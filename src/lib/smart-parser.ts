@@ -334,10 +334,18 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
     if (hasPipe) {
       const tableLines: string[] = [line];
       let j = i + 1;
-
+      let blankRun = 0;
       while (j < rawLines.length) {
         const nextTrimmed = rawLines[j].trim();
-        if (nextTrimmed && (nextTrimmed.includes('|') || nextTrimmed.includes('｜'))) {
+        if (!nextTrimmed) {
+          // 允许表格行之间出现单个空行（用户粘贴的表格行间常有空行）；连续两个空行视为表格结束
+          blankRun++;
+          if (blankRun >= 2) break;
+          j++;
+          continue;
+        }
+        blankRun = 0;
+        if (nextTrimmed.includes('|') || nextTrimmed.includes('｜')) {
           tableLines.push(rawLines[j]);
           j++;
         } else {
@@ -345,12 +353,13 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
         }
       }
 
-      // 连续 2 行以上带竖线，规整为合法 Markdown 表格
-      if (tableLines.length >= 2) {
+      // 连续 2 行以上带竖线（忽略行间单个空行），规整为合法 Markdown 表格
+      const nonEmptyTableLines = tableLines.filter((l) => l.trim());
+      if (nonEmptyTableLines.length >= 2) {
         const normalizedTable: string[] = [];
         let colCount = 0;
 
-        tableLines.forEach((tLine, idx) => {
+        nonEmptyTableLines.forEach((tLine, idx) => {
           // 将全角 ｜ 替换为半角 |
           const replaced = tLine.replace(/｜/g, '|').trim();
           const rawCells = replaced
@@ -380,8 +389,8 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
           // 第一行后面如果尚未包含表头分割线，自动插入表头线
           if (idx === 0) {
             const hasDividerNext =
-              tableLines.length > 1 &&
-              /^\|?[\s\-:]+(\|[\s\-:]+)+\|?$/.test(tableLines[1].replace(/｜/g, '|').trim());
+              nonEmptyTableLines.length > 1 &&
+              /^\|?[\s\-:]+(\|[\s\-:]+)+\|?$/.test(nonEmptyTableLines[1].replace(/｜/g, '|').trim());
             if (!hasDividerNext) {
               const divider = `| ${Array(cells.length).fill(':---:').join(' | ')} |`;
               normalizedTable.push(divider);
@@ -418,10 +427,18 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
     if (isPotentialSpaceTable) {
       const spaceTableLines: string[][] = [initialColumns];
       let j = i + 1;
+      let blankRun = 0;
 
       while (j < rawLines.length) {
         const nextTrimmed = rawLines[j].trim();
-        if (!nextTrimmed) break;
+        if (!nextTrimmed) {
+          // 允许表格行之间出现单个空行（用户粘贴的表格行间常有空行）；连续两个空行视为表格结束
+          blankRun++;
+          if (blankRun >= 2) break;
+          j++;
+          continue;
+        }
+        blankRun = 0;
         const nextCols = splitBySpaceOrTab(nextTrimmed);
         // 如果列数与第一行一致（或相差不超过 1 列）
         if (Math.abs(nextCols.length - initialColumns.length) <= 1 && nextCols.length >= 2) {
