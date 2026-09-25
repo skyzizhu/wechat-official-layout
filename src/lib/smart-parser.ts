@@ -102,6 +102,19 @@ export function addPanguSpacing(text: string): string {
 }
 
 /**
+ * 判断是否为图片类型的 URL。
+ * 纯文本输入中的图片类型 URL 按排版需求保持原样：仅显示用户输入的 URL 文本，
+ * 不自动转为图片，也不转为短标签链接。
+ */
+export function isImageUrl(url: string): boolean {
+  return (
+    /^https?:\/\/\S+\.(?:jpg|jpeg|png|webp|gif|svg|avif)(?:\?.*)?$/i.test(url) ||
+    /^https?:\/\/images\.unsplash\.com\/\S+/i.test(url) ||
+    /^https?:\/\/mmbiz\.qpic\.cn\/\S+/i.test(url)
+  );
+}
+
+/**
  * 智能转换正文中的裸 URL 为 Markdown 链接，以便文末脚注引擎识别
  */
 export function formatBareUrls(text: string): string {
@@ -110,6 +123,10 @@ export function formatBareUrls(text: string): string {
   const bareUrlRegex = /(?<![(\[="'])(https?:\/\/[a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=%]+)(?![)\]"'])/g;
 
   return text.replace(bareUrlRegex, (url) => {
+    // 图片类型 URL：保持用户输入的 URL 原样显示（不转图片、不转短标签）
+    if (isImageUrl(url)) {
+      return url;
+    }
     try {
       const parsed = new URL(url);
       const host = parsed.hostname.toLowerCase();
@@ -188,11 +205,17 @@ function emphasizeItemHeader(text: string): string {
   const colonMatch = text.match(/^([^：:——\-，。！？\n]{2,18})([：:])\s*(.+)$/);
   if (colonMatch) {
     const title = colonMatch[1].trim();
-    if (/^(?:https?|ftp|file)$/i.test(title)) {
-      return text;
-    }
     const punct = '：';
     const rest = colonMatch[3].trim();
+    // 防止把 URL 协议的冒号误判为条目标题分隔符（如 "普通链接 https://..." 会被拆成 "**普通链接 https**：//..." 损坏 URL）：
+    // 标题以协议名结尾（https/http/ftp/file/ws/wss），或冒号后紧跟 //，均视为 URL 的一部分，保持原样
+    if (
+      /^(?:https?|ftp|file|ws|wss)$/i.test(title) ||
+      /(?:https?|ftp|file|ws|wss)$/i.test(title) ||
+      /^\/\//.test(rest)
+    ) {
+      return text;
+    }
     return `**${title}**${punct}${rest}`;
   }
 
@@ -200,10 +223,14 @@ function emphasizeItemHeader(text: string): string {
   const dashMatch = text.match(/^([^：:——\-，。！？\n]{2,18})(\s*——\s*|\s*-\s*)(.+)$/);
   if (dashMatch) {
     const title = dashMatch[1].trim();
-    if (/^(?:https?|ftp|file)$/i.test(title)) {
+    const rest = dashMatch[3].trim();
+    // 同上：标题以 URL 协议名结尾时保持原样，避免损坏链接
+    if (
+      /^(?:https?|ftp|file|ws|wss)$/i.test(title) ||
+      /(?:https?|ftp|file|ws|wss)$/i.test(title)
+    ) {
       return text;
     }
-    const rest = dashMatch[3].trim();
     return `**${title}** — ${rest}`;
   }
 
@@ -337,20 +364,9 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
               return true;
             });
 
-          // 自动检测并转换单元格中的图片链接或题注
+          // 单元格中的图片类型 URL 保持用户输入的 URL 原样显示（不自动转为图片）；仅保留 ▲ 题注的斜体强调
           const cells = rawCells.map((cellText) => {
             const cellTrimmed = cellText.trim();
-            const imgMatch = cellTrimmed.match(/^(?:(?:图片|配图|插图|图|Image)[：:]\s*)?(https?:\/\/\S+)$/i);
-            if (imgMatch) {
-              const u = imgMatch[1];
-              if (
-                /\.(?:jpg|jpeg|png|webp|gif|svg)(?:\?.*)?$/i.test(u) ||
-                u.includes('images.unsplash.com') ||
-                u.includes('mmbiz.qpic.cn')
-              ) {
-                return `![配图](${u})`;
-              }
-            }
             if (/^▲\s*.+$/.test(cellTrimmed) && !cellTrimmed.startsWith('*')) {
               return `*${cellTrimmed}*`;
             }
@@ -574,47 +590,8 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
       continue;
     }
 
-    // 3.8.5 识别独立图片定义与图表（配图：URL、[图片] URL、图1：说明 | URL、独立图片链接）
-    const imgPrefixMatch = trimmed.match(/^(?:图片|配图|插图|图|Image|Img)\s*(\d*)[：:]\s*(.+)$/i);
-    if (imgPrefixMatch) {
-      const rest = imgPrefixMatch[2].trim();
-      if (rest.includes('|') || rest.includes('｜')) {
-        const parts = rest.split(/[|｜]/).map((s) => s.trim());
-        const desc = parts[0];
-        const url = parts[1];
-        if (/^https?:\/\//i.test(url)) {
-          processedLines.push('');
-          processedLines.push(`![${desc}](${url})`);
-          processedLines.push('');
-          continue;
-        }
-      } else if (/^https?:\/\/\S+$/i.test(rest)) {
-        processedLines.push('');
-        processedLines.push(`![配图](${rest})`);
-        processedLines.push('');
-        continue;
-      }
-    }
-
-    const bracketImgMatch = trimmed.match(/^\[(?:图片|配图|插图|Image)\]\s*(https?:\/\/\S+)$/i);
-    if (bracketImgMatch) {
-      processedLines.push('');
-      processedLines.push(`![配图](${bracketImgMatch[1].trim()})`);
-      processedLines.push('');
-      continue;
-    }
-
-    // 独立图片 URL（以主流图片格式后缀结尾或来自高可用图床 Unsplash/微信图床）
-    if (
-      /^https?:\/\/\S+\.(?:jpg|jpeg|png|webp|gif|svg)(?:\?.*)?$/i.test(trimmed) ||
-      /^https?:\/\/images\.unsplash\.com\/\S+$/i.test(trimmed) ||
-      /^https?:\/\/mmbiz\.qpic\.cn\/\S+$/i.test(trimmed)
-    ) {
-      processedLines.push('');
-      processedLines.push(`![配图](${trimmed})`);
-      processedLines.push('');
-      continue;
-    }
+    // 3.8.5 图片类 URL 不再自动转为图片（配图：URL、[图片] URL、独立图片链接、Base64 均保持用户输入原样）：
+    // 纯文本输入遵循「URL 只显示 URL」的排版需求；仅当用户显式写出 Markdown 图片语法 ![alt](url) 时才按图片渲染
 
     // 3.9 识别图片题注或图表标注：如 "▲ 图1：系统整体架构" 或 "▲ 阶段 1：草图"
     if (
