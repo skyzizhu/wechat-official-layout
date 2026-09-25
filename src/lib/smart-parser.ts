@@ -477,6 +477,13 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
       continue;
     }
 
+    // 保留显式 Markdown 图片语法（含粘贴截图生成的 Base64 图片）整行原样输出：
+    // 不参与条目标题提取与间距改写，避免 data:URL 中的冒号被误拆导致图片损坏
+    if (/^!\[[^\]]*\]\(.+\)$/.test(trimmed)) {
+      processedLines.push(trimmed);
+      continue;
+    }
+
     // 3.1 识别分割线：如 "---", "===", "***", "———", "·····"
     if (/^[-—_*=·.]{3,}$/.test(trimmed)) {
       processedLines.push('');
