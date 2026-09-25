@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+/* Custom theme tokens for Tailwind v4 */
+@theme inline {
+  --color-background: #ffffff;
+  --color-foreground: #171717;
+  --color-brand-50: #f0f7ff;
+  --color-brand-100: #e0effe;
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-brand-700: #1d4ed8;
+
+  /* Animation for toast */
+  --animate-fade-in: fade-in 0.2s ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Global styles */
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+}
+
+/* 核心修复：清除引用块内部段落的首尾 margin，确保边框内容完美垂直居中 */
+blockquote > p:last-child {
+  margin-bottom: 0 !important;
+}
+blockquote > p:first-child {
+  margin-top: 0 !important;
+}
+blockquote p {
+  text-indent: 0 !important; /* 引用框内文字不应缩进，保持完美对称 */
+}
+
+/* 核心修复：分割线与段落垂直间距对称优化，确保分割线上下留白绝对对称，解决文字在分割线内部上下留白不一致问题 */
+hr {
+  box-sizing: border-box;
+}
+
+/* 紧随分割线后的段落，重置顶外边距为 0，防止与分割线自身的下外边距叠加 */
+hr + p,
+p[data-after-hr="true"] {
+  margin-top: 0 !important;
+}
+
+/* 紧邻分割线之前的段落，重置底外边距为 0，防止与分割线上外边距叠加 */
+p:has(+ hr),
+p[data-before-hr="true"] {
+  margin-bottom: 0 !important;
+}
+
+/* 双分割线夹持的文本（题记/金句/引言）：上下外边距均归零，完全由两道分割线的对称 margin 决定，实现 100% 绝对垂直居中 */
+hr + p:has(+ hr),
+p[data-between-hrs="true"],
+p[data-role="enclosed-quote"] {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* 列表项与表格垂直居中对齐 */
+li > p:last-child {
+  margin-bottom: 0 !important;
+}
+th, td {
+  vertical-align: middle;
+}
+
+/* Editor textarea */
+.editor-textarea {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  outline: none;
+  background: transparent;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 14px;
+  line-height: 1.8;
+  tab-size: 2;
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}

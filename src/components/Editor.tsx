@@ -1,0 +1,278 @@
+'use client';
+
+import {
+  Trash2,
+  Sparkles,
+  FileText,
+  Code2,
+  Wand2,
+  RotateCcw,
+  ChevronDown,
+  FileSpreadsheet,
+  GraduationCap,
+  FileCheck2,
+} from 'lucide-react';
+import { detectContentFormat, convertPlainTextToMarkdown } from '@/lib/smart-parser';
+import { SAMPLE_PRESETS } from '@/lib/sample-markdown';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
+
+export type ContentMode = 'auto' | 'plain-text' | 'markdown';
+
+interface EditorProps {
+  value: string;
+  onChange: (value: string) => void;
+  mode: ContentMode;
+  onModeChange: (mode: ContentMode) => void;
+  onClear: () => void;
+  onRestoreSample: (presetKey?: string) => void;
+  draftStatus?: string;
+  firstLineAsTitle?: boolean;
+  onToggleFirstLineAsTitle?: (enabled: boolean) => void;
+}
+
+export function Editor({
+  value,
+  onChange,
+  mode,
+  onModeChange,
+  onClear,
+  onRestoreSample,
+  draftStatus,
+  firstLineAsTitle = false,
+  onToggleFirstLineAsTitle,
+}: EditorProps) {
+  const charCount = value.replace(/\s/g, '').length;
+  const [showPresetMenu, setShowPresetMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // 实时分析文本格式
+  const detection = useMemo(() => detectContentFormat(value), [value]);
+
+  // 点击外部自动关闭下拉菜单
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setShowPresetMenu(false);
+      }
+    }
+    if (showPresetMenu) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showPresetMenu]);
+
+  // 一键将当前普通文本转为标准 Markdown 填入编辑器
+  const handleConvertToMarkdown = () => {
+    if (!value.trim()) return;
+    const converted = convertPlainTextToMarkdown(value, {
+      treatFirstLineAsTitle: firstLineAsTitle,
+    });
+    onChange(converted);
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-white">
+      {/* 顶部主工具栏 */}
+      <div className="h-11 border-b border-gray-200 flex items-center px-3 sm:px-4 text-sm text-gray-600 justify-between flex-shrink-0 bg-gray-50/50">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-gray-800 text-xs tracking-wider uppercase hidden sm:inline">
+            输入内容
+          </span>
+
+          {/* 模式选择切换 */}
+          <div className="flex items-center bg-gray-200/80 p-0.5 rounded-lg text-xs">
+            <button
+              onClick={() => onModeChange('auto')}
+              className={`px-2 sm:px-2.5 py-1 rounded-md transition-all flex items-center gap-1 font-medium cursor-pointer ${
+                mode === 'auto'
+                  ? 'bg-white text-blue-600 shadow-xs'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+              title="智能检测并自动排版"
+            >
+              <Sparkles className="w-3 h-3 text-amber-500" />
+              <span>自动识别</span>
+            </button>
+            <button
+              onClick={() => onModeChange('plain-text')}
+              className={`px-2 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer ${
+                mode === 'plain-text'
+                  ? 'bg-white text-blue-600 shadow-xs font-medium'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+              title="强制按纯文本提取层级排版"
+            >
+              <FileText className="w-3 h-3" />
+              <span>纯文本</span>
+            </button>
+            <button
+              onClick={() => onModeChange('markdown')}
+              className={`px-2 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer ${
+                mode === 'markdown'
+                  ? 'bg-white text-blue-600 shadow-xs font-medium'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+              title="按原始 Markdown 语法渲染"
+            >
+              <Code2 className="w-3 h-3" />
+              <span>Markdown</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 快捷操作区：本地草稿暂存状态 + 多格式范文库 + 一键清空 */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* 本地草稿自动暂存状态胶囊 */}
+          {draftStatus && (
+            <div className="hidden lg:flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/80">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span>{draftStatus}</span>
+            </div>
+          )}
+
+          {/* 字符计数 */}
+          <span className="text-xs text-gray-400">{charCount} 字</span>
+
+          {/* 多格式范文库快捷下拉 */}
+          <div className="relative" ref={menuRef}>
+            <div className="flex items-center">
+              <button
+                onClick={() => onRestoreSample('all-round-markdown')}
+                className="px-2 py-1 rounded-l-md text-xs text-gray-700 hover:text-blue-600 hover:bg-blue-50 transition-all flex items-center gap-1 cursor-pointer font-medium border border-gray-200 border-r-0"
+                title="载入全能 Markdown 范文（含标题、表格、代码、清单、金句）"
+              >
+                <RotateCcw className="w-3 h-3 text-blue-500" />
+                <span className="hidden md:inline">测试范文</span>
+              </button>
+              <button
+                onClick={() => setShowPresetMenu((prev) => !prev)}
+                className="px-1.5 py-1 rounded-r-md text-[11px] text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-all cursor-pointer font-medium border border-gray-200 flex items-center"
+                title="选择更多不同格式的测试范文"
+              >
+                <ChevronDown className={`w-3 h-3 transition-transform ${showPresetMenu ? 'rotate-180 text-blue-600' : ''}`} />
+              </button>
+            </div>
+
+            {/* 下拉范文选项卡片 */}
+            {showPresetMenu && (
+              <div className="absolute right-0 top-full mt-1.5 w-64 bg-white border border-gray-200 shadow-xl rounded-xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100">
+                <div className="px-2 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                  选择测试范文类型
+                </div>
+                
+                <button
+                  onClick={() => {
+                    onRestoreSample('all-round-markdown');
+                    setShowPresetMenu(false);
+                  }}
+                  className="w-full text-left px-2.5 py-2.5 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-all flex items-start gap-2.5 cursor-pointer group border-b border-gray-100"
+                >
+                  <FileCheck2 className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-gray-800 group-hover:text-blue-700 flex items-center gap-1.5">
+                      <span>全能旗舰 Markdown 范文</span>
+                      <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.2 rounded font-normal">全格式</span>
+                    </div>
+                    <div className="text-[11px] text-gray-400 leading-tight mt-1">
+                      容纳系统全部格式：大标题、双线题记、微胶囊、荧光高亮、任务清单、对齐表格、多语言代码、Q&A、图片、文末脚注
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    onRestoreSample('all-round-plain-text');
+                    setShowPresetMenu(false);
+                  }}
+                  className="w-full text-left px-2.5 py-2.5 rounded-lg text-xs text-gray-700 hover:bg-amber-50 hover:text-amber-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                >
+                  <FileText className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-gray-800 group-hover:text-amber-800 flex items-center gap-1.5">
+                      <span>全能旗舰自然纯文本范文</span>
+                      <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.2 rounded font-normal">智能转换</span>
+                    </div>
+                    <div className="text-[11px] text-gray-400 leading-tight mt-1">
+                      零语法纯文本：冒号自动加粗、全角管道符表格、纯文本代码段、Q&A访谈、注释旁白、智能分段呼吸感
+                    </div>
+                  </div>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 一键清空 */}
+          <button
+            onClick={onClear}
+            className="px-2 py-1 rounded-md text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 transition-all flex items-center gap-1 cursor-pointer font-medium border border-gray-200 hover:border-red-200"
+            title="一键清空输入框所有内容"
+          >
+            <Trash2 className="w-3 h-3 text-gray-400 group-hover:text-red-500" />
+            <span className="hidden md:inline">清空</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 智能检测状态提示浮条 */}
+      <div className="px-4 py-1.5 bg-blue-50/60 border-b border-blue-100 flex items-center justify-between text-xs text-gray-600">
+        <div className="flex items-center gap-1.5">
+          {detection.isMarkdown ? (
+            <span className="inline-flex items-center gap-1 font-medium text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full text-[11px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              已识别：Markdown 源码
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 font-medium text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-full text-[11px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+              已识别：自然普通文本 (已智能提取标题、金句、表格与段落)
+            </span>
+          )}
+        </div>
+
+        {/* 当是纯文本或自动识别时，提供首句是否为大标题开关 + 一键格式化 */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {onToggleFirstLineAsTitle && (
+            <button
+              onClick={() => onToggleFirstLineAsTitle(!firstLineAsTitle)}
+              className={`flex items-center gap-1 text-[11px] px-2 py-0.5 rounded border transition-all cursor-pointer font-medium shadow-2xs ${
+                firstLineAsTitle
+                  ? 'bg-amber-100/90 text-amber-800 border-amber-300'
+                  : 'bg-white text-gray-500 border-gray-200 hover:text-gray-700'
+              }`}
+              title="默认关闭：第一句话作为详情正文首段；开启后符合条件的首句将提升为文章大标题"
+            >
+              <span>首句标题:</span>
+              <span className={`font-bold ${firstLineAsTitle ? 'text-amber-800' : 'text-gray-400'}`}>
+                {firstLineAsTitle ? '开' : '关'}
+              </span>
+            </button>
+          )}
+
+          {!detection.isMarkdown && value.trim().length > 0 && (
+            <button
+              onClick={handleConvertToMarkdown}
+              className="flex items-center gap-1 text-[11px] text-blue-700 hover:text-blue-900 bg-white hover:bg-blue-50 px-2 py-0.5 rounded border border-blue-200 shadow-2xs transition-all cursor-pointer font-medium"
+              title="把当前智能解析的结构转换为带 # 等标号的 Markdown 源码写回编辑器"
+            >
+              <Wand2 className="w-3 h-3 text-blue-600" />
+              一键转为标准 Markdown
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 编辑文本区 */}
+      <div className="flex-1 p-4 overflow-auto">
+        <textarea
+          className="editor-textarea text-gray-800"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="在此直接粘贴文章内容，无需手动排版。系统会自动智能区分是普通文本还是 Markdown 源码..."
+          spellCheck={false}
+        />
+      </div>
+    </div>
+  );
+}
