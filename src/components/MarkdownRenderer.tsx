@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import type { ThemePreset } from '@/themes/types';
 import type { Components } from 'react-markdown';
-import React from 'react';
+import React, { CSSProperties } from 'react';
 
 interface MarkdownRendererProps {
   content: string;
@@ -48,6 +48,25 @@ function markNodesWithTag(node: any, tagName: string, propKey: string, propValue
   if (node.children && Array.isArray(node.children)) {
     node.children.forEach((child: any) => markNodesWithTag(child, tagName, propKey, propValue));
   }
+}
+
+/**
+ * 提取 GFM 表格列对齐（:--- 左对齐 / :---: 居中 / ---: 右对齐）。
+ * react-markdown 将对齐信息放入单元格组件的 style prop；
+ * 兜底再从 hast 节点的 properties.style 字符串中解析，确保 :---: 与 ---: 在预览中不丢失。
+ */
+function getCellAlignStyle(incomingStyle: any, node: any): CSSProperties {
+  if (incomingStyle && typeof incomingStyle === 'object') {
+    return incomingStyle as CSSProperties;
+  }
+  const raw = node?.properties?.style;
+  if (typeof raw === 'string' && /text-align/i.test(raw)) {
+    const match = raw.match(/text-align:\s*([a-z-]+)/i);
+    if (match) {
+      return { textAlign: match[1] as CSSProperties['textAlign'] };
+    }
+  }
+  return {};
 }
 
 /**
@@ -272,7 +291,7 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
               marginBottom: '26px',
               textAlign: 'center',
               fontSize: '13px',
-              lineHeight: 1.6,
+              lineHeight: 1.75,
               color: '#64748b',
               letterSpacing: '0.02em',
               boxSizing: 'border-box',
@@ -460,18 +479,25 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
         }
         return (
           <span
+            data-role="task-checkbox"
             style={{
               display: 'inline-block',
               width: '15px',
               height: '15px',
+              lineHeight: '15px',
+              textAlign: 'center',
               border: '1.5px solid #cbd5e1',
               borderRadius: '3px',
+              fontSize: '11px',
               marginRight: '7px',
               verticalAlign: 'middle',
               boxSizing: 'border-box',
+              color: 'transparent',
               userSelect: 'none',
             }}
-          />
+          >
+            □
+          </span>
         );
       }
       return <input checked={checked} {...props} />;
@@ -506,6 +532,18 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
           alt={alt ?? '配图'}
           data-w="1080"
           data-ratio="auto"
+          referrerPolicy="no-referrer"
+          crossOrigin="anonymous"
+          loading="lazy"
+          onError={(e) => {
+            const target = e.currentTarget;
+            if (!target.dataset.hasFailed) {
+              target.dataset.hasFailed = 'true';
+              if (src && src.startsWith('/') && typeof window !== 'undefined') {
+                target.src = window.location.origin + src;
+              }
+            }
+          }}
           style={{
             maxWidth: '100%',
             height: 'auto',
@@ -569,7 +607,7 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
       );
     },
 
-    th: ({ node, children }: any) => {
+    th: ({ node, style: incomingAlign, children }: any) => {
       const isImageCell = Boolean(node?.properties?.dataImageCell);
       if (isImageCell) {
         return (
@@ -581,7 +619,11 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
               verticalAlign: 'top',
               textAlign: 'center',
               fontWeight: 'normal',
-              lineHeight: 1.6,
+              fontStyle: 'normal',
+              fontSize: '13px',
+              lineHeight: 1.75,
+              color: '#64748b',
+              letterSpacing: '0.02em',
               boxSizing: 'border-box',
             }}
           >
@@ -589,10 +631,10 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
           </th>
         );
       }
-      return <th style={{ ...elements.th, lineHeight: 1.7 }}>{children}</th>;
+      return <th style={{ ...elements.th, ...getCellAlignStyle(incomingAlign, node), lineHeight: 1.7 }}>{children}</th>;
     },
 
-    td: ({ node, children }: any) => {
+    td: ({ node, style: incomingAlign, children }: any) => {
       const isImageCell = Boolean(node?.properties?.dataImageCell);
       if (isImageCell) {
         return (
@@ -600,10 +642,14 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
             style={{
               border: 'none',
               background: 'transparent',
-              padding: '0 4px',
+              padding: '6px 4px 0 4px',
               verticalAlign: 'top',
               textAlign: 'center',
-              lineHeight: 1.6,
+              fontStyle: 'normal',
+              fontSize: '13px',
+              lineHeight: 1.75,
+              color: '#64748b',
+              letterSpacing: '0.02em',
               boxSizing: 'border-box',
             }}
           >
@@ -611,7 +657,7 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
           </td>
         );
       }
-      return <td style={{ ...elements.td, lineHeight: 1.7 }}>{children}</td>;
+      return <td style={{ ...elements.td, ...getCellAlignStyle(incomingAlign, node), lineHeight: 1.7 }}>{children}</td>;
     },
 
     // 微信角标/脚注引用上标（规范 1.3: 继承行高，使用 baseline + relative 位移）

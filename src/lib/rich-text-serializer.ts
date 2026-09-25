@@ -139,6 +139,17 @@ function sanitizeInlineStyle(style: string): string {
 }
 
 /**
+ * 将 React CSSProperties 主题样式对象序列化为内联 CSS 字符串（用于表格继承主题样式）
+ */
+function cssPropertiesToInlineStyle(style: Record<string, unknown> | undefined): string {
+  if (!style) return '';
+  return Object.entries(style)
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .map(([key, value]) => `${key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${String(value)}`)
+    .join('; ');
+}
+
+/**
  * 将整篇排版 DOM 节点序列化为 100% 严格符合微信公众号官方规范的富文本 HTML
  */
 export function serializeToWeChatRichText(
@@ -392,12 +403,18 @@ export function serializeToWeChatRichText(
     const innerPre = document.createElement('pre');
     innerPre.setAttribute(
       'style',
-      `margin: 0; padding: 0; font-family: Consolas, Monaco, Menlo, 'Courier New', monospace; font-size: 13px; line-height: 1.65; color: ${preColor}; white-space: pre-wrap; word-break: break-all; background: transparent; border: none; box-sizing: border-box;`
+      `margin: 0; padding: 0; font-family: Consolas, Monaco, Menlo, 'Courier New', monospace; font-size: 13px; line-height: 1.75; color: ${preColor}; white-space: pre-wrap; word-break: break-all; background: transparent; border: none; box-sizing: border-box;`
     );
 
     const code = pre.querySelector('code');
-    const codeContent = code ? code.innerHTML : pre.innerHTML;
-    innerPre.innerHTML = `<code style="font-family: inherit; font-size: inherit; background: transparent; padding: 0; border: none; color: inherit; white-space: pre-wrap; word-break: break-all;">${codeContent}</code>`;
+    const rawContent = code ? code.innerHTML : pre.innerHTML;
+    const lines = rawContent.split('\n');
+    const formattedLines = lines.map((line) => {
+      const lineHtml = line.length > 0 ? line : '&nbsp;';
+      return `<span style="display: block; line-height: 1.75; margin: 0; padding: 0; font-family: inherit; font-size: inherit; color: inherit; box-sizing: border-box;">${lineHtml}</span>`;
+    }).join('');
+
+    innerPre.innerHTML = `<code style="display: block; font-family: inherit; font-size: inherit; line-height: 1.75; background: transparent; padding: 0; border: none; color: inherit; box-sizing: border-box;">${formattedLines}</code>`;
 
     section.appendChild(innerPre);
 
@@ -478,30 +495,46 @@ export function serializeToWeChatRichText(
       return;
     }
 
-    // 普通数据表格排版
-    table.setAttribute(
-      'style',
-      'width: 100%; border-collapse: collapse; font-size: 13.5px; line-height: 1.75; margin: 0 auto; text-align: left; box-sizing: border-box; word-break: break-word;'
-    );
+    // 普通数据表格排版：完整继承当前主题的表格样式（公众号风、暗色极客、波普、学术等 16 套模板各有独立表格语言），
+    // 再统一叠加官方规范合规约束：width 100% 自适应杜绝固定列宽、border-collapse、line-height 1.75、box-sizing
+    const tableThemeStyle = cssPropertiesToInlineStyle({
+      ...(themeElements?.table || {}),
+      width: '100%',
+      maxWidth: '100%',
+      borderCollapse: 'collapse',
+      lineHeight: 1.75,
+      boxSizing: 'border-box',
+      wordBreak: 'break-word',
+    });
+    table.setAttribute('style', tableThemeStyle);
 
-    // 强化 th 样式（自适应换行，避免固定列宽）
+    // 强化 th 样式：继承主题表头配色（含主色搭配引擎生成的色值），自适应换行避免固定列宽，
+    // 并保留 GFM 列对齐（:--- 左对齐 / :---: 居中 / ---: 右对齐）
     table.querySelectorAll('th').forEach((th) => {
       th.removeAttribute('width');
       th.removeAttribute('data-colwidth');
-      th.setAttribute(
-        'style',
-        'border: 1px solid #e2e8f0; padding: 8px 12px; background-color: #f8fafc; color: #1e293b; font-weight: 700; line-height: 1.75; text-align: left; box-sizing: border-box; word-break: break-word;'
-      );
+      const alignCss = th.style.textAlign ? `text-align: ${th.style.textAlign}` : '';
+      const thThemeStyle = cssPropertiesToInlineStyle({
+        ...(themeElements?.th || {}),
+        lineHeight: 1.75,
+        boxSizing: 'border-box',
+        wordBreak: 'break-word',
+      });
+      th.setAttribute('style', [thThemeStyle, alignCss].filter(Boolean).join('; '));
     });
 
-    // 强化 td 样式
+    // 强化 td 样式：继承主题单元格样式，并保留 GFM 列对齐
     table.querySelectorAll('td').forEach((td) => {
       td.removeAttribute('width');
       td.removeAttribute('data-colwidth');
-      td.setAttribute(
-        'style',
-        'border: 1px solid #e2e8f0; padding: 8px 12px; color: #334155; line-height: 1.75; box-sizing: border-box; word-break: break-word;'
-      );
+      const alignCss = td.style.textAlign ? `text-align: ${td.style.textAlign}` : '';
+      const tdThemeStyle = cssPropertiesToInlineStyle({
+        ...(themeElements?.td || {}),
+        lineHeight: 1.75,
+        boxSizing: 'border-box',
+        wordBreak: 'break-word',
+      });
+      td.setAttribute('style', [tdThemeStyle, alignCss].filter(Boolean).join('; '));
     });
 
     // 检查父级是否已经是 section
@@ -803,10 +836,22 @@ export function serializeToWeChatRichText(
       } else {
         span.setAttribute(
           'style',
-          'display: inline-block; width: 15px; height: 15px; border: 1.5px solid #cbd5e1; border-radius: 3px; margin-right: 7px; vertical-align: middle; box-sizing: border-box;'
+          'display: inline-block; width: 15px; height: 15px; line-height: 15px; text-align: center; border: 1.5px solid #cbd5e1; border-radius: 3px; margin-right: 7px; vertical-align: middle; box-sizing: border-box; font-size: 11px; color: transparent;'
         );
+        span.textContent = '□';
       }
       input.parentElement?.replaceChild(span, input);
+    }
+  });
+
+  // 处理已作为 span 存在的任务复选框，确保其包含不可见字符杜绝叠字
+  clone.querySelectorAll('span[data-role="task-checkbox"]').forEach((span) => {
+    if (!span.textContent || span.textContent === '\u200B') {
+      span.textContent = '□';
+      (span as HTMLElement).style.color = 'transparent';
+      (span as HTMLElement).style.lineHeight = '15px';
+      (span as HTMLElement).style.fontSize = '11px';
+      (span as HTMLElement).style.textAlign = 'center';
     }
   });
 
@@ -818,31 +863,55 @@ export function serializeToWeChatRichText(
   const imgPadding = (imgThemeStyle.padding as string) ?? '';
   const imgBg = (imgThemeStyle.backgroundColor as string) ?? '';
 
-  clone.querySelectorAll('img').forEach((img) => {
+  const liveImgs = Array.from(element.querySelectorAll('img'));
+  clone.querySelectorAll('img').forEach((img, idx) => {
     const isInsideTable = Boolean(img.closest('table'));
     const borderStr = imgBorder ? `border: ${imgBorder};` : '';
     const shadowStr = imgShadow ? `box-shadow: ${imgShadow};` : '';
     const paddingStr = imgPadding ? `padding: ${imgPadding};` : '';
     const bgStr = imgBg ? `background-color: ${imgBg};` : '';
     const radiusStr = imgRadius ? `border-radius: ${imgRadius};` : '';
-    const marginStr = isInsideTable ? 'margin: 0 auto;' : 'margin: 0 auto;';
+    const marginStr = 'margin: 0 auto;';
 
     img.setAttribute(
       'style',
       `max-width: 100%; width: 100%; height: auto; display: block; ${marginStr} ${radiusStr} ${borderStr} ${shadowStr} ${paddingStr} ${bgStr} box-sizing: border-box;`
     );
 
-    const src = img.getAttribute('src') || '';
+    let src = img.getAttribute('src') || '';
+
+    // 如果是本站静态图片（如 /images/... 或本地域名），从 live DOM 通过同源 canvas 导出 Base64
+    // 确保复制粘贴至微信公众号时，图片直接以内联二进制形式由微信转存为微信 CDN，无需外网访问 localhost
+    const liveImg = liveImgs[idx];
+    if (liveImg && (src.startsWith('/') || (typeof window !== 'undefined' && src.includes(window.location.host)))) {
+      try {
+        const canvas = document.createElement('canvas');
+        const nw = liveImg.naturalWidth || 800;
+        const nh = liveImg.naturalHeight || 600;
+        canvas.width = nw;
+        canvas.height = nh;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(liveImg, 0, 0, nw, nh);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+          src = dataUrl;
+          img.setAttribute('src', dataUrl);
+        }
+      } catch (err) {
+        console.warn('Canvas toDataURL failed for live img', err);
+      }
+    }
+
     if (src && !img.getAttribute('data-src')) {
       img.setAttribute('data-src', src);
     }
     if (!img.getAttribute('data-w')) {
-      const naturalW = img.naturalWidth || 1080;
+      const naturalW = liveImg?.naturalWidth || 1080;
       img.setAttribute('data-w', String(naturalW));
     }
     if (!img.getAttribute('data-ratio')) {
-      const naturalW = img.naturalWidth;
-      const naturalH = img.naturalHeight;
+      const naturalW = liveImg?.naturalWidth;
+      const naturalH = liveImg?.naturalHeight;
       const ratio = naturalW && naturalH ? (naturalH / naturalW).toFixed(4) : '0.5625';
       img.setAttribute('data-ratio', String(ratio));
     }
