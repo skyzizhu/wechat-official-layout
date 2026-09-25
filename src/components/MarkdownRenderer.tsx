@@ -1,6 +1,6 @@
 'use client';
 
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import type { ThemePreset } from '@/themes/types';
@@ -67,6 +67,17 @@ function getCellAlignStyle(incomingStyle: any, node: any): CSSProperties {
     }
   }
   return {};
+}
+
+/**
+ * URL 安全过滤：在 react-markdown 默认白名单基础上放行 data:image/（粘贴截图的 Base64 内嵌图）
+ * 与 blob:（本地预览对象地址），其余协议仍交由默认过滤处理
+ */
+function imageUrlTransform(url: string): string {
+  if (/^(?:data:image\/|blob:)/i.test(url)) {
+    return url;
+  }
+  return defaultUrlTransform(url);
 }
 
 /**
@@ -685,6 +696,7 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw, rehypeLayoutEnhancer]}
+        urlTransform={imageUrlTransform}
         components={components}
       >
         {content}
