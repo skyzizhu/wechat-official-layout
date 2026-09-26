@@ -621,6 +621,28 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
     const line = rawLines[i];
     const trimmed = line.trim();
 
+    // 2.0a 整篇代码检测：用户直接粘贴纯代码（无任何说明文字）时，
+    // 首行即强代码特征且大部分行为代码形态 → 整篇包装为单个代码块，
+    // 跳过一切文本排版规则（章节/列表/强调规则对纯代码毫无意义且会产生误判）
+    if (i === 0) {
+      const nonEmpty = rawLines.map((l) => l.trim()).filter(Boolean);
+      const strongCodeStart =
+        /^(?:interface\s|type\s+[A-Za-z_$<{]|class\s|function\s|def\s|export\s|import\s|const\s|let\s|var\s|public\s|private\s|package\s|#include|using\s|SELECT\s|INSERT\s|CREATE\s+TABLE|<!DOCTYPE|<html|#!)/i;
+      const codeLikeRe =
+        /(?:[;{}]\s*$|^\s*[{}\[\]]\s*$|^\s*(?:readonly|const|let|var|function|return|export|import|interface|type|enum|if|for|while|switch|case|try|catch|def|print|console)\b|^\s*(?:\/\*\*?|\*(?:\s|$)|\*\/|\/\/)|^\s{2,}\S|=>|^[a-zA-Z_$][\w$]*\s*:\s*|^[a-zA-Z_$][\w$]*,\s*$|\b(?:SELECT|FROM|WHERE|GROUP\s+BY|ORDER\s+BY|INSERT\s+INTO|UPDATE|DELETE\s+FROM)\b)/;
+      if (nonEmpty.length >= 3 && strongCodeStart.test(nonEmpty[0])) {
+        const sample = nonEmpty.slice(0, 30);
+        const codeLike = sample.filter((l) => codeLikeRe.test(l)).length;
+        if (codeLike / sample.length >= 0.5) {
+          const lang = inferCodeLanguage(nonEmpty.join('\n')) || 'typescript';
+          blockProcessedLines.push('```' + lang);
+          blockProcessedLines.push(...rawLines);
+          blockProcessedLines.push('```');
+          break;
+        }
+      }
+    }
+
     // 2.0 若行本身已处于 Markdown 代码块内 (```)，保留并原样放行
     if (trimmed.startsWith('```')) {
       blockProcessedLines.push(line);
@@ -638,7 +660,9 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
 
     // 2.1 检查是否是纯文本代码块（如连续几行包含代码特征或 JSON 结构）
     const isCodeStart =
-      /^(?:const|let|var|function|import|export|class|def|public|private|protected|static|void|async)\s+/.test(trimmed) ||
+      /^(?:const|let|var|function|import|export|class|def|public|private|protected|static|void|async|interface|type|enum|readonly)\s/.test(trimmed) ||
+      /^type\s+[A-Za-z_$][\w$]*\s*[={]/.test(trimmed) ||
+      /^\/\*\*/.test(trimmed) ||
       /^(?:if|for|while|switch|try)\s*[\(\{]/.test(trimmed) ||
       /^(?:console\.|print\(|System\.out\.|echo\s)/.test(trimmed) ||
       /^(?:\{\s*$|\[\s*$)/.test(trimmed) ||
@@ -664,9 +688,12 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
 
         consecutiveEmpty = 0;
         const isStillCode =
-          /^(?:const|let|var|function|import|export|class|def|return|if|else|for|while|switch|case|try|catch|finally|console|print)\b/.test(nextTrimmed) ||
+          /^(?:const|let|var|function|import|export|class|interface|type|enum|def|return|if|else|for|while|switch|case|try|catch|finally|console|print|readonly)\b/.test(nextTrimmed) ||
           /^[}\]\);,]/.test(nextTrimmed) ||
           /["'][\w\-]+["']\s*:\s*/.test(nextTrimmed) ||
+          /^[a-zA-Z_$][\w$]*\s*:\s*/.test(nextTrimmed) ||
+          /^[a-zA-Z_$][\w$]*,\s*$/.test(nextTrimmed) ||
+          /^\s*(?:\/\*\*?|\*(?:\s|$)|\*\/)/.test(nextTrimmed) ||
           /^(?:\$|npm|pnpm|yarn|git|docker|curl|pip)\s+/.test(nextTrimmed) ||
           /^(?:FROM|WHERE|GROUP\s+BY|ORDER\s+BY|LIMIT|JOIN|HAVING)\b/i.test(nextTrimmed) ||
           /^[a-zA-Z0-9_$.]+\(.*\)[;]?$/.test(nextTrimmed) ||
@@ -1094,15 +1121,9 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
       continue;
     }
 
-    // 3.11 识别自然纯文本中的配图与图片 URL
-    const plainImgMatch = trimmed.match(/^(?:配图|图片|插图)[：:]\s*(\S+)$/i) || trimmed.match(/^\[(?:配图|图片|插图)\]\s*(\S+)$/i);
-    if (plainImgMatch && isImageUrl(plainImgMatch[1])) {
-      const imgUrl = plainImgMatch[1];
-      processedLines.push('');
-      processedLines.push(`![配图](${imgUrl})`);
-      lastNonEmptyWasImage = true;
-      continue;
-    }
+    // 3.11 配图 / 图片标记行（配图：URL、[图片] URL）不再转为图片：
+    // 纯文本输入遵循「URL 只显示 URL」的需求，此类行按普通文本处理；
+    // 仅显式 Markdown 图片语法 ![alt](url) 与 <img> 标签才在预览中按图片渲染
 
     // 3.12 识别图片题注或图表标注：如 "▲ 图1：系统整体架构" 或 "▲ 阶段 1：草图" 或 "*▲ 图1：系统架构*"
     const isCaptionPattern =
