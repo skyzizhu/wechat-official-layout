@@ -57,6 +57,8 @@ export function Editor({
   const [isDragging, setIsDragging] = useState(false);
   // 第二阶段：选中行意图转换工具栏 { 起始行, 结束行（含） }
   const [intentBar, setIntentBar] = useState<{ s: number; e: number } | null>(null);
+  // 低置信度决策悬浮确认窗：默认收起为数量徽标，点击展开
+  const [decisionPanelOpen, setDecisionPanelOpen] = useState(false);
 
   const menuRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -254,53 +256,73 @@ export function Editor({
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
     >
-      {/* 第二阶段：低置信度识别决策提示条 —— 让「拿不准」可见，一键纠偏 */}
+      {/* 第二阶段：低置信度识别决策 —— 悬浮确认窗（默认收起为数量徽标，点击展开列表） */}
       {lowConfidenceDecisions && lowConfidenceDecisions.length > 0 && (
-        <div className="flex-shrink-0 border-b border-amber-200 bg-amber-50/70 px-3 py-1.5 text-xs">
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-medium text-amber-800">
+        <div className="absolute bottom-3 right-3 z-40">
+          {decisionPanelOpen ? (
+            <div className="w-[440px] max-w-[92vw] max-h-[460px] flex flex-col bg-white border border-amber-200 rounded-xl shadow-2xl">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-amber-100 flex-shrink-0">
+                <span className="font-medium text-amber-800 text-xs">
+                  ⚠ {lowConfidenceDecisions.length} 处识别需要确认
+                </span>
+                <span className="flex items-center gap-2">
+                  {onExportFeedback && (
+                    <button
+                      onClick={onExportFeedback}
+                      className="text-[11px] text-amber-700 hover:text-amber-900 underline cursor-pointer"
+                      title="导出本地反馈数据（JSON），帮助改进识别规则"
+                    >
+                      导出反馈
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setDecisionPanelOpen(false)}
+                    className="text-gray-400 hover:text-gray-600 cursor-pointer text-xs"
+                  >
+                    收起 ×
+                  </button>
+                </span>
+              </div>
+              <div className="overflow-y-auto px-3 py-2 space-y-2 text-xs">
+                {lowConfidenceDecisions.map((d) => {
+                  const key = `${d.type}:${d.snippet}`;
+                  return (
+                    <div key={key} className="flex items-center justify-between gap-2 text-gray-700">
+                      <span className="truncate flex-1" title={d.snippet}>
+                        「{d.snippet}」… {d.type}（{Math.round(d.confidence * 100)}%）
+                      </span>
+                      <span className="flex items-center gap-1.5 flex-shrink-0">
+                        {onResolveDecision && (
+                          <button
+                            onClick={() => onResolveDecision(d)}
+                            className="px-1.5 py-0.5 rounded border border-gray-300 bg-white hover:bg-gray-100 cursor-pointer whitespace-nowrap"
+                          >
+                            {d.type === '金句' ? '转为金句' : d.type === 'HTML代码块' ? '转为代码块' : '改为正文'}
+                          </button>
+                        )}
+                        {onKeepDecision && (
+                          <button
+                            onClick={() => onKeepDecision(d)}
+                            className="px-1.5 py-0.5 rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer whitespace-nowrap"
+                          >
+                            保留 ✓
+                          </button>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setDecisionPanelOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white text-xs font-medium rounded-full shadow-lg hover:bg-amber-600 cursor-pointer"
+              title="点击展开识别确认列表"
+            >
               ⚠ {lowConfidenceDecisions.length} 处识别需要确认
-            </span>
-            {onExportFeedback && (
-              <button
-                onClick={onExportFeedback}
-                className="text-[11px] text-amber-700 hover:text-amber-900 underline cursor-pointer"
-                title="导出本地反馈数据（JSON），帮助改进识别规则"
-              >
-                导出反馈
-              </button>
-            )}
-          </div>
-          <div className="mt-1 space-y-1">
-            {lowConfidenceDecisions.map((d) => {
-              const key = `${d.type}:${d.snippet}`;
-              return (
-                <div key={key} className="flex items-center justify-between gap-2 text-gray-700">
-                  <span className="truncate">
-                    「{d.snippet}」… 识别为{d.type}（置信度 {Math.round(d.confidence * 100)}%）
-                  </span>
-                  <span className="flex items-center gap-1.5 flex-shrink-0">
-                    {onResolveDecision && (
-                      <button
-                        onClick={() => onResolveDecision(d)}
-                        className="px-1.5 py-0.5 rounded border border-gray-300 bg-white hover:bg-gray-100 cursor-pointer"
-                      >
-                        {d.type === '金句' ? '转为金句' : d.type === 'HTML代码块' ? '转为代码块' : '改为正文'}
-                      </button>
-                    )}
-                    {onKeepDecision && (
-                      <button
-                        onClick={() => onKeepDecision(d)}
-                        className="px-1.5 py-0.5 rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer"
-                      >
-                        保留 ✓
-                      </button>
-                    )}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+            </button>
+          )}
         </div>
       )}
 
