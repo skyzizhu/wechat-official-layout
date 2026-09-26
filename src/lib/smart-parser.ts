@@ -1385,9 +1385,9 @@ export function repairPastedHtml(text: string): string {
     }
     // 2) 修复标签内属性名的破折号损伤（data — role → data-role）
     out = out.replace(/(<[a-zA-Z][^<>]*?)\bdata\s+[—–−]\s*(?=[a-zA-Z][a-zA-Z-]*\s*=)/g, '$1data-');
-    // 3) 清除历史转换残留的孤立星号垃圾行（整行仅由两个星号组成——它既非合法加粗也非分割线，纯属转换残渣；
-    //    连同行尾换行一起移除，避免在 HTML 块中间留下空行导致结构断裂；注意保留单独的 *** 水平分割线）
-    out = out.replace(/^[ \t]*\*\*[ \t]*\n?/gm, '');
+    // 3) 清除历史转换残留的孤立星号垃圾行（整行有且仅有两个星号——它既非合法加粗也非分割线，纯属转换残渣；
+    //    必须锚定行尾，绝不能误伤以 ** 开头的正常加粗行（如 **Q：...**、**需求梳理** — ...）；注意保留 *** 水平分割线）
+    out = out.replace(/^[ \t]*\*\*[ \t]*(?:\n|$)/gm, '');
     return out;
   });
   return repaired.join('');
