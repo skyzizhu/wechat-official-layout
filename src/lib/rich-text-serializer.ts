@@ -28,7 +28,7 @@ import { ThemePreset, WECHAT_OFFICIAL_FONT_FAMILY } from '@/themes/types';
 /**
  * 清理并规范化 CSS 内联样式字符串，严格契合微信公众号插件规范
  */
-function sanitizeInlineStyle(style: string): string {
+function sanitizeInlineStyle(style: string, options?: { isDecorative?: boolean; dataRole?: string | null }): string {
   if (!style) return '';
   return style
     .replace(/"/g, "'") // 彻底将内联样式中的双引号转为单引号，防止破坏 HTML style="..." 属性结构
@@ -70,11 +70,12 @@ function sanitizeInlineStyle(style: string): string {
       // 规范 1.5.1 & 1.5.2: 剔除容器 height: 0 或固定微小高度 (防止移动端内容不可见或截断裁剪)
       const compact = lower.replace(/\s+/g, '');
       if (
-        compact === 'height:0' ||
+        !options?.isDecorative &&
+        (compact === 'height:0' ||
         compact === 'height:0px' ||
         compact.startsWith('height:0.') ||
         compact === 'height:1px' ||
-        compact === 'height:1.5px'
+        compact === 'height:1.5px')
       ) {
         return false;
       }
@@ -115,19 +116,19 @@ function sanitizeInlineStyle(style: string): string {
         const valStr = res.slice(12).trim().toLowerCase();
         if (valStr.endsWith('px')) {
           const pxVal = parseFloat(valStr);
-          if (!isNaN(pxVal) && pxVal < 24) {
+          if (!isNaN(pxVal) && pxVal < 24 && options?.dataRole !== 'task-checkbox') {
             res = 'line-height: 1.75';
           }
         } else if (valStr.endsWith('%')) {
           const pctVal = parseFloat(valStr);
-          if (!isNaN(pctVal) && pctVal < 175) {
+          if (!isNaN(pctVal) && pctVal < 175 && options?.dataRole !== 'task-checkbox') {
             res = 'line-height: 1.75';
           }
         } else if (valStr === 'inherit' || valStr === '0' || valStr === '0px' || valStr === 'normal') {
           res = 'line-height: 1.75';
         } else {
           const num = parseFloat(valStr);
-          if (!isNaN(num) && num < 1.75) {
+          if (!isNaN(num) && num < 1.75 && options?.dataRole !== 'task-checkbox') {
             res = 'line-height: 1.75';
           }
         }
@@ -137,6 +138,7 @@ function sanitizeInlineStyle(style: string): string {
     })
     .join('; ');
 }
+
 
 /**
  * 将 React CSSProperties 主题样式对象序列化为内联 CSS 字符串（用于表格继承主题样式）
@@ -187,9 +189,13 @@ export function serializeToWeChatRichText(
 
     const h1Color = (themeElements?.h1?.color as string) || '#0f172a';
     const h1FontSize = (themeElements?.h1?.fontSize as string) || '24px';
+    const h1FontWeight = (themeElements?.h1?.fontWeight as string | number) || 800;
+    const h1LetterSpacing = (themeElements?.h1?.letterSpacing as string) || '0.5px';
     const h1BorderBottom = themeElements?.h1?.borderBottom as string | undefined;
+    const h1BorderTop = themeElements?.h1?.borderTop as string | undefined;
     const h1PaddingBottom = themeElements?.h1?.paddingBottom as string | undefined;
-    const borderStyle = h1BorderBottom ? `border-bottom: ${h1BorderBottom};` : '';
+    const borderBottomStyle = h1BorderBottom ? `border-bottom: ${h1BorderBottom};` : '';
+    const borderTopStyle = h1BorderTop ? `border-top: ${h1BorderTop};` : '';
     const paddingBottomStyle = h1PaddingBottom ? `padding-bottom: ${h1PaddingBottom};` : '';
 
     const section = document.createElement('section');
@@ -201,7 +207,7 @@ export function serializeToWeChatRichText(
     const innerH1 = document.createElement('h1');
     innerH1.setAttribute(
       'style',
-      `margin: 0; padding: 0; font-size: ${h1FontSize}; font-weight: 800; color: ${h1Color}; line-height: 1.75; letter-spacing: 0.5px; ${paddingBottomStyle} ${borderStyle} box-sizing: border-box; max-width: 100%; word-break: break-word;`
+      `margin: 0; padding: 0; font-size: ${h1FontSize}; font-weight: ${h1FontWeight}; color: ${h1Color}; line-height: 1.75; letter-spacing: ${h1LetterSpacing}; ${paddingBottomStyle} ${borderTopStyle} ${borderBottomStyle} box-sizing: border-box; max-width: 100%; word-break: break-word;`
     );
     innerH1.innerHTML = h1.innerHTML;
 
@@ -252,6 +258,20 @@ export function serializeToWeChatRichText(
       const innerSpan = h2.querySelector('span');
       const textHtml = innerSpan ? innerSpan.innerHTML : h2.innerHTML;
       section.innerHTML = `<span style="display: inline-block; background-color: #fde047; color: #000000; border: 2px solid #000000; padding: 4px 12px; box-shadow: 2.5px 2.5px 0px #000000; font-weight: 800; font-size: 17.5px; line-height: 1.75; max-width: 100%; word-break: break-word; box-sizing: border-box;">${textHtml}</span>`;
+    }
+    // Case B2: 复古报纸横幅风格 (上下横栏实线，古典铅印大标题风格)
+    else if (h2Decoration === 'newspaper-banner') {
+      const h2Style = themeElements?.h2 || {};
+      const borderTop = (h2Style.borderTop as string) || '1px solid #78716c';
+      const borderBottom = (h2Style.borderBottom as string) || '1px solid #78716c';
+      const bg = (h2Style.backgroundColor as string) || 'rgba(120, 113, 108, 0.08)';
+      const letterSpacing = (h2Style.letterSpacing as string) || '2px';
+      const textAlign = (h2Style.textAlign as string) || 'center';
+      section.setAttribute(
+        'style',
+        `margin-top: 44px; margin-bottom: 20px; text-align: ${textAlign}; line-height: 1.75; padding: 6px 14px; border-top: ${borderTop}; border-bottom: ${borderBottom}; background-color: ${bg}; max-width: 100%; box-sizing: border-box;`
+      );
+      section.innerHTML = `<span style="font-size: ${h2FontSize}; font-weight: 800; color: ${h2Color}; letter-spacing: ${letterSpacing}; line-height: 1.75; box-sizing: border-box;">${h2.innerHTML}</span>`;
     }
     // Case C: 经典微胶囊小彩条（微信风、商务、新中式、极客、薄荷、莫兰迪等）
     else if (
@@ -313,7 +333,24 @@ export function serializeToWeChatRichText(
     if (!parent) return;
 
     const h3Color = (themeElements?.h3?.color as string) || accentColor || '#047857';
-    const h3FontSize = (themeElements?.h3?.fontSize as string) || '16px';
+    const h3FontSize = (themeElements?.h3?.fontSize as string) || '16.5px';
+    const h3FontWeight = (themeElements?.h3?.fontWeight as string | number) || 600;
+    const h3LetterSpacing = (themeElements?.h3?.letterSpacing as string) || 'normal';
+    const h3BorderLeft = themeElements?.h3?.borderLeft as string | undefined;
+    const h3BorderLeftColor = themeElements?.h3?.borderLeftColor as string | undefined;
+    const h3BorderBottom = themeElements?.h3?.borderBottom as string | undefined;
+    const h3PaddingLeft = (themeElements?.h3?.paddingLeft as string) || (h3BorderLeft || h3BorderLeftColor ? '10px' : '0');
+
+    let borderCss = '';
+    if (h3BorderLeft) {
+      borderCss = `border-left: ${h3BorderLeft};`;
+    } else if (h3BorderLeftColor) {
+      borderCss = `border-left: 3.5px solid ${h3BorderLeftColor};`;
+    } else if (h3BorderBottom) {
+      borderCss = `border-bottom: ${h3BorderBottom};`;
+    } else {
+      borderCss = `border-left: 3.5px solid ${accentColor};`;
+    }
 
     const section = document.createElement('section');
     section.setAttribute(
@@ -324,7 +361,7 @@ export function serializeToWeChatRichText(
     const innerH3 = document.createElement('h3');
     innerH3.setAttribute(
       'style',
-      `margin: 0; padding: 0 0 0 10px; font-size: ${h3FontSize}; font-weight: 600; color: ${h3Color}; border-left: 3.5px solid ${accentColor}; line-height: 1.75; max-width: 100%; word-break: break-word; box-sizing: border-box;`
+      `margin: 0; padding: 0 0 0 ${h3PaddingLeft}; font-size: ${h3FontSize}; font-weight: ${h3FontWeight}; color: ${h3Color}; letter-spacing: ${h3LetterSpacing}; ${borderCss} line-height: 1.75; max-width: 100%; word-break: break-word; box-sizing: border-box;`
     );
     innerH3.innerHTML = h3.innerHTML;
 
@@ -354,17 +391,20 @@ export function serializeToWeChatRichText(
     const quoteBg =
       (bqStyle.backgroundColor as string) ||
       'rgba(16, 185, 129, 0.06)';
-    const quoteBorder =
-      (bqStyle.borderLeft as string) ||
-      `3.5px solid ${accentColor}`;
+    const fullBorder = (bqStyle.border as string) ? `border: ${bqStyle.border};` : '';
+    const quoteBorderLeft = (bqStyle.borderLeft as string) || (fullBorder ? '' : `3.5px solid ${accentColor}`);
+    const borderLeftStyle = quoteBorderLeft ? `border-left: ${quoteBorderLeft};` : '';
     const quoteColor = (bqStyle.color as string) || '#1f2937';
     const quoteRadius = (bqStyle.borderRadius as string) || '0 8px 8px 0';
+    const quotePadding = (bqStyle.padding as string) || '16px 20px';
+    const quoteFontSize = (bqStyle.fontSize as string) || '14.5px';
+    const quoteBoxShadow = (bqStyle.boxShadow as string) ? `box-shadow: ${bqStyle.boxShadow};` : '';
 
     const section = document.createElement('section');
     section.setAttribute('data-role', 'blockquote');
     section.setAttribute(
       'style',
-      `margin: 24px 0; padding: 16px 20px; background-color: ${quoteBg}; border-left: ${quoteBorder}; border-radius: ${quoteRadius}; color: ${quoteColor}; font-size: 14.5px; line-height: 1.85; max-width: 100%; box-sizing: border-box; word-break: break-word;`
+      `margin: 24px 0; padding: ${quotePadding}; background-color: ${quoteBg}; ${fullBorder} ${borderLeftStyle} border-radius: ${quoteRadius}; ${quoteBoxShadow} color: ${quoteColor}; font-size: ${quoteFontSize}; line-height: 1.85; max-width: 100%; box-sizing: border-box; word-break: break-word;`
     );
 
     // 格式化引用块内部的所有子段落，移除多余外边距
@@ -372,7 +412,7 @@ export function serializeToWeChatRichText(
       const isLast = idx === arr.length - 1;
       p.setAttribute(
         'style',
-        `margin: 0 0 ${isLast ? '0' : '10px'} 0; padding: 0; font-size: 14.5px; line-height: 1.85; color: inherit; letter-spacing: 0.034em; box-sizing: border-box;`
+        `margin: 0 0 ${isLast ? '0' : '10px'} 0; padding: 0; font-size: ${quoteFontSize}; line-height: 1.85; color: inherit; letter-spacing: 0.034em; box-sizing: border-box;`
       );
     });
 
@@ -446,7 +486,7 @@ export function serializeToWeChatRichText(
 
       table.setAttribute(
         'style',
-        'width: 100%; border-collapse: collapse; margin: 24px auto; border: none; background: transparent; font-size: 13px; line-height: 1.75; color: #64748b; box-sizing: border-box; max-width: 100%;'
+        'width: 100%; border-collapse: collapse; margin: 24px auto; border: none; background: transparent; font-size: 13px; line-height: 1.75; color: #64748b; box-sizing: border-box; max-width: 100%; table-layout: fixed;'
       );
 
       table.querySelectorAll('th, td').forEach((cell) => {
@@ -609,11 +649,51 @@ export function serializeToWeChatRichText(
 
     // 1. 检查是否为图片包装容器段落
     if (p.querySelector('img')) {
+      // 容错处理：若同一个 <p> 中既有 <img> 又有后续题注文本/内联节点（如 Markdown 中未空行）
+      const childNodes = Array.from(p.childNodes);
+      const imgIdx = childNodes.findIndex(
+        (n) => n.nodeName === 'IMG' || (n.nodeType === 1 && (n as HTMLElement).querySelector('img'))
+      );
+      if (imgIdx !== -1) {
+        const trailingNodes = childNodes.slice(imgIdx + 1).filter((n) => {
+          if (n.nodeType === 3) return Boolean(n.textContent?.trim());
+          return true;
+        });
+
+        if (trailingNodes.length > 0) {
+          const captionP = document.createElement('p');
+          captionP.setAttribute('data-role', 'image-caption');
+          captionP.setAttribute(
+            'style',
+            'margin-top: 8px; margin-bottom: 26px; font-size: 13px; line-height: 1.75; color: #64748b; letter-spacing: 0.02em; text-align: center; word-break: break-word; box-sizing: border-box; max-width: 100%;'
+          );
+          trailingNodes.forEach((n) => {
+            if (n.nodeType === 1 && (n as HTMLElement).matches('em, span')) {
+              while (n.firstChild) {
+                captionP.appendChild(n.firstChild);
+              }
+              n.remove();
+            } else {
+              captionP.appendChild(n);
+            }
+          });
+          p.after(captionP);
+
+          p.setAttribute(
+            'style',
+            'margin-top: 26px; margin-bottom: 0; text-align: center; max-width: 100%; box-sizing: border-box; line-height: 1.75;'
+          );
+          return;
+        }
+      }
+
       const nextText = next?.textContent?.trim() || '';
       const isNextCaption =
         next?.getAttribute('data-role') === 'image-caption' ||
-        /^(?:▲\s*|\[)?(?:图|表|Figure)\s*\d+/i.test(nextText) ||
-        nextText.startsWith('▲');
+        /^(?:▲\s*|\[)?(?:图|表|Figure|阶段)\s*[\dA-Za-z\-]+/i.test(nextText) ||
+        nextText.startsWith('▲') ||
+        /^(?:注|注\d+|※)[：:]/.test(nextText) ||
+        (next && nextText.length > 0 && nextText.length < 120 && !/[。！？]$/.test(nextText));
 
       p.setAttribute(
         'style',
@@ -629,11 +709,15 @@ export function serializeToWeChatRichText(
       prev &&
       (prev.querySelector('img') ||
         prev.getAttribute('data-role') === 'image-gallery' ||
-        prev.tagName === 'IMG');
+        prev.getAttribute('data-role') === 'image-wrapper' ||
+        prev.tagName === 'IMG' ||
+        prev.tagName === 'FIGURE');
     const isCaption =
       pRole === 'image-caption' ||
-      /^(?:▲\s*|\[)?(?:图|表|Figure)\s*\d+/i.test(pText) ||
-      (isPrevImgBlock && (pText.startsWith('▲') || (pText.length > 0 && pText.length < 80 && !/[。！？]$/.test(pText))));
+      /^(?:▲\s*|\[)?(?:图|表|Figure|阶段)\s*[\dA-Za-z\-]+/i.test(pText) ||
+      pText.startsWith('▲') ||
+      /^(?:注|注\d+|※)[：:]/.test(pText) ||
+      (isPrevImgBlock && (pText.length > 0 && pText.length < 120 && !/[。！？]$/.test(pText)));
 
     if (isCaption) {
       p.setAttribute(
@@ -772,10 +856,12 @@ export function serializeToWeChatRichText(
     if (hasGradientBg) {
       strong.setAttribute('data-ignore-dm', 'text-bg-gradient');
     }
-    // 强制声明 display: inline; white-space: nowrap; 杜绝 inline-block / block，避免微信粘贴异常折行
+    // 强制声明 display: inline; 杜绝 inline-block / block，避免微信粘贴异常折行
+    const isAtomicGroup = strong.parentElement?.tagName === 'SPAN' && strong.parentElement.getAttribute('style')?.includes('white-space: nowrap');
+    const whiteSpaceStyle = isAtomicGroup ? 'white-space: nowrap;' : 'word-break: break-word;';
     strong.setAttribute(
       'style',
-      `font-weight: 700; color: ${strongColor}; ${markStyle} display: inline; white-space: nowrap;`
+      `font-weight: 700; color: ${strongColor}; ${markStyle} display: inline; ${whiteSpaceStyle}`
     );
   });
 
@@ -800,9 +886,17 @@ export function serializeToWeChatRichText(
       a.remove();
       return;
     }
+    const aStyle = themeElements?.a || {};
+    const aColor = (aStyle.color as string) || accentColor;
+    const aTextDecoration = (aStyle.textDecoration as string) || 'underline';
+    const aFontWeight = (aStyle.fontWeight as string | number) || 600;
+    const aBorderBottom = aStyle.borderBottom ? `border-bottom: ${aStyle.borderBottom};` : '';
+    const aBg = aStyle.backgroundColor ? `background-color: ${aStyle.backgroundColor};` : '';
+    const aPadding = aStyle.padding ? `padding: ${aStyle.padding};` : '';
+    const aBorderRadius = aStyle.borderRadius ? `border-radius: ${aStyle.borderRadius};` : '';
     a.setAttribute(
       'style',
-      `color: ${accentColor}; text-decoration: underline; text-underline-offset: 3px; font-weight: 600; box-sizing: border-box;`
+      `color: ${aColor}; text-decoration: ${aTextDecoration}; text-underline-offset: 3px; font-weight: ${aFontWeight}; ${aBorderBottom} ${aBg} ${aPadding} ${aBorderRadius} box-sizing: border-box; word-break: break-all;`
     );
   });
 
@@ -865,45 +959,54 @@ export function serializeToWeChatRichText(
 
   const liveImgs = Array.from(element.querySelectorAll('img'));
   clone.querySelectorAll('img').forEach((img, idx) => {
-    const isInsideTable = Boolean(img.closest('table'));
+    const isInsideCell = Boolean(img.closest('td, th'));
     const borderStr = imgBorder ? `border: ${imgBorder};` : '';
     const shadowStr = imgShadow ? `box-shadow: ${imgShadow};` : '';
     const paddingStr = imgPadding ? `padding: ${imgPadding};` : '';
     const bgStr = imgBg ? `background-color: ${imgBg};` : '';
     const radiusStr = imgRadius ? `border-radius: ${imgRadius};` : '';
     const marginStr = 'margin: 0 auto;';
+    const galleryStyle = isInsideCell ? 'aspect-ratio: 4 / 3; object-fit: cover;' : '';
 
     img.setAttribute(
       'style',
-      `max-width: 100%; width: 100%; height: auto; display: block; ${marginStr} ${radiusStr} ${borderStr} ${shadowStr} ${paddingStr} ${bgStr} box-sizing: border-box;`
+      `max-width: 100%; width: 100%; height: auto; ${galleryStyle} display: block; ${marginStr} ${radiusStr} ${borderStr} ${shadowStr} ${paddingStr} ${bgStr} box-sizing: border-box;`
     );
 
     let src = img.getAttribute('src') || '';
+    const originalSrc = src;
 
     // 如果是本站静态图片（如 /images/... 或本地域名），从 live DOM 通过同源 canvas 导出 Base64
     // 确保复制粘贴至微信公众号时，图片直接以内联二进制形式由微信转存为微信 CDN，无需外网访问 localhost
     const liveImg = liveImgs[idx];
     if (liveImg && (src.startsWith('/') || (typeof window !== 'undefined' && src.includes(window.location.host)))) {
-      try {
-        const canvas = document.createElement('canvas');
-        const nw = liveImg.naturalWidth || 800;
-        const nh = liveImg.naturalHeight || 600;
-        canvas.width = nw;
-        canvas.height = nh;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(liveImg, 0, 0, nw, nh);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
-          src = dataUrl;
-          img.setAttribute('src', dataUrl);
+      if (!liveImg.complete || liveImg.naturalWidth === 0) {
+        // Skip Base64 conversion for unloaded images, keep original src
+      } else {
+        try {
+          const canvas = document.createElement('canvas');
+          const nw = liveImg.naturalWidth || 800;
+          const nh = liveImg.naturalHeight || 600;
+          canvas.width = nw;
+          canvas.height = nh;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, nw, nh);
+            ctx.drawImage(liveImg, 0, 0, nw, nh);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+            src = dataUrl;
+            img.setAttribute('src', dataUrl);
+          }
+        } catch (err) {
+          console.warn('Canvas toDataURL failed for live img', err);
         }
-      } catch (err) {
-        console.warn('Canvas toDataURL failed for live img', err);
       }
     }
 
-    if (src && !img.getAttribute('data-src')) {
-      img.setAttribute('data-src', src);
+    // data-src 保留原始图片地址（而非 Base64 内联值），避免同一张图的双份拷贝导致产物体积翻倍
+    if (originalSrc && !img.getAttribute('data-src')) {
+      img.setAttribute('data-src', originalSrc);
     }
     if (!img.getAttribute('data-w')) {
       const naturalW = liveImg?.naturalWidth || 1080;
@@ -912,7 +1015,11 @@ export function serializeToWeChatRichText(
     if (!img.getAttribute('data-ratio')) {
       const naturalW = liveImg?.naturalWidth;
       const naturalH = liveImg?.naturalHeight;
-      const ratio = naturalW && naturalH ? (naturalH / naturalW).toFixed(4) : '0.5625';
+      const ratio = isInsideCell
+        ? '0.75'
+        : naturalW && naturalH
+        ? (naturalH / naturalW).toFixed(4)
+        : '0.5625';
       img.setAttribute('data-ratio', String(ratio));
     }
     if (!img.getAttribute('alt')) {
@@ -942,7 +1049,9 @@ export function serializeToWeChatRichText(
 
     const rawStyle = node.getAttribute('style');
     if (rawStyle) {
-      const sanitized = sanitizeInlineStyle(rawStyle);
+      const isDecorative = !node.textContent?.trim();
+      const dataRole = node.getAttribute('data-role');
+      const sanitized = sanitizeInlineStyle(rawStyle, { isDecorative, dataRole });
       node.setAttribute('style', sanitized);
     }
   });
@@ -965,9 +1074,15 @@ export function serializeToWeChatRichText(
     rawBgColor.toLowerCase() === '#fff' ||
     rawBgColor === 'transparent';
 
-  const outerContainerStyle = isWhiteBg
-    ? `max-width: 100%; margin: 0 auto; box-sizing: border-box; font-family: ${WECHAT_OFFICIAL_FONT_FAMILY}; font-size: ${baseFontSize}; letter-spacing: 0.034em; line-height: 1.85; color: ${mainTextColor}; text-align: justify; word-break: break-word;`
-    : `max-width: 100%; margin: 0 auto; box-sizing: border-box; font-family: ${WECHAT_OFFICIAL_FONT_FAMILY}; font-size: ${baseFontSize}; letter-spacing: 0.034em; line-height: 1.85; color: ${mainTextColor}; text-align: justify; word-break: break-word; background-color: ${rawBgColor}; padding: 24px 16px; border-radius: 8px;`;
+  const cBorder = theme?.container?.border ? `border: ${theme.container.border};` : '';
+  const cRadius = theme?.container?.borderRadius ? `border-radius: ${theme.container.borderRadius};` : '';
+  const cShadow = theme?.container?.boxShadow ? `box-shadow: ${theme.container.boxShadow};` : '';
+  const hasContainerFrame = Boolean(cBorder || cShadow);
+  const containerPadding = hasContainerFrame || !isWhiteBg ? 'padding: 24px 16px;' : '';
+  const bgStyle = isWhiteBg ? '' : `background-color: ${rawBgColor};`;
+  const radiusStyle = cRadius ? cRadius : (isWhiteBg && !hasContainerFrame ? '' : 'border-radius: 8px;');
+
+  const outerContainerStyle = `max-width: 100%; margin: 0 auto; box-sizing: border-box; font-family: ${WECHAT_OFFICIAL_FONT_FAMILY}; font-size: ${baseFontSize}; letter-spacing: 0.034em; line-height: 1.85; color: ${mainTextColor}; text-align: justify; word-break: break-word; ${bgStyle} ${cBorder} ${radiusStyle} ${cShadow} ${containerPadding}`.trim();
 
   // 杜绝任何双引号破坏 style="..." 属性结构
   const safeOuterStyle = outerContainerStyle.replace(/"/g, "'");
@@ -996,65 +1111,63 @@ export async function copyHighFidelityRichText(
 
   let success = false;
 
-  // 策略 1: 优先尝试现代标准的 navigator.clipboard.write API
-  if (navigator.clipboard && window.ClipboardItem) {
-    try {
-      const htmlBlob = new Blob([fullHtml], { type: 'text/html' });
-      const textBlob = new Blob([plainText], { type: 'text/plain' });
+  // 策略 1: 优先使用经典的 copy 事件监听注入法（同步操作，不会因为 await 丢失用户手势）
+  const copyHandler = (e: ClipboardEvent) => {
+    e.preventDefault();
+    if (e.clipboardData) {
+      e.clipboardData.clearData();
+      e.clipboardData.setData('text/html', fullHtml);
+      e.clipboardData.setData('text/plain', plainText);
+    }
+  };
 
+  // 激活合法选区以确保 execCommand('copy') 触发 copy 事件
+  const dummySpan = document.createElement('span');
+  dummySpan.style.position = 'fixed';
+  dummySpan.style.left = '-9999px';
+  dummySpan.style.top = '0';
+  dummySpan.style.fontSize = '12px';
+  dummySpan.style.lineHeight = '1.5';
+  dummySpan.setAttribute('aria-hidden', 'true');
+  dummySpan.textContent = ' ';
+  document.body.appendChild(dummySpan);
+
+  const range = document.createRange();
+  range.selectNodeContents(dummySpan);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+
+  document.addEventListener('copy', copyHandler, { once: true });
+
+  try {
+    success = document.execCommand('copy');
+  } catch (err) {
+    console.warn('execCommand copy failed', err);
+  } finally {
+    selection?.removeAllRanges();
+    if (dummySpan.parentNode) {
+      dummySpan.parentNode.removeChild(dummySpan);
+    }
+    document.removeEventListener('copy', copyHandler);
+  }
+
+  // 策略 2: 降级使用现代标准的 navigator.clipboard.write API
+  if (!success && navigator.clipboard && typeof ClipboardItem !== 'undefined') {
+    try {
       await navigator.clipboard.write([
         new ClipboardItem({
-          'text/html': htmlBlob,
-          'text/plain': textBlob,
+          'text/html': new Blob([fullHtml], { type: 'text/html' }),
+          'text/plain': new Blob([plainText], { type: 'text/plain' }),
         }),
       ]);
       success = true;
     } catch (err) {
-      console.warn('Modern navigator.clipboard.write failed, falling back to copy event', err);
+      console.warn('Modern navigator.clipboard.write failed', err);
     }
   }
-
-  // 策略 2: 降级使用经典的 copy 事件监听注入法（兼容任何浏览器环境，100% 写入 text/html）
+  
   if (!success) {
-    const copyHandler = (e: ClipboardEvent) => {
-      e.preventDefault();
-      if (e.clipboardData) {
-        e.clipboardData.clearData();
-        e.clipboardData.setData('text/html', fullHtml);
-        e.clipboardData.setData('text/plain', plainText);
-      }
-    };
-
-    // 激活合法选区以确保 execCommand('copy') 触发 copy 事件
-    const dummySpan = document.createElement('span');
-    dummySpan.style.position = 'fixed';
-    dummySpan.style.left = '-9999px';
-    dummySpan.style.top = '0';
-    dummySpan.style.fontSize = '12px';
-    dummySpan.style.lineHeight = '1.5';
-    dummySpan.setAttribute('aria-hidden', 'true');
-    dummySpan.textContent = ' ';
-    document.body.appendChild(dummySpan);
-
-    const range = document.createRange();
-    range.selectNodeContents(dummySpan);
-    const selection = window.getSelection();
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-
-    document.addEventListener('copy', copyHandler, { once: true });
-
-    try {
-      const ok = document.execCommand('copy');
-      if (!ok) {
-        throw new Error('document.execCommand copy returned false');
-      }
-    } finally {
-      selection?.removeAllRanges();
-      if (dummySpan.parentNode) {
-        dummySpan.parentNode.removeChild(dummySpan);
-      }
-      document.removeEventListener('copy', copyHandler);
-    }
+    throw new Error('All clipboard copy strategies failed');
   }
 }
