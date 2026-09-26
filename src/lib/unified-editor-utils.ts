@@ -192,6 +192,21 @@ export function markdownToUnifiedHtml(markdown: string): string {
       continue;
     }
 
+    // 4.5 引用块（> 开头的连续行 → 引用卡片）：保证「一键转 Markdown / AI 排版」
+    // 产出的引用块在编辑器中可视化呈现，且同步回写时保留 > 前缀，杜绝整篇变引用的污染
+    if (trimmed.startsWith('>')) {
+      const quoteLines: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith('>')) {
+        quoteLines.push(lines[i].trim().replace(/^>\s?/, ''));
+        i++;
+      }
+      const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const inner = quoteLines.map((l) => esc(l) || ' ').join('<br>');
+      const quoteHtml = `<blockquote class="unified-quote my-3 border-l-4 border-emerald-400 bg-emerald-50/60 rounded-r-lg px-4 py-3 text-gray-600" data-ml-s="${blockStart}" data-ml-e="${i - 1}">${inner}</blockquote>\n<p><br></p>`;
+      htmlParts.push(withLineMark(quoteHtml, blockStart, i - 1));
+      continue;
+    }
+
     // 5. 自然纯文本配图标记（配图：URL / [图片] URL）不再转为图片卡片：
     // 纯文本输入遵循「URL 只显示 URL」的排版需求，此类行按普通文本段落处理；
     // 仅显式 Markdown 图片语法 ![alt](url) 与 <img> 标签才在画布中呈现图片卡片
@@ -245,6 +260,13 @@ export function unifiedHtmlToMarkdown(container: HTMLElement): string {
             }
           }
         }
+        continue;
+      }
+
+      // 1.5 引用卡片 <blockquote class="unified-quote">：还原为 > 前缀行
+      if (el.classList.contains('unified-quote')) {
+        const qlines = (el.innerText || '').split('\n').map((t) => t.trim()).filter(Boolean);
+        qlines.forEach((q) => parts.push(`> ${q}`));
         continue;
       }
 
