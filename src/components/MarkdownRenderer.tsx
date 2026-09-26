@@ -13,6 +13,12 @@ interface MarkdownRendererProps {
 }
 
 /**
+ * photo-card 图片卡片内部段落的题注色上下文：
+ * 卡片为白色衬底，题注需使用主题强调色（而非正文黑/主题正文色），保证卡片上清晰可读且跟随主题
+ */
+const PhotoCardColorContext = React.createContext<string | null>(null);
+
+/**
  * 递归提取 AST 节点中的纯文本
  */
 function getNodeText(node: any): string {
@@ -195,6 +201,8 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
 
   // 题注统一色：跟随主题的弱化文字色（td 单元格色优先，正文色兜底），暗色主题自动呈浅色、亮色主题呈深灰
   const captionColor = (elements.td?.color as string) || (elements.p?.color as string) || '#64748b';
+  // 主题强调色（H3/链接色，响应主色搭配），用于白色衬底卡片上的题注
+  const accentColor = (elements.h3?.color as string) || (elements.a?.color as string) || captionColor;
 
   const components: Components = {
     // 一级大标题：醒目、克制、大气通透，绝不附带无关字符
@@ -344,10 +352,10 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
     h6: ({ children }) => <h6 style={{ ...elements.h6, lineHeight: 1.75 }}>{children}</h6>,
 
     // 正文段落：原样保留用户文本，智能支持题注紧凑对齐与大图留白
-    // 正文段落：原样保留用户文本，智能支持题注紧凑对齐与大图留白
     // 合并策略：用户原生 HTML 中显式写的内联样式（incomingStyle）优先于主题默认值，
     // 保证 <p style="text-align: center"> 等用户意图不被主题覆盖
     p: ({ node, style: incomingStyle, children }: any) => {
+      const photoCardColor = React.useContext(PhotoCardColorContext);
       const isImageCaption = Boolean(node?.properties?.dataImageCaption);
       const isImageParagraph = Boolean(node?.properties?.dataImageParagraph);
       const hasCaption = Boolean(node?.properties?.dataHasCaption);
@@ -366,7 +374,7 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
               textAlign: 'center',
               fontSize: '13px',
               lineHeight: 1.75,
-              color: captionColor,
+              color: accentColor,
               fontStyle: 'normal',
               letterSpacing: '0.02em',
               boxSizing: 'border-box',
@@ -415,6 +423,10 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
             marginBottom,
             wordBreak: 'break-word',
             boxSizing: 'border-box',
+            // photo-card 白色卡片内的段落统一为题注规范：13px、居中、主题强调色、非斜体
+            ...(photoCardColor
+              ? { fontSize: '13px', color: photoCardColor, textAlign: 'center', fontStyle: 'normal', fontWeight: 500 }
+              : null),
           }}
         >
           {children}
@@ -659,6 +671,25 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
       />
     ),
 
+    // 自定义 HTML 卡片（photo-card）：宽度与正文对齐，并为内部题注提供主题强调色上下文
+    section: ({ node, style: incomingStyle, children }: any) => {
+      const role = node?.properties?.dataRole;
+      const userStyle = incomingStyle && typeof incomingStyle === 'object' ? incomingStyle : null;
+      if (role === 'photo-card') {
+        return (
+          <PhotoCardColorContext.Provider value={accentColor}>
+            <section
+              data-role="photo-card"
+              style={{ ...userStyle, margin: userStyle?.margin || '20px auto', maxWidth: '100%' }}
+            >
+              {children}
+            </section>
+          </PhotoCardColorContext.Provider>
+        );
+      }
+      return <section style={userStyle}>{children}</section>;
+    },
+
     table: ({ node, children }: any) => {
       const isImageTable = Boolean(node?.properties?.dataImageTable);
       if (isImageTable) {
@@ -710,7 +741,7 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
               fontStyle: 'normal',
               fontSize: '13px',
               lineHeight: 1.75,
-              color: captionColor,
+              color: accentColor,
               letterSpacing: '0.02em',
               boxSizing: 'border-box',
             }}
@@ -736,7 +767,7 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
               fontStyle: 'normal',
               fontSize: '13px',
               lineHeight: 1.75,
-              color: captionColor,
+              color: accentColor,
               letterSpacing: '0.02em',
               boxSizing: 'border-box',
             }}
