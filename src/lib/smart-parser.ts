@@ -849,6 +849,7 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
   const processedLines: string[] = [];
   let isFirstNonEmpty = true;
   let inCodeBlock = false;
+  let inHtmlBlock = false;
   let lastNonEmptyWasImage = false;
 
   // 阿拉伯数字编号行的智能消歧辅助：
@@ -881,7 +882,18 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
     }
 
     if (!trimmed) {
+      inHtmlBlock = false; // 空行结束 HTML 块
       processedLines.push('');
+      continue;
+    }
+
+    // 保留用户内嵌的显式 HTML 块（photo-card 图片卡片、自定义 section 等）：
+    // 以 "<字母" 开头的行开启 HTML 块，直到空行为止；块内行原样输出，
+    // 杜绝条目标题提取/强调/间距等文本规则破坏 style 属性与卡片结构
+    if (inHtmlBlock || /^<[a-zA-Z]/.test(trimmed)) {
+      inHtmlBlock = true;
+      lastNonEmptyWasImage = false;
+      processedLines.push(trimmed);
       continue;
     }
 
@@ -1373,6 +1385,9 @@ export function repairPastedHtml(text: string): string {
     }
     // 2) 修复标签内属性名的破折号损伤（data — role → data-role）
     out = out.replace(/(<[a-zA-Z][^<>]*?)\bdata\s+[—–−]\s*(?=[a-zA-Z][a-zA-Z-]*\s*=)/g, '$1data-');
+    // 3) 清除历史转换残留的孤立星号垃圾行（整行仅由两个星号组成——它既非合法加粗也非分割线，纯属转换残渣；
+    //    连同行尾换行一起移除，避免在 HTML 块中间留下空行导致结构断裂；注意保留单独的 *** 水平分割线）
+    out = out.replace(/^[ \t]*\*\*[ \t]*\n?/gm, '');
     return out;
   });
   return repaired.join('');

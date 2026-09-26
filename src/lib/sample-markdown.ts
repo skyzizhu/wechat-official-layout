@@ -29,12 +29,14 @@ export const SAMPLE_MARKDOWN = `# 排版之美：现代数字化长文的视觉�
 - **空间与留白**：精确到像素的行间距与外边距，是给读者视线最好的休憩区。
 - **高亮与微标**：通过 **荧光笔加粗高亮** 与 *斜体重点强调*，瞬间抓住读者注意力。
 - **文本修饰细节**：支持 ~~过时删除线~~ 与 \`inline_code\` 等宽对比标记。
+  - 行内超链接：如 [微信设计规范](https://mp.weixin.qq.com) 与原生角标<sup>[注]</sup>联动
+  - 缩进子层级：支持多级嵌套列表，呈现清晰细腻的逻辑递进
 
 ### 1.1 排版工程的核心支撑体系
 
 在设计一套面向公众号与多端分发的排版系统时，需要兼顾以下三个要素：
 
-1. **结构清晰度**：严格遵循层级递进（H1 $\\to$ H2 $\\to$ H3 $\\to$ H4），禁止层级倒置；
+1. **结构清晰度**：严格遵循层级递进（H1 → H2 → H3 → H4 → H5 → H6），禁止层级倒置；
 2. **样式内联化**：深度遵循《微信公众平台第三方开发规范》，消除一切非法外部样式；
 3. **响应式自适应**：在 375px 小屏手机与大屏平板之间，均保持不换行的优雅呼吸感。
 
@@ -45,6 +47,14 @@ export const SAMPLE_MARKDOWN = `# 排版之美：现代数字化长文的视觉�
 - [x] 斑马纹自适应表格与横向防溢出滑动卡片
 - [x] 任务复选框高保真原生矢量化（杜绝微信过滤 input 标签）
 - [ ] 更多个性化排版风格扩展与动态配色调优
+
+##### 1.1.1.1 移动端深度优化细节
+
+微信公众号规范严格要求文本行高不低于 1.75，规避多行文本由于紧缩导致视觉重叠。
+
+###### 1.1.1.1.1 极端边界排版验证
+
+无论在 375px 小屏手机还是横屏折叠屏设备上，字行比例均保持自然舒适的呼吸感。
 
 ## 二、数据矩阵与全形态表格
 
@@ -64,13 +74,13 @@ export const SAMPLE_MARKDOWN = `# 排版之美：现代数字化长文的视觉�
 
 ### 3.1 典雅高清单图与居中题注
 
-![极简主义书籍与现代版式设计美学](https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=1200&q=80)
+![极简主义书籍与现代版式设计美学](/images/sample/sample-1.jpg)
 
 *▲ 图 1：极简主义书籍与现代版式设计的视觉呼吸感*
 
 ### 3.2 微信合规双图并列画廊（对比展示）
 
-| ![传统手工印刷工艺](https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=600&q=80) | ![现代数字化排版交互](https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=600&q=80) |
+| ![传统手工印刷工艺](/images/sample/sample-2.jpg) | ![现代数字化排版交互](/images/sample/sample-3.jpg) |
 | :---: | :---: |
 | *▲ 图 2-A：传统手工印刷工艺* | *▲ 图 2-B：现代数字化排版交互* |
 
@@ -78,15 +88,15 @@ export const SAMPLE_MARKDOWN = `# 排版之美：现代数字化长文的视觉�
 
 ### 3.3 三图流程串联（工作流呈现）
 
-| ![构思草图](https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=500&q=80) | ![视觉编排](https://images.unsplash.com/photo-1542744094-3a31f272c490?auto=format&fit=crop&w=500&q=80) | ![全端发布](https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=500&q=80) |
+| ![构思草图](/images/sample/sample-4.jpg) | ![视觉编排](/images/sample/sample-5.jpg) | ![全端发布](/images/sample/sample-6.jpg) |
 | :---: | :---: | :---: |
 | *▲ 阶段 1：灵感与结构草图* | *▲ 阶段 2：高保真排版设计* | *▲ 阶段 3：多端与公众号分发* |
 
 ### 3.4 拍立得留白卡片（Dark Mode 安全型）
 
-<section data-role="photo-card" style="margin: 28px auto; max-width: 90%; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 12px 16px 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); text-align: center;">
-  <img src="https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=1000&q=80" alt="沉浸式阅读与知识空间" style="width: 100%; border-radius: 6px; display: block; margin: 0 auto;" />
-  <p style="margin: 12px 0 0 0; font-size: 13px; color: #64748b; font-weight: 500; text-align: center;">▲ 图 3：拍立得衬底卡片，暗黑模式下自带留白护城河</p>
+<section data-role="photo-card" style="margin: 20px auto; max-width: 100%; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 8px 10px 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); text-align: center;">
+  <img src="/images/sample/sample-7.jpg" alt="沉浸式阅读与知识空间" style="width: 100%; border-radius: 6px; display: block; margin: 0 auto;" />
+  <p style="margin: 8px 0 0 0; font-size: 13px; color: #64748b; font-weight: 500; text-align: center;">▲ 图 3：拍立得衬底卡片，暗黑模式下自带留白护城河</p>
 </section>
 
 ## 四、代码美学与多语言技术呈现
@@ -197,6 +207,17 @@ export const SAMPLE_PLAIN_TEXT = `排版之美：现代数字化长文的视觉�
 3、结构的层次感：小节标题与重点标注，宛如旅途中的路标，时刻指引读者思维的方向。
 4、留白的节奏感：恰到好处的外边距让版面不显逼仄，给予视线缓冲与喘息的空间。
 
+1.1 排版工程的核心支撑体系
+在设计一套面向公众号与多端分发的排版系统时，需要兼顾结构清晰度与样式内联化。
+
+1.1.1 关键任务推进清单
+[x] 微信官方开发规范全面对齐（规避 #2.3.2 叠字告警与零乱码）
+[x] 纯 CSS 无侵入标题装饰栏（微胶囊、画廊线、波普硬阴影）
+[x] 解决题注联动与多图画廊高度平齐对齐
+[ ] 纯文本全形态智能语义识别引擎升级
+✓ 斑马纹自适应表格与横向防溢出滑动卡片
+□ 更多个性化排版风格扩展与动态配色调优
+
 【全格式智能解析与传统排版对比】
 排版维度 ｜ 传统手动排版 ｜ 智能语义识别引擎
 标题与层级 ｜ 手动选择字号加粗 ｜ 自动提取大标题与多级章节
@@ -215,17 +236,17 @@ export const SAMPLE_PLAIN_TEXT = `排版之美：现代数字化长文的视觉�
 三、视觉传达与多形态配图展示
 排版艺术不仅关乎文字，更离不开考究的多形态视觉配图。智能语义引擎同样支持自然语言下的多种图片形态识别与自动转换：
 
-配图：https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=1200&q=80
+配图：/images/sample/sample-1.jpg
 ▲ 图1：极简主义书籍与现代版式设计的视觉呼吸感
 
 【双图并列对比画廊】
 传统手工装订工艺 ｜ 现代数字化排版交互
-https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=600&q=80 ｜ https://images.unsplash.com/photo-1499750310107-5fef28a66643?auto=format&fit=crop&w=600&q=80
+/images/sample/sample-2.jpg ｜ /images/sample/sample-3.jpg
 ▲ 图2-A：传统手工装订工艺 ｜ ▲ 图2-B：现代数字化排版交互
 
 提示：对于纯文本输入，无论输入“配图：URL”还是表格中粘贴多张图片链接，引擎都能毫秒级识别并转换为微信官方合规的自适应多图画廊。
 
-图片：https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=1000&q=80
+图片：/images/sample/sample-7.jpg
 ▲ 图3：沉浸式阅读与知识空间（自适应当前主题专属质感）
 
 四、技术代码与逻辑呈现
@@ -248,13 +269,11 @@ function calculateReadingTime(text) {
 步骤二：右侧即时呈现预设风格的专业排版。
 步骤三：点击「复制公众号」，直接粘贴至公众平台后台发布。
 
-注意：在将文章复制到微信公众号后台之前，建议通过右上角的字号与主色微调器预览不同配色。
+💡 核心提示：所有智能识别与富文本序列化均在浏览器本地秒级完成，杜绝任何外部数据传输。
 
-提示：当正文中包含外部链接时，系统会自动开启「外链转脚注」引擎。
+⚠️ 注意事项：在将文章复制到微信公众号后台之前，建议通过右上角的字号与主色微调器预览不同配色。
 
-注：所有智能识别与富文本序列化均在浏览器本地秒级完成，杜绝任何外部数据传输。
-
-“好的设计是少，却更好。它让核心的事物更加纯粹与凸显。”
+“好的设计是少，却更好。它让核心的事物更加纯粹与凸显，消除一切浮夸多余的装潢，让真正重要的思想在字里行间静静流淌。” —— 迪特·拉姆斯
 
 六、参考资料：
 https://developers.weixin.qq.com/doc/service/guide/product/plugin_spec.html

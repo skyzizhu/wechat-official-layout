@@ -109,10 +109,46 @@ function rehypeLayoutEnhancer() {
           curr.properties.dataBetweenHrs = 'true';
         }
 
-        // 2. 检测是否为纯图片段落
+        // 2. 检测是否为纯图片段落或单段图文
         const containsImg = treeContainsTag(curr, 'img');
         if (containsImg) {
           curr.properties.dataImageParagraph = 'true';
+
+          // 若同一个段落中同时包含图片与后续题注文字/em（如 Markdown 中未空行），拆分为两个独立段落
+          if (curr.children && Array.isArray(curr.children)) {
+            const imgIdx = curr.children.findIndex(
+              (c: any) => c.tagName === 'img' || treeContainsTag(c, 'img')
+            );
+            if (imgIdx !== -1) {
+              const afterImgNodes = curr.children.slice(imgIdx + 1);
+              const hasTrailingContent = afterImgNodes.some((c: any) => {
+                if (c.type === 'text') return Boolean(c.value?.trim());
+                return true;
+              });
+
+              if (hasTrailingContent) {
+                // 将后续节点切出为一个独立的题注段落
+                curr.children = curr.children.slice(0, imgIdx + 1);
+                curr.properties.dataHasCaption = 'true';
+
+                const captionNode = {
+                  type: 'element',
+                  tagName: 'p',
+                  properties: {
+                    dataImageCaption: 'true',
+                  },
+                  children: afterImgNodes,
+                };
+
+                const treeIdx = tree.children.indexOf(curr);
+                if (treeIdx !== -1) {
+                  tree.children.splice(treeIdx + 1, 0, captionNode);
+                }
+                elementChildren.splice(i + 1, 0, captionNode);
+                continue;
+              }
+            }
+          }
         }
 
         // 3. 检测是否为紧邻图片的题注段落
@@ -123,15 +159,20 @@ function rehypeLayoutEnhancer() {
             prev.properties?.dataImageTable === 'true');
         const textContent = getNodeText(curr).trim();
         const isCaptionText =
-          /^(?:▲\s*|\[)?(?:图|表|Figure)\s*\d+/i.test(textContent) ||
+          /^(?:▲\s*|\[)?(?:图|表|Figure|阶段)\s*[\dA-Za-z\-]+/i.test(textContent) ||
           textContent.startsWith('▲') ||
-          (isPrevImg && textContent.length > 0 && textContent.length < 80 && !/[。！？]$/.test(textContent));
+          /^(?:注|注\d+|※)[：:]/.test(textContent) ||
+          (isPrevImg && (
+            (curr.children?.some((c: any) => c.tagName === 'em') && textContent.length < 140) ||
+            (textContent.length > 0 && textContent.length < 120 && !/[。！？]$/.test(textContent))
+          ));
 
         if (isPrevImg && isCaptionText) {
           curr.properties.dataImageCaption = 'true';
           if (prev.properties) {
             prev.properties.dataHasCaption = 'true';
           }
+          markNodesWithTag(prev, 'img', 'dataHasCaption', 'true');
         }
       }
 
@@ -150,7 +191,7 @@ function rehypeLayoutEnhancer() {
 }
 
 export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
-  const { elements, dropcap, h2Decoration, markHighlight } = theme;
+  const { elements, h2Decoration, markHighlight } = theme;
 
   const components: Components = {
     // 一级大标题：醒目、克制、大气通透，绝不附带无关字符
@@ -233,6 +274,22 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
         );
       }
 
+      // 复古报纸横幅栏（上下横栏实线包裹，古典铅印大标题风格）
+      if (h2Decoration === 'newspaper-banner') {
+        return (
+          <h2
+            style={{
+              ...elements.h2,
+              textAlign: (elements.h2.textAlign as any) || 'center',
+              lineHeight: 1.75,
+              boxSizing: 'border-box',
+            }}
+          >
+            {children}
+          </h2>
+        );
+      }
+
       // 经典微胶囊小彩条（微信、新中式、商务、暗色极客等：空 span 纯背景色块，零文本内容）
       if (
         h2Decoration === 'wechat-badge' ||
@@ -284,7 +341,10 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
     h6: ({ children }) => <h6 style={{ ...elements.h6, lineHeight: 1.75 }}>{children}</h6>,
 
     // 正文段落：原样保留用户文本，智能支持题注紧凑对齐与大图留白
-    p: ({ node, children }: any) => {
+    // 正文段落：原样保留用户文本，智能支持题注紧凑对齐与大图留白
+    // 合并策略：用户原生 HTML 中显式写的内联样式（incomingStyle）优先于主题默认值，
+    // 保证 <p style="text-align: center"> 等用户意图不被主题覆盖
+    p: ({ node, style: incomingStyle, children }: any) => {
       const isImageCaption = Boolean(node?.properties?.dataImageCaption);
       const isImageParagraph = Boolean(node?.properties?.dataImageParagraph);
       const hasCaption = Boolean(node?.properties?.dataHasCaption);
@@ -304,6 +364,7 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
               fontSize: '13px',
               lineHeight: 1.75,
               color: '#64748b',
+              fontStyle: 'normal',
               letterSpacing: '0.02em',
               boxSizing: 'border-box',
               maxWidth: '100%',
@@ -346,6 +407,7 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
           data-before-hr={isBeforeHr ? 'true' : undefined}
           style={{
             ...elements.p,
+            ...(incomingStyle && typeof incomingStyle === 'object' ? incomingStyle : null),
             marginTop,
             marginBottom,
             wordBreak: 'break-word',
@@ -371,20 +433,25 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
       );
     },
 
-    ul: ({ children }) => (
-      <ul
-        style={{
-          listStyleType: (elements.ul?.listStyleType as string) || 'disc',
-          paddingLeft: (elements.ul?.paddingLeft as string) || '24px',
-          margin: (elements.ul?.margin as string) || '16px 0',
-          ...elements.ul,
-        }}
-      >
-        {children}
-      </ul>
-    ),
-    ol: ({ children }) => (
+    ul: ({ children, node, className }: any) => {
+      const isTaskList = className === 'contains-task-list' || node?.properties?.className?.includes('contains-task-list');
+      return (
+        <ul
+          style={{
+            listStyleType: (elements.ul?.listStyleType as string) || 'disc',
+            paddingLeft: (elements.ul?.paddingLeft as string) || '24px',
+            margin: (elements.ul?.margin as string) || '16px 0',
+            ...elements.ul,
+            ...(isTaskList ? { listStyleType: 'none', paddingLeft: '8px' } : {})
+          }}
+        >
+          {children}
+        </ul>
+      );
+    },
+    ol: ({ children, start }: any) => (
       <ol
+        start={start}
         style={{
           listStyleType: (elements.ol?.listStyleType as string) || 'decimal',
           paddingLeft: (elements.ol?.paddingLeft as string) || '24px',
@@ -453,7 +520,7 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
 
     strong: ({ children }) => {
       const style = markHighlight ? { ...elements.strong, ...markHighlight } : elements.strong;
-      return <strong style={{ ...style, display: 'inline', whiteSpace: 'nowrap' }}>{children}</strong>;
+      return <strong style={{ ...style, display: 'inline', wordBreak: 'break-word' }}>{children}</strong>;
     },
 
     em: ({ children }) => <em style={elements.em}>{children}</em>,
@@ -514,29 +581,37 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
       return <input checked={checked} {...props} />;
     },
 
-    code: ({ className, children, ...props }) => {
-      const isCodeBlock = className?.startsWith('language-');
+    pre: ({ children }: any) => {
+      return (
+        <section data-role="code-block" data-ignore-width="" style={{ margin: '24px 0', overflowX: 'auto' as const, WebkitOverflowScrolling: 'touch' as any }}>
+          <pre style={{ ...elements.pre, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+            {children}
+          </pre>
+        </section>
+      );
+    },
+
+    code: ({ className, children, node, ...props }: any) => {
+      const isCodeBlock =
+        className?.startsWith('language-') ||
+        (typeof children === 'string' && children.includes('\n'));
+      // If inside a pre (code block), just render the code with minimal styling
       if (isCodeBlock) {
         return (
-          <section data-role="code-block" data-ignore-width="" style={{ margin: '24px 0', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <pre style={{ ...elements.pre, margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-              <code style={{ fontFamily: 'inherit', fontSize: 'inherit', backgroundColor: 'transparent', padding: 0 }}>
-                {children}
-              </code>
-            </pre>
-          </section>
+          <code style={{ fontFamily: 'inherit', fontSize: 'inherit', backgroundColor: 'transparent', padding: 0 }}>
+            {children}
+          </code>
         );
       }
-      return <code style={elements.code} {...props}>{children}</code>;
+      // Inline code
+      return <code style={elements.code}>{children}</code>;
     },
 
-    pre: ({ children }) => {
-      return <>{children}</>;
-    },
-
-    img: ({ src, alt, node }: any) => {
+    // 图片：合并用户原生 HTML 中显式写的内联样式（优先），避免主题 margin 覆盖用户排版意图
+    img: ({ src, alt, node, style: incomingStyle }: any) => {
       const isInsideCell = Boolean(node?.properties?.dataInsideCell);
       const hasCaption = Boolean(node?.properties?.dataHasCaption);
+      const userStyle = incomingStyle && typeof incomingStyle === 'object' ? incomingStyle : null;
       return (
         <img
           src={src ?? ''}
@@ -544,15 +619,12 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
           data-w="1080"
           data-ratio="auto"
           referrerPolicy="no-referrer"
-          crossOrigin="anonymous"
           loading="lazy"
           onError={(e) => {
             const target = e.currentTarget;
             if (!target.dataset.hasFailed) {
               target.dataset.hasFailed = 'true';
-              if (src && src.startsWith('/') && typeof window !== 'undefined') {
-                target.src = window.location.origin + src;
-              }
+              target.alt = alt || '图片加载失败';
             }
           }}
           style={{
@@ -561,8 +633,9 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
             display: 'block',
             boxSizing: 'border-box',
             ...elements.img,
+            ...userStyle,
             ...(isInsideCell
-              ? { margin: '0 auto', width: '100%' }
+              ? { margin: '0 auto', width: '100%', aspectRatio: '4 / 3', objectFit: 'cover' }
               : hasCaption
               ? { marginBottom: 0 }
               : {}),
@@ -595,6 +668,7 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
             <table
               style={{
                 width: '100%',
+                tableLayout: 'fixed',
                 borderCollapse: 'collapse',
                 border: 'none',
                 background: 'transparent',
@@ -642,7 +716,7 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
           </th>
         );
       }
-      return <th style={{ ...elements.th, ...getCellAlignStyle(incomingAlign, node), lineHeight: 1.7 }}>{children}</th>;
+      return <th style={{ ...elements.th, ...getCellAlignStyle(incomingAlign, node), lineHeight: 1.75 }}>{children}</th>;
     },
 
     td: ({ node, style: incomingAlign, children }: any) => {
@@ -668,7 +742,7 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
           </td>
         );
       }
-      return <td style={{ ...elements.td, ...getCellAlignStyle(incomingAlign, node), lineHeight: 1.7 }}>{children}</td>;
+      return <td style={{ ...elements.td, ...getCellAlignStyle(incomingAlign, node), lineHeight: 1.75 }}>{children}</td>;
     },
 
     // 微信角标/脚注引用上标（规范 1.3: 继承行高，使用 baseline + relative 位移）
