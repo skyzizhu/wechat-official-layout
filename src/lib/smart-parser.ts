@@ -572,7 +572,8 @@ function emphasizeItemHeader(text: string): string {
   }
 
   // 4. 匹配破折号前面的条目标题：条目标题 —— 具体说明...
-  const dashMatch = text.match(/^([^：:——\-，。！？\n]{2,18})(\s*——\s*|\s*-\s*)(.+)$/);
+  // 单个连字符/破折号必须两侧都有空格才视为分隔符（避免 "font-size"、"co-work" 等词内连字符被误判炸出 **）
+  const dashMatch = text.match(/^([^：:——\-，。！？\n]{2,18})(\s*——\s*|\s-\s|\s—\s)(.+)$/);
   if (dashMatch) {
     const title = dashMatch[1].trim();
     const rest = dashMatch[3].trim();
@@ -1354,6 +1355,29 @@ export function adjustFirstLineTitle(markdown: string, treatAsTitle: boolean): s
  * @param mode 'auto' (自动侦测并格式化) | 'plain-text' (强制格式化纯文本) | 'markdown' (纯 Markdown 直通)
  * @param options 纯文本解析选项，如是否识别首句为大标题
  */
+/**
+ * 修复用户从网页 / 文档 / AI 对话中复制而来的"损伤 HTML"：
+ * 1. 双重转义还原：&lt;section ...&gt; → <section ...>（粘贴被转义的源码时按真实 HTML 渲染，而非显示源码文本）
+ * 2. 属性名破折号损伤修复：data — role / data – role → data-role（输入法或富文本编辑器常把连字符替换为长破折号）
+ * 代码块围栏内的内容不做任何修复，保持源码原样展示。
+ */
+export function repairPastedHtml(text: string): string {
+  if (!text) return '';
+  const segments = text.split(/(```[\s\S]*?```)/g);
+  const repaired = segments.map((segment, i) => {
+    if (i % 2 === 1) return segment; // 代码围栏内保持原样
+    let out = segment;
+    // 1) 还原被转义的常见 HTML 标签
+    if (/&lt;\/?(?:section|div|p|img|h[1-6]|table|thead|tbody|tr|td|th|ul|ol|li|blockquote|figure|figcaption|span|a|br|strong|em|b|i)\b/i.test(out)) {
+      out = out.replace(/&lt;(\/?[a-zA-Z][^&<>]*?)&gt;/g, '<$1>');
+    }
+    // 2) 修复标签内属性名的破折号损伤（data — role → data-role）
+    out = out.replace(/(<[a-zA-Z][^<>]*?)\bdata\s+[—–−]\s*(?=[a-zA-Z][a-zA-Z-]*\s*=)/g, '$1data-');
+    return out;
+  });
+  return repaired.join('');
+}
+
 export function processContentByMode(
   content: string,
   mode: 'auto' | 'plain-text' | 'markdown' = 'auto',
@@ -1369,22 +1393,28 @@ export function processContentByMode(
   let baseMd: string;
   let isTransformed: boolean;
 
+  // 先修复输入端的损伤 HTML（双重转义、data — role 等属性破折号损伤），
+  // 避免智能转换引擎把受损属性中的连字符/破折号误判为标题分隔符
+  const sanitizedContent = repairPastedHtml(content);
+
   // 在 auto 模式与 plain-text 模式下，统一执行全能语义规整与格式转换：
   // 保持文档中已有的代码块、图片与标准表格不被破坏的同时，
   // 将文档中未格式化的各级章节、表格、清单、提示、列表与段落全面升级为语义化结构！
   // 仅当用户显式选择 'markdown' 模式时才直通跳过。
   if (mode === 'plain-text' || mode === 'auto') {
-    baseMd = convertPlainTextToMarkdown(content, {
+    baseMd = convertPlainTextToMarkdown(sanitizedContent, {
       ...options,
       treatFirstLineAsTitle: treatAsTitle,
     });
     isTransformed = baseMd !== content;
   } else {
-    baseMd = content;
+    baseMd = sanitizedContent;
     isTransformed = false;
   }
 
-  const finalMd = adjustFirstLineTitle(baseMd, treatAsTitle);
+  // 修复从网页 / 文档 / AI 对话复制而来的损伤 HTML（双重转义、属性破折号损伤），
+  // 保证 photo-card 等自定义 HTML 卡片在预览中按真实结构渲染而非显示源码
+  const finalMd = repairPastedHtml(adjustFirstLineTitle(baseMd, treatAsTitle));
 
   return {
     renderedMarkdown: finalMd,
