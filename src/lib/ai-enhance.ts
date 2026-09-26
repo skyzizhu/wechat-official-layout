@@ -15,6 +15,16 @@ export interface AiSettings {
 
 export const AI_SETTINGS_KEY = 'radiant_ai_settings';
 
+/**
+ * 端点归一化：支持直接填 Base URL（如 https://agentrouter.org/v1），
+ * 自动补全 /chat/completions；已填完整地址则原样使用
+ */
+export function normalizeEndpoint(endpoint: string): string {
+  const trimmed = endpoint.trim().replace(/\/+$/, '');
+  if (/\/chat\/completions$/.test(trimmed)) return trimmed;
+  return `${trimmed}/chat/completions`;
+}
+
 export function loadAiSettings(): AiSettings {
   try {
     const raw = localStorage.getItem(AI_SETTINGS_KEY);
@@ -46,7 +56,7 @@ export async function enhanceWithAi(text: string, settings: AiSettings): Promise
   if (!text.trim()) throw new Error('内容为空');
   if (!settings.endpoint || !settings.apiKey) throw new Error('AI 接口未配置');
 
-  const res = await fetch(settings.endpoint, {
+  const res = await fetch(normalizeEndpoint(settings.endpoint), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

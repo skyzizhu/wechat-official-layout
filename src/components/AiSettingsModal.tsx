@@ -39,7 +39,7 @@ export function AiSettingsModal({ isOpen, settings, onClose, onSave }: AiSetting
             <input
               value={draft.endpoint}
               onChange={(e) => setDraft({ ...draft, endpoint: e.target.value })}
-              placeholder="https://api.openai.com/v1/chat/completions"
+              placeholder="https://api.openai.com/v1（自动补全 /chat/completions）"
               className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-500"
             />
           </label>
