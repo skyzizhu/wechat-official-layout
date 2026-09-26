@@ -41,7 +41,7 @@ export const neoChinese: ThemePreset = {
       marginBottom: "32px",
       color: "#b91c1c",
       letterSpacing: "3.5px",
-      lineHeight: "1.7",
+      lineHeight: "1.75",
       paddingBottom: "16px",
       borderBottom: "1.5px solid #fecaca",
     },
@@ -51,8 +51,6 @@ export const neoChinese: ThemePreset = {
       marginTop: "44px",
       marginBottom: "20px",
       color: "#b91c1c",
-      display: "flex",
-      alignItems: "center",
     },
     h3: {
       fontSize: "16.5px",
@@ -64,14 +62,14 @@ export const neoChinese: ThemePreset = {
       borderLeft: "3.5px solid #b91c1c",
     },
     h4: {
-      fontSize: "15px",
+      fontSize: "16px",
       fontWeight: 600,
       marginTop: "20px",
       marginBottom: "8px",
       color: "#991b1b",
     },
     h5: {
-      fontSize: "15px",
+      fontSize: "15.5px",
       fontWeight: 600,
       marginTop: "20px",
       marginBottom: "8px",
@@ -149,7 +147,7 @@ export const neoChinese: ThemePreset = {
       borderRadius: "6px",
       overflow: "auto",
       fontSize: "13.5px",
-      lineHeight: "1.7",
+      lineHeight: "1.75",
       margin: "26px 0",
     },
     img: {

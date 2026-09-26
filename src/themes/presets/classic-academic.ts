@@ -40,7 +40,7 @@ export const classicAcademic: ThemePreset = {
       marginBottom: "32px",
       color: "#0c0a09",
       letterSpacing: "2.5px",
-      lineHeight: "1.7",
+      lineHeight: "1.75",
       paddingBottom: "16px",
       borderBottom: "2px solid #1c1917",
     },
@@ -51,8 +51,6 @@ export const classicAcademic: ThemePreset = {
       marginBottom: "20px",
       color: "#1c1917",
       letterSpacing: "0.5px",
-      display: "flex",
-      alignItems: "center",
     },
     h3: {
       fontSize: "16.5px",
@@ -62,14 +60,14 @@ export const classicAcademic: ThemePreset = {
       color: "#292524",
     },
     h4: {
-      fontSize: "15px",
+      fontSize: "16px",
       fontWeight: 700,
       marginTop: "20px",
       marginBottom: "8px",
       color: "#292524",
     },
     h5: {
-      fontSize: "15px",
+      fontSize: "15.5px",
       fontWeight: 700,
       marginTop: "20px",
       marginBottom: "8px",
@@ -147,7 +145,7 @@ export const classicAcademic: ThemePreset = {
       borderRadius: "6px",
       overflow: "auto",
       fontSize: "13.5px",
-      lineHeight: "1.7",
+      lineHeight: "1.75",
       margin: "26px 0",
     },
     img: {

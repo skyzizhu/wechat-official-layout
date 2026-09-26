@@ -1,6 +1,6 @@
 'use client';
 
-import { Palette, ChevronDown, Copy, ImageDown, Pipette, Link2, Heading1 } from 'lucide-react';
+import { Palette, ChevronDown, Copy, ImageDown, Pipette, Link2, Heading1, Sparkles, Settings2, Loader2 } from 'lucide-react';
 import type { ThemePreset, FontSizeOption } from '@/themes';
 import { copyRichText, exportAsImage } from '@/lib/export';
 import { useToast } from './Toast';
@@ -19,9 +19,13 @@ interface ExportToolbarProps {
   onToggleFootnotes: (enabled: boolean) => void;
   firstLineAsTitle?: boolean;
   onToggleFirstLineAsTitle?: (enabled: boolean) => void;
+  aiApplying?: boolean;
+  onAiEnhance?: () => void;
+  onOpenAiSettings?: () => void;
 }
 
 export function ExportToolbar({
+
   previewRef,
   theme,
   onOpenThemeSelector,
@@ -33,7 +37,10 @@ export function ExportToolbar({
   onToggleFootnotes,
   firstLineAsTitle = false,
   onToggleFirstLineAsTitle,
-}: ExportToolbarProps) {
+  aiApplying,
+  onAiEnhance,
+  onOpenAiSettings,
+} : ExportToolbarProps) {
   const { showToast } = useToast();
   const [exporting, setExporting] = useState(false);
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
@@ -65,11 +72,11 @@ export function ExportToolbar({
   return (
     <>
       <div className="h-12 border-b border-gray-200 bg-white flex items-center justify-between px-3 sm:px-4 flex-shrink-0 shadow-xs gap-2">
-        {/* 左侧：排版预设选择按钮 + 风格主色调节 + 字号大小微调器 + 外链转脚注开关 */}
-        <div className="flex items-center gap-1.5 sm:gap-2.5 overflow-x-auto no-scrollbar py-1">
+        {/* 左侧：排版预设选择按钮 + 风格主色调节 + 字号大小微调器 + 外链转脚注开关 + 首句标题开关 */}
+        <div className="flex items-center gap-1 sm:gap-1.5 xl:gap-2 overflow-x-auto no-scrollbar py-1 min-w-0">
           <button
             onClick={onOpenThemeSelector}
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs sm:text-sm font-semibold transition-all cursor-pointer border border-blue-200 shadow-2xs flex-shrink-0"
+            className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs sm:text-sm font-semibold transition-all cursor-pointer border border-blue-200 shadow-2xs flex-shrink-0"
             title="点击切换 16 款个性排版风格"
           >
             <Palette className="w-4 h-4 text-blue-600" />
@@ -89,18 +96,18 @@ export function ExportToolbar({
               }}
               className="w-3 h-3 rounded-full border border-black/15 shadow-2xs flex-shrink-0"
             />
-            <span className="hidden md:inline">主色搭配</span>
+            <span className="hidden 2xl:inline">主色搭配</span>
             <Pipette className="w-3 h-3 text-gray-400" />
           </button>
 
           {/* 字号大小微调器 (14 / 15 / 16) */}
           <div className="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200 text-xs flex-shrink-0">
-            <span className="hidden xl:inline text-gray-400 px-1 text-[11px] font-medium">字号:</span>
+            <span className="hidden 2xl:inline text-gray-400 px-1 text-[11px] font-medium">字号:</span>
             {(['14', '15', '16'] as const).map((size) => (
               <button
                 key={size}
                 onClick={() => onFontSizeChange(size)}
-                className={`px-2 py-0.5 rounded-md transition-all font-medium cursor-pointer ${
+                className={`px-1.5 sm:px-2 py-0.5 rounded-md transition-all font-medium cursor-pointer ${
                   fontSize === size
                     ? 'bg-white text-blue-600 shadow-2xs font-bold'
                     : 'text-gray-500 hover:text-gray-800'
@@ -123,7 +130,7 @@ export function ExportToolbar({
             title="微信公众号无法直接跳转外链。开启后自动将 [文字](链接) 编译为文末 [1] 参考链接清单"
           >
             <Link2 className="w-3.5 h-3.5 text-blue-600" />
-            <span className="hidden sm:inline">外链转脚注</span>
+            <span className="hidden sm:inline">外链脚注</span>
             <span
               className={`text-[10px] px-1 py-0.2 rounded font-bold ${
                 linkFootnotes ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'
@@ -133,7 +140,7 @@ export function ExportToolbar({
             </span>
           </button>
 
-          {/* 首句设为标题开关（默认关闭：第一句话作为详情内容中的首个正文段落） */}
+          {/* 首句设为标题开关 */}
           {onToggleFirstLineAsTitle && (
             <button
               onClick={() => onToggleFirstLineAsTitle(!firstLineAsTitle)}
@@ -142,7 +149,7 @@ export function ExportToolbar({
                   ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
                   : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
               }`}
-              title="默认关闭：第一句话作为正文详情首段；开启后符合条件的首句将提升为文章大标题"
+              title="开启后首句作为文章 H1 大标题；关闭后首句作为正文首个段落"
             >
               <Heading1 className="w-3.5 h-3.5 text-amber-600" />
               <span className="hidden sm:inline">首句标题</span>
@@ -159,6 +166,26 @@ export function ExportToolbar({
 
         {/* 右侧：导出操作 */}
         <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          <button
+            onClick={onAiEnhance}
+            disabled={aiApplying}
+            title="AI 增强识别：将纯文本交给 AI 按排版约定直接转换为 Markdown"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-500 hover:from-violet-700 hover:to-fuchsia-600 text-sm text-white font-medium transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+          >
+            {aiApplying ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Sparkles className="w-4 h-4" />
+            )}
+            <span className="hidden sm:inline">{aiApplying ? 'AI 排版中…' : 'AI 排版'}</span>
+          </button>
+          <button
+            onClick={onOpenAiSettings}
+            title="AI 增强识别设置（接口地址 / 密钥 / 模型）"
+            className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 cursor-pointer"
+          >
+            <Settings2 className="w-4 h-4" />
+          </button>
           <button
             onClick={handleCopyRichText}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-sm text-gray-700 font-medium transition-colors border border-gray-200 cursor-pointer shadow-2xs"

@@ -41,7 +41,7 @@ export const warmJournal: ThemePreset = {
       color: "#c2410c",
       marginBottom: "32px",
       letterSpacing: "1px",
-      lineHeight: "1.7",
+      lineHeight: "1.75",
       paddingBottom: "14px",
       borderBottom: "1.5px solid #fed7aa",
     },
@@ -51,8 +51,6 @@ export const warmJournal: ThemePreset = {
       marginTop: "42px",
       marginBottom: "20px",
       color: "#c2410c",
-      display: "flex",
-      alignItems: "center",
     },
     h3: {
       fontSize: "16px",
@@ -148,7 +146,7 @@ export const warmJournal: ThemePreset = {
       borderRadius: "10px",
       overflow: "auto",
       fontSize: "13.5px",
-      lineHeight: "1.7",
+      lineHeight: "1.75",
       margin: "24px 0",
     },
     img: {

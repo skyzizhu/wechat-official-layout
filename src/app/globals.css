@@ -103,3 +103,16 @@ th, td {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #9ca3af;
 }
+
+/* 统一编辑器图片题注占位符提示 */
+.unified-caption:empty::before,
+.unified-gallery-cap:empty::before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  pointer-events: none;
+}
+
+/* 微信排版规范：图片题注内的强调文本保持正体，杜绝中文字体伪斜体锯齿 */
+[data-role="image-caption"] em {
+  font-style: normal;
+}

@@ -592,15 +592,44 @@ export interface ParserOptions {
    * 默认：false（首句默认作为详情内容中的首个正文段落）
    */
   treatFirstLineAsTitle?: boolean;
+  /**
+   * 用户纠偏后抑制的识别决策键（${type}:${snippet}）：
+   * 命中的内容块将不再被转换为对应格式，保持普通正文
+   */
+  suppressedDecisions?: string[];
+}
+
+/**
+ * 单条识别决策：引擎对某个内容块做出的格式判定
+ */
+export interface ConversionDecision {
+  /** 决策类型（表格/题注/小节标题等） */
+  type: string;
+  /** 置信度 0~1，低于 0.75 的决策会在界面提示用户确认 */
+  confidence: number;
+  /** 识别块首行内容片段（用于定位与纠偏） */
+  snippet: string;
 }
 
 /**
  * 将普通中文/英文长文本智能转换为结构化优雅的 Markdown
  */
-export function convertPlainTextToMarkdown(text: string, options?: ParserOptions): string {
+export function convertPlainTextToMarkdown(
+  text: string,
+  options?: ParserOptions,
+  decisions?: ConversionDecision[]
+): string {
   if (!text || text.trim().length === 0) return '';
 
   const treatFirstLineAsTitle = options?.treatFirstLineAsTitle ?? false;
+  // 用户纠偏抑制清单：命中键的识别决策不再应用（转为普通正文）
+  const suppressed = new Set(options?.suppressedDecisions ?? []);
+  const isSuppressed = (type: string, snippet: string) => suppressed.has(`${type}:${snippet}`);
+
+  // 记录低置信度识别决策的辅助函数
+  const noteDecision = (type: string, confidence: number, snippet: string) => {
+    decisions?.push({ type, confidence, snippet: snippet.slice(0, 24) });
+  };
 
   // 1. 统一换行符，并拆分为原始行
   const rawLines = text
@@ -745,7 +774,17 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
       }
 
       const nonEmptyTableLines = tableLines.filter((l) => l.trim());
-      if (nonEmptyTableLines.length >= 2) {
+      const pipeFirstCell = (() => {
+        const first = nonEmptyTableLines[0].replace(/｜/g, '|').trim();
+        return first.replace(/^\|/, '').split('|')[0].trim() || first;
+      })();
+      const pipeBlankSkips = nonEmptyTableLines.length !== tableLines.length;
+      const pipeSuppressed = pipeBlankSkips && isSuppressed('表格（管道分隔）', pipeFirstCell);
+      if (nonEmptyTableLines.length >= 2 && !pipeSuppressed) {
+        // 置信度：行间穿插过空行的表格判定把握略低，提示用户确认
+        if (pipeBlankSkips) {
+          noteDecision('表格（管道分隔）', 0.68, pipeFirstCell);
+        }
         const normalizedTable: string[] = [];
         let colCount = 0;
 
@@ -838,7 +877,13 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
         }
       }
 
-      if (spaceTableLines.length >= 2) {
+      if (spaceTableLines.length >= 2 && !isSuppressed('表格（空格对齐）', (spaceTableLines[0][0] || '').slice(0, 24))) {
+        // 置信度：双空格/制表符对齐的表格判定把握中等（Word 粘贴常见误判），提示用户确认
+        noteDecision(
+          '表格（空格对齐）',
+          0.65,
+          (spaceTableLines[0][0] || '').slice(0, 24)
+        );
         const maxCols = Math.max(...spaceTableLines.map((r) => r.length));
         const formattedTable: string[] = [];
 
@@ -1163,18 +1208,31 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
     // 仅显式 Markdown 图片语法 ![alt](url) 与 <img> 标签才在预览中按图片渲染
 
     // 3.12 识别图片题注或图表标注：如 "▲ 图1：系统整体架构" 或 "▲ 阶段 1：草图" 或 "*▲ 图1：系统架构*"
-    const isCaptionPattern =
+    const explicitCaption =
       /^\*?(?:▲\s*|\[)?(?:图|表|Figure|阶段)\s*[\dA-Za-z\-]+/i.test(trimmed) ||
       /^\*?▲\s*.+$/i.test(trimmed) ||
-      /^\*?注[：:]/.test(trimmed) ||
-      (lastNonEmptyWasImage &&
-        trimmed.length > 0 &&
-        trimmed.length < 120 &&
-        !/[。！？]$/.test(trimmed));
+      /^\*?注[：:]/.test(trimmed);
+    const adjacencyCaption =
+      lastNonEmptyWasImage &&
+      trimmed.length > 0 &&
+      trimmed.length < 120 &&
+      !/[。！？]$/.test(trimmed);
+    const isCaptionPattern = explicitCaption || adjacencyCaption;
 
     if (isCaptionPattern) {
       const cleanCap = trimmed.replace(/^[*_]+|[*_]+$/g, '').trim();
       const formattedCap = cleanCap.startsWith('▲') ? cleanCap : `▲ ${cleanCap}`;
+      // 置信度：紧随图片且无显式标记的短行判定为题注的把握中等（可能是普通正文），提示用户确认
+      if (adjacencyCaption && !explicitCaption) {
+        if (!isSuppressed('题注', cleanCap)) {
+          noteDecision('题注', 0.68, cleanCap);
+        } else {
+          // 用户已纠偏为正文：去除斜体与题注标记，按普通文本输出
+          processedLines.push(addPanguSpacing(formatBareUrls(cleanCap)));
+          lastNonEmptyWasImage = false;
+          continue;
+        }
+      }
       processedLines.push(`*${formattedCap}*`);
       lastNonEmptyWasImage = false;
       continue;
@@ -1242,6 +1300,15 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
       // 层级与形态由第一阶段的「编号家族聚类」预计算（arabicSectionIndexes / arabicSectionLevelMap）：
       // 孤立编号行 → 小节标题（文档含中文族时 H3，否则 H2）；密集编号行 → 有序列表项
       if (!isMultiLevelNumbering && !isReferenceLike && arabicSectionIndexes.has(idx)) {
+        // 置信度：文档中存在中文序号章节时，阿拉伯编号是否应降级为小节存在歧义，提示用户确认
+        if (hasChineseNumberedSections) {
+          if (isSuppressed('小节标题（编号）', content)) {
+            // 用户已纠偏为正文：原样输出，不转标题也不转列表
+            processedLines.push(trimmed);
+            continue;
+          }
+          noteDecision('小节标题（编号）', 0.72, content);
+        }
         processedLines.push('');
         processedLines.push(`${arabicSectionLevelMap.get(idx)} ${trimmed}`);
         processedLines.push('');
@@ -1263,8 +1330,11 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
       trimmed.length <= 18 &&
       !/[，。；！？…、“”'’（）()：:]/.test(trimmed) &&
       !trimmed.startsWith('#') &&
-      !trimmed.startsWith('-')
+      !trimmed.startsWith('-') &&
+      !isSuppressed('小节标题（短行）', trimmed)
     ) {
+      // 置信度：孤立短句（如「受益匪浅」）可能是文末感叹而非标题，提示用户确认
+      noteDecision('小节标题（短行）', 0.7, trimmed);
       processedLines.push(`### ${trimmed}`);
       continue;
     }
@@ -1448,12 +1518,15 @@ export function processContentByMode(
   renderedMarkdown: string;
   detectedFormat: FormatDetectionResult;
   isTransformed: boolean;
+  /** 低置信度识别决策（置信度 < 0.75），供界面提示用户确认 */
+  decisions: ConversionDecision[];
 } {
   const detected = detectContentFormat(content);
   const treatAsTitle = options?.treatFirstLineAsTitle ?? false;
 
   let baseMd: string;
   let isTransformed: boolean;
+  const decisions: ConversionDecision[] = [];
 
   // 先修复输入端的损伤 HTML（双重转义、data — role 等属性破折号损伤），
   // 避免智能转换引擎把受损属性中的连字符/破折号误判为标题分隔符
@@ -1464,10 +1537,14 @@ export function processContentByMode(
   // 将文档中未格式化的各级章节、表格、清单、提示、列表与段落全面升级为语义化结构！
   // 仅当用户显式选择 'markdown' 模式时才直通跳过。
   if (mode === 'plain-text' || mode === 'auto') {
-    baseMd = convertPlainTextToMarkdown(sanitizedContent, {
-      ...options,
-      treatFirstLineAsTitle: treatAsTitle,
-    });
+    baseMd = convertPlainTextToMarkdown(
+      sanitizedContent,
+      {
+        ...options,
+        treatFirstLineAsTitle: treatAsTitle,
+      },
+      decisions
+    );
     isTransformed = baseMd !== content;
   } else {
     baseMd = sanitizedContent;
@@ -1482,5 +1559,6 @@ export function processContentByMode(
     renderedMarkdown: finalMd,
     detectedFormat: detected,
     isTransformed: isTransformed || finalMd !== content,
+    decisions,
   };
 }

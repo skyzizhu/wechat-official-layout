@@ -40,7 +40,7 @@ export const modernMinimal: ThemePreset = {
       color: "#18181b",
       marginBottom: "32px",
       letterSpacing: "-0.5px",
-      lineHeight: "1.7",
+      lineHeight: "1.75",
       paddingBottom: "16px",
       borderBottom: "2px solid #18181b",
     },
@@ -51,8 +51,6 @@ export const modernMinimal: ThemePreset = {
       marginBottom: "20px",
       color: "#18181b",
       letterSpacing: "-0.3px",
-      display: "flex",
-      alignItems: "center",
     },
     h3: {
       fontSize: "17px",
@@ -147,7 +145,7 @@ export const modernMinimal: ThemePreset = {
       borderRadius: "8px",
       overflow: "auto",
       fontSize: "13.5px",
-      lineHeight: "1.7",
+      lineHeight: "1.75",
       margin: "26px 0",
     },
     img: {

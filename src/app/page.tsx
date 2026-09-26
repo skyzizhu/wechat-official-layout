@@ -15,7 +15,9 @@ import {
   FontSizeOption,
 } from '@/themes';
 import { SAMPLE_MARKDOWN, SAMPLE_PLAIN_TEXT, SAMPLE_PRESETS } from '@/lib/sample-markdown';
-import { processContentByMode } from '@/lib/smart-parser';
+import { processContentByMode, ConversionDecision } from '@/lib/smart-parser';
+import { enhanceWithAi, loadAiSettings, saveAiSettings, AiSettings } from '@/lib/ai-enhance';
+import { AiSettingsModal } from '@/components/AiSettingsModal';
 import { convertLinksToFootnotes } from '@/lib/link-footnotes';
 import { PenLine, Eye } from 'lucide-react';
 
@@ -36,19 +38,53 @@ function MainLayout() {
   const [fontSize, setFontSize] = useState<FontSizeOption>('15'); // 字号微调：14px / 15px / 16px
   const [linkFootnotes, setLinkFootnotes] = useState<boolean>(true); // 微信外链转文末脚注开关 (默认开启)
   const [mode, setMode] = useState<ContentMode>('auto');
+  const [firstLineAsTitle, setFirstLineAsTitle] = useState(true);
   const [showThemes, setShowThemes] = useState(false);
   const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('preview');
   const [draftStatus, setDraftStatus] = useState<string>('草稿就绪');
   const [isLoaded, setIsLoaded] = useState(false);
+  // 第二阶段：用户纠偏的识别决策（抑制键持久化；已确认保留的会话内隐藏）
+  const [suppressedKeys, setSuppressedKeys] = useState<string[]>([]);
+  const [dismissedKeys, setDismissedKeys] = useState<string[]>([]);
+  // 第三阶段：AI 增强识别
+  const [aiSettings, setAiSettings] = useState<AiSettings>({ endpoint: '', apiKey: '', model: 'gpt-4o-mini' });
+  const [showAiSettings, setShowAiSettings] = useState(false);
+  const [aiApplying, setAiApplying] = useState(false);
 
   const previewRef = useRef<HTMLDivElement>(null);
 
   // 1. 初始化从浏览器 LocalStorage 恢复草稿与用户偏好
   useEffect(() => {
     try {
-      const savedDraft = localStorage.getItem('radiant_article_draft');
-      if (savedDraft !== null && savedDraft.trim() !== '') {
-        setMarkdown(savedDraft);
+      let savedDraft = localStorage.getItem('radiant_article_draft');
+      if (savedDraft !== null) {
+        if (savedDraft.trim() === '') {
+          setMarkdown('');
+        } else {
+          // 自动平滑升级旧草稿中不稳定的外网图片为本地高可靠静态图片，避免吞噬末尾的括号或管道符
+          let updated = savedDraft
+            .replace(/https:\/\/images\.unsplash\.com\/photo-1512820790803-83ca734da794[^\s)"'<>]+/g, '/images/sample/sample-1.jpg')
+            .replace(/https:\/\/images\.unsplash\.com\/photo-1544716278-ca5e3f4abd8c[^\s)"'<>]+/g, '/images/sample/sample-2.jpg')
+            .replace(/https:\/\/images\.unsplash\.com\/photo-1499750310107-5fef28a66643[^\s)"'<>]+/g, '/images/sample/sample-3.jpg')
+            .replace(/https:\/\/images\.unsplash\.com\/photo-1455390582262-044cdead277a[^\s)"'<>]+/g, '/images/sample/sample-4.jpg')
+            .replace(/https:\/\/images\.unsplash\.com\/photo-1542744094-3a31f272c490[^\s)"'<>]+/g, '/images/sample/sample-5.jpg')
+            .replace(/https:\/\/images\.unsplash\.com\/photo-1460925895917-afdab827c52f[^\s)"'<>]+/g, '/images/sample/sample-6.jpg')
+            .replace(/https:\/\/images\.unsplash\.com\/photo-1497633762265-9d179a990aa6[^\s)"'<>]+/g, '/images/sample/sample-7.jpg');
+
+          // 强力修复因历史正则导致缺失右括号的图片语法: ![alt](/images/sample/sample-X.jpg -> ![alt](/images/sample/sample-X.jpg)
+          updated = updated.replace(/(!\[[^\]]*\]\(\/images\/sample\/sample-\d+\.jpg)(?!\))/g, '$1)');
+
+          // 若草稿是系统范文但仍有外链遗留，直接对齐最新的 SAMPLE_MARKDOWN
+          if (updated.includes('排版之美') && updated.includes('unsplash.com')) {
+            updated = SAMPLE_MARKDOWN;
+          }
+
+          savedDraft = updated;
+          try {
+            localStorage.setItem('radiant_article_draft', savedDraft);
+          } catch {}
+          setMarkdown(savedDraft);
+        }
       }
 
       const savedTheme = localStorage.getItem('radiant_theme_id');
@@ -72,6 +108,21 @@ function MainLayout() {
         setMode(savedMode);
       }
 
+      setAiSettings(loadAiSettings());
+
+      const savedSuppressed = localStorage.getItem('radiant_suppressed_decisions');
+      if (savedSuppressed) {
+        try {
+          const parsed = JSON.parse(savedSuppressed);
+          if (Array.isArray(parsed)) setSuppressedKeys(parsed);
+        } catch {}
+      }
+
+      const savedFirstLine = localStorage.getItem('radiant_first_line_title');
+      if (savedFirstLine !== null) {
+        setFirstLineAsTitle(savedFirstLine === 'true');
+      }
+
       setDraftStatus('草稿已载入');
       setIsLoaded(true);
     } catch {
@@ -91,6 +142,7 @@ function MainLayout() {
         localStorage.setItem('radiant_font_size', fontSize);
         localStorage.setItem('radiant_link_footnotes', String(linkFootnotes));
         localStorage.setItem('radiant_content_mode', mode);
+        localStorage.setItem('radiant_first_line_title', String(firstLineAsTitle));
 
         const now = new Date();
         const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now
@@ -104,13 +156,13 @@ function MainLayout() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [markdown, themeId, customColor, fontSize, linkFootnotes, mode, isLoaded]);
+  }, [markdown, themeId, customColor, fontSize, linkFootnotes, mode, firstLineAsTitle, isLoaded]);
 
   // 3. 一键清空处理
   const handleClear = () => {
     setMarkdown('');
     try {
-      localStorage.removeItem('radiant_article_draft');
+      localStorage.setItem('radiant_article_draft', '');
     } catch {}
     setDraftStatus('内容已清空');
     showToast('🗑️ 输入框内容已清空');
@@ -151,7 +203,6 @@ function MainLayout() {
   };
 
   // 7. 首句设为大标题开关（默认关闭：第一句话作为详情内容中的首个正文段落）
-  const [firstLineAsTitle, setFirstLineAsTitle] = useState(false);
   const handleToggleFirstLineAsTitle = (enabled: boolean) => {
     setFirstLineAsTitle(enabled);
     showToast(
@@ -172,6 +223,7 @@ function MainLayout() {
   const processed = useMemo(() => {
     const rawResult = processContentByMode(markdown, mode, {
       treatFirstLineAsTitle: firstLineAsTitle,
+      suppressedDecisions: suppressedKeys,
     });
     const withFootnotes = convertLinksToFootnotes(rawResult.renderedMarkdown, linkFootnotes);
     return {
@@ -179,7 +231,82 @@ function MainLayout() {
       renderedMarkdown: withFootnotes.content,
       footnotes: withFootnotes.footnotes,
     };
-  }, [markdown, mode, linkFootnotes, firstLineAsTitle]);
+  }, [markdown, mode, linkFootnotes, firstLineAsTitle, suppressedKeys]);
+
+  // 第二阶段：低置信度识别决策的纠偏与反馈
+  const lowConfidenceDecisions = (processed.decisions || []).filter(
+    (d) => d.confidence < 0.75 && !dismissedKeys.includes(`${d.type}:${d.snippet}`)
+  );
+
+  const logFeedback = (d: ConversionDecision, action: string) => {
+    try {
+      const log = JSON.parse(localStorage.getItem('radiant_feedback_log') || '[]');
+      log.push({ ts: new Date().toISOString(), action, type: d.type, confidence: d.confidence, snippet: d.snippet });
+      localStorage.setItem('radiant_feedback_log', JSON.stringify(log.slice(-200)));
+    } catch {}
+  };
+
+  const handleResolveDecision = (d: ConversionDecision) => {
+    const key = `${d.type}:${d.snippet}`;
+    setSuppressedKeys((prev) => {
+      const next = prev.includes(key) ? prev : [...prev, key];
+      try {
+        localStorage.setItem('radiant_suppressed_decisions', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+    logFeedback(d, '改为正文');
+    setDraftStatus(`已将「${d.snippet}」改为正文`);
+  };
+
+  const handleKeepDecision = (d: ConversionDecision) => {
+    const key = `${d.type}:${d.snippet}`;
+    setDismissedKeys((prev) => (prev.includes(key) ? prev : [...prev, key]));
+    logFeedback(d, '保留');
+  };
+
+  const handleExportFeedback = () => {
+    try {
+      const log = localStorage.getItem('radiant_feedback_log') || '[]';
+      const blob = new Blob([log], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `wenpai-feedback-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {}
+  };
+
+  // 第三阶段：AI 增强排版 —— 将当前纯文本交给 AI 按系统排版约定直接转换为 Markdown；失败回退启发式结果
+  const handleAiEnhance = async () => {
+    if (!aiSettings.endpoint || !aiSettings.apiKey) {
+      setShowAiSettings(true);
+      return;
+    }
+    setAiApplying(true);
+    setDraftStatus('⏳ AI 正在排版…');
+    try {
+      const md = await enhanceWithAi(markdown, aiSettings);
+      setMarkdown(md);
+      try {
+        localStorage.setItem('radiant_article_draft', md);
+      } catch {}
+      setDraftStatus('✨ AI 排版完成');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setDraftStatus(`AI 排版失败：${msg}`);
+      console.warn('AI enhance failed', err);
+    } finally {
+      setAiApplying(false);
+    }
+  };
+
+  const handleSaveAiSettings = (s: AiSettings) => {
+    setAiSettings(s);
+    saveAiSettings(s);
+    setDraftStatus('AI 设置已保存');
+  };
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
@@ -199,6 +326,10 @@ function MainLayout() {
             draftStatus={draftStatus}
             firstLineAsTitle={firstLineAsTitle}
             onToggleFirstLineAsTitle={handleToggleFirstLineAsTitle}
+            lowConfidenceDecisions={lowConfidenceDecisions}
+            onResolveDecision={handleResolveDecision}
+            onKeepDecision={handleKeepDecision}
+            onExportFeedback={handleExportFeedback}
           />
         </div>
 
@@ -216,6 +347,9 @@ function MainLayout() {
             onToggleFootnotes={handleToggleFootnotes}
             firstLineAsTitle={firstLineAsTitle}
             onToggleFirstLineAsTitle={handleToggleFirstLineAsTitle}
+            aiApplying={aiApplying}
+            onAiEnhance={handleAiEnhance}
+            onOpenAiSettings={() => setShowAiSettings(true)}
           />
 
           {/* 移动端切换视图 */}
@@ -231,6 +365,10 @@ function MainLayout() {
                 draftStatus={draftStatus}
                 firstLineAsTitle={firstLineAsTitle}
                 onToggleFirstLineAsTitle={handleToggleFirstLineAsTitle}
+                lowConfidenceDecisions={lowConfidenceDecisions}
+                onResolveDecision={handleResolveDecision}
+                onKeepDecision={handleKeepDecision}
+                onExportFeedback={handleExportFeedback}
               />
             ) : (
               <Preview
@@ -282,6 +420,13 @@ function MainLayout() {
         onSelect={(newId) => {
           setThemeId(newId);
         }}
+      />
+
+      <AiSettingsModal
+        isOpen={showAiSettings}
+        settings={aiSettings}
+        onClose={() => setShowAiSettings(false)}
+        onSave={handleSaveAiSettings}
       />
     </div>
   );

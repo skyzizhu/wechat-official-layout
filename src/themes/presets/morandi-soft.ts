@@ -144,7 +144,7 @@ export const morandiSoft: ThemePreset = {
       borderRadius: "10px",
       overflow: "auto",
       fontSize: "13.5px",
-      lineHeight: "1.7",
+      lineHeight: "1.75",
       margin: "24px 0",
     },
     img: {

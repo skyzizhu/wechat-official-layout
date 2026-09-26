@@ -166,6 +166,18 @@ export function applyFontSizeToTheme(
           ...theme.elements.h3,
           fontSize: '15px',
         },
+        h4: {
+          ...theme.elements.h4,
+          fontSize: '14.5px',
+        },
+        h5: {
+          ...theme.elements.h5,
+          fontSize: '14px',
+        },
+        h6: {
+          ...theme.elements.h6,
+          fontSize: '14px',
+        },
         p: {
           ...theme.elements.p,
           fontSize: '14px',
@@ -210,6 +222,18 @@ export function applyFontSizeToTheme(
       h3: {
         ...theme.elements.h3,
         fontSize: '17.5px',
+      },
+      h4: {
+        ...theme.elements.h4,
+        fontSize: '17px',
+      },
+      h5: {
+        ...theme.elements.h5,
+        fontSize: '16.5px',
+      },
+      h6: {
+        ...theme.elements.h6,
+        fontSize: '16.5px',
       },
       p: {
         ...theme.elements.p,

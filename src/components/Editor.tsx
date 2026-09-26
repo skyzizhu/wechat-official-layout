@@ -16,6 +16,7 @@ import {
 import { detectContentFormat, convertPlainTextToMarkdown } from '@/lib/smart-parser';
 
 import { compressAndEncodeImage } from '@/lib/image-utils';
+import type { ConversionDecision } from '@/lib/smart-parser';
 import {
   markdownToUnifiedHtml,
   unifiedHtmlToMarkdown,
@@ -35,6 +36,10 @@ interface EditorProps {
   draftStatus?: string;
   firstLineAsTitle?: boolean;
   onToggleFirstLineAsTitle?: (enabled: boolean) => void;
+  lowConfidenceDecisions?: ConversionDecision[];
+  onResolveDecision?: (d: ConversionDecision) => void;
+  onKeepDecision?: (d: ConversionDecision) => void;
+  onExportFeedback?: () => void;
 }
 
 export function Editor({
@@ -47,12 +52,18 @@ export function Editor({
   draftStatus,
   firstLineAsTitle = false,
   onToggleFirstLineAsTitle,
+  lowConfidenceDecisions,
+  onResolveDecision,
+  onKeepDecision,
+  onExportFeedback,
 }: EditorProps) {
   const charCount = value.replace(/\s/g, '').length;
   const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  // 第二阶段：选中行意图转换工具栏 { 屏幕坐标, markdown 起止行 }
+  const [intentBar, setIntentBar] = useState<{ x: number; y: number; s: number; e: number } | null>(null);
 
   const menuRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -100,6 +111,105 @@ export function Editor({
     lastMarkdownRef.current = md;
     onChange(md);
   }, [onChange]);
+
+  // ===== 第二阶段：选中行意图转换 =====
+  // 从当前选区推算覆盖的 Markdown 行范围（基于 markdownToUnifiedHtml 注入的 data-ml-s/e 标记）
+  const computeSelectionLines = () => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !editorRef.current) return null;
+    const range = sel.getRangeAt(0);
+    if (!editorRef.current.contains(range.commonAncestorContainer)) return null;
+    const marked = Array.from(editorRef.current.querySelectorAll<HTMLElement>('[data-ml-s]')).filter((el) =>
+      range.intersectsNode(el)
+    );
+    if (marked.length === 0) return null;
+    const ranges = marked
+      .map((el) => ({
+        s: parseInt(el.getAttribute('data-ml-s') || '', 10),
+        e: parseInt(el.getAttribute('data-ml-e') || '', 10),
+      }))
+      .filter((v) => !Number.isNaN(v.s) && !Number.isNaN(v.e));
+    if (ranges.length === 0) return null;
+    const s = Math.min(...ranges.map((v) => v.s));
+    const e = Math.max(...ranges.map((v) => v.e));
+    const rect = range.getBoundingClientRect();
+    const containerRect = editorRef.current.getBoundingClientRect();
+    return {
+      x: Math.max(8, Math.min(rect.left - containerRect.left, containerRect.width - 340)),
+      y: Math.max(4, Math.max(rect.top - containerRect.top - 42, 4)),
+      s,
+      e,
+    };
+  };
+
+  const handleEditorMouseUp = () => setIntentBar(computeSelectionLines());
+
+  const applyIntentTransform = (kind: string) => {
+    if (!intentBar) return;
+    const { s, e } = intentBar;
+    const lines = value.split('\n');
+    switch (kind) {
+      case 'h2':
+        for (let k = s; k <= e; k++) {
+          const t = (lines[k] || '').trim();
+          if (t) lines[k] = `## ${t.replace(/^#+\s*/, '')}`;
+        }
+        break;
+      case 'h3':
+        for (let k = s; k <= e; k++) {
+          const t = (lines[k] || '').trim();
+          if (t) lines[k] = `### ${t.replace(/^#+\s*/, '')}`;
+        }
+        break;
+      case 'list':
+        for (let k = s; k <= e; k++) {
+          const t = (lines[k] || '').trim();
+          if (t) lines[k] = `- ${t.replace(/^[-•●·✦\s]+/, '')}`;
+        }
+        break;
+      case 'table': {
+        const rows: string[] = [];
+        for (let k = s; k <= e; k++) {
+          const t = (lines[k] || '').trim();
+          if (!t) continue;
+          const cells = t.split(/\s*(?:\t|[｜|]\s*|\s{2,}|[,，])\s*/).filter(Boolean);
+          rows.push(`| ${cells.join(' | ')} |`);
+        }
+        if (rows.length >= 2) {
+          const colCount = rows[0].split('|').length - 2;
+          rows.splice(1, 0, `| ${Array(Math.max(colCount, 1)).fill(':---').join(' | ')} |`);
+        }
+        lines.splice(s, e - s + 1, ...rows);
+        break;
+      }
+      case 'quote':
+        for (let k = s; k <= e; k++) {
+          const t = (lines[k] || '').trim();
+          if (t) lines[k] = `> ${t}`;
+        }
+        break;
+      case 'code': {
+        const selected = lines.slice(s, e + 1);
+        lines.splice(s, e - s + 1, '```', ...selected, '```');
+        break;
+      }
+      case 'caption':
+        for (let k = s; k <= e; k++) {
+          const t = (lines[k] || '').trim().replace(/^[*_]+|[*_]+$/g, '');
+          if (t) lines[k] = `*${t.startsWith('▲') ? t : `▲ ${t}`}*`;
+        }
+        break;
+      case 'text':
+        for (let k = s; k <= e; k++) {
+          lines[k] = (lines[k] || '').replace(/^(?:#{1,6}\s*|>\s*|-\s*|\*+|```)/, '').trim();
+        }
+        break;
+    }
+    const next = lines.join('\n');
+    lastMarkdownRef.current = next;
+    setIntentBar(null);
+    onChange(next);
+  };
 
   // 监听输入事件（处理文字录入与题注修改）
   const handleInput = () => {
@@ -400,7 +510,92 @@ export function Editor({
       }}
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
+      onMouseUp={handleEditorMouseUp}
     >
+      {/* 第二阶段：低置信度识别决策提示条 —— 让「拿不准」可见，一键纠偏 */}
+      {lowConfidenceDecisions && lowConfidenceDecisions.length > 0 && (
+        <div className="flex-shrink-0 border-b border-amber-200 bg-amber-50/70 px-3 py-1.5 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium text-amber-800">
+              ⚠ {lowConfidenceDecisions.length} 处识别需要确认
+            </span>
+            {onExportFeedback && (
+              <button
+                onClick={onExportFeedback}
+                className="text-[11px] text-amber-700 hover:text-amber-900 underline cursor-pointer"
+                title="导出本地反馈数据（JSON），帮助改进识别规则"
+              >
+                导出反馈
+              </button>
+            )}
+          </div>
+          <div className="mt-1 space-y-1">
+            {lowConfidenceDecisions.map((d) => {
+              const key = `${d.type}:${d.snippet}`;
+              return (
+                <div key={key} className="flex items-center justify-between gap-2 text-gray-700">
+                  <span className="truncate">
+                    「{d.snippet}」… 识别为{d.type}（置信度 {Math.round(d.confidence * 100)}%）
+                  </span>
+                  <span className="flex items-center gap-1.5 flex-shrink-0">
+                    {onResolveDecision && (
+                      <button
+                        onClick={() => onResolveDecision(d)}
+                        className="px-1.5 py-0.5 rounded border border-gray-300 bg-white hover:bg-gray-100 cursor-pointer"
+                      >
+                        改为正文
+                      </button>
+                    )}
+                    {onKeepDecision && (
+                      <button
+                        onClick={() => onKeepDecision(d)}
+                        className="px-1.5 py-0.5 rounded border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 cursor-pointer"
+                      >
+                        保留 ✓
+                      </button>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 第二阶段：选中行意图转换工具栏 */}
+      {intentBar && (
+        <div
+          className="absolute z-30 flex items-center gap-0.5 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-1 py-1"
+          style={{ left: Math.max(intentBar.x, 8), top: intentBar.y }}
+          onMouseDown={(e) => e.preventDefault()}
+        >
+          {[
+            { kind: 'h2', label: 'H2' },
+            { kind: 'h3', label: 'H3' },
+            { kind: 'list', label: '列表' },
+            { kind: 'table', label: '表格' },
+            { kind: 'quote', label: '引用' },
+            { kind: 'code', label: '代码' },
+            { kind: 'caption', label: '题注' },
+            { kind: 'text', label: '正文' },
+          ].map((item) => (
+            <button
+              key={item.kind}
+              onClick={() => applyIntentTransform(item.kind)}
+              className="px-2 py-1 rounded hover:bg-white/20 cursor-pointer whitespace-nowrap"
+            >
+              {item.label}
+            </button>
+          ))}
+          <button
+            onClick={() => setIntentBar(null)}
+            className="px-1.5 py-1 rounded hover:bg-white/20 text-gray-400 cursor-pointer"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* 隐藏的本地图片选取 input */}
       <input
         type="file"

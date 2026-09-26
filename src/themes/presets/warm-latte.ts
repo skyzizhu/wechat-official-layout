@@ -40,7 +40,7 @@ export const warmLatte: ThemePreset = {
       marginBottom: "32px",
       color: "#78350f",
       letterSpacing: "1.5px",
-      lineHeight: "1.7",
+      lineHeight: "1.75",
       paddingBottom: "16px",
       borderBottom: "1.5px solid #fde68a",
     },
@@ -50,8 +50,6 @@ export const warmLatte: ThemePreset = {
       marginTop: "44px",
       marginBottom: "20px",
       color: "#92400e",
-      display: "flex",
-      alignItems: "center",
     },
     h3: {
       fontSize: "16.5px",
@@ -147,7 +145,7 @@ export const warmLatte: ThemePreset = {
       borderRadius: "8px",
       overflow: "auto",
       fontSize: "13.5px",
-      lineHeight: "1.7",
+      lineHeight: "1.75",
       margin: "24px 0",
     },
     img: {

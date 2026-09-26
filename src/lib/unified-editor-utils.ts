@@ -17,7 +17,13 @@ export function markdownToUnifiedHtml(markdown: string): string {
   const htmlParts: string[] = [];
   let i = 0;
 
+  // 为每个生成的块元素注入源码行号标记（data-ml-s / data-ml-e），
+  // 供意图工具栏在「编辑器选区 ↔ Markdown 行」之间精确映射
+  const withLineMark = (html: string, s: number, e: number) =>
+    html.replace(/^<([a-zA-Z]+)/, `<$1 data-ml-s="${s}" data-ml-e="${e}">`);
+
   while (i < lines.length) {
+    const blockStart = i;
     const rawLine = lines[i];
     const trimmed = rawLine.trim();
 
@@ -80,7 +86,7 @@ export function markdownToUnifiedHtml(markdown: string): string {
           </div>
           <p><br></p>
         `;
-        htmlParts.push(galleryHtml.trim());
+        htmlParts.push(withLineMark(galleryHtml.trim(), blockStart, i - 1));
         continue;
       }
     }
@@ -138,7 +144,7 @@ export function markdownToUnifiedHtml(markdown: string): string {
         </figure>
         <p><br></p>
       `;
-      htmlParts.push(figureHtml.trim());
+      htmlParts.push(withLineMark(figureHtml.trim(), blockStart, i));
       i = hasCaption ? nextIdx + 1 : i + 1;
       continue;
     }
@@ -181,7 +187,7 @@ export function markdownToUnifiedHtml(markdown: string): string {
         </figure>
         <p><br></p>
       `;
-      htmlParts.push(figureHtml.trim());
+      htmlParts.push(withLineMark(figureHtml.trim(), blockStart, i));
       i = hasCaption ? nextIdx + 1 : i + 1;
       continue;
     }
@@ -196,7 +202,7 @@ export function markdownToUnifiedHtml(markdown: string): string {
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
-    htmlParts.push(`<p>${escaped}</p>`);
+    htmlParts.push(withLineMark(`<p>${escaped}</p>`, blockStart, i));
     i++;
   }
 

@@ -41,7 +41,7 @@ export const freshMint: ThemePreset = {
       marginBottom: "30px",
       color: "#0d9488",
       letterSpacing: "0.5px",
-      lineHeight: "1.7",
+      lineHeight: "1.75",
       paddingBottom: "14px",
       borderBottom: "1.5px solid #99f6e4",
     },
@@ -51,8 +51,6 @@ export const freshMint: ThemePreset = {
       marginTop: "42px",
       marginBottom: "18px",
       color: "#0f766e",
-      display: "flex",
-      alignItems: "center",
     },
     h3: {
       fontSize: "16.5px",
@@ -147,7 +145,7 @@ export const freshMint: ThemePreset = {
       borderRadius: "10px",
       overflow: "auto",
       fontSize: "13.5px",
-      lineHeight: "1.7",
+      lineHeight: "1.75",
       margin: "24px 0",
     },
     img: {

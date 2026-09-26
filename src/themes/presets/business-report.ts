@@ -40,7 +40,7 @@ export const businessReport: ThemePreset = {
       color: "#1e3a8a",
       marginBottom: "30px",
       letterSpacing: "-0.3px",
-      lineHeight: "1.7",
+      lineHeight: "1.75",
       paddingBottom: "16px",
       borderBottom: "2.5px solid #1e3a8a",
     },
@@ -142,7 +142,7 @@ export const businessReport: ThemePreset = {
       borderRadius: "8px",
       overflow: "auto",
       fontSize: "13.5px",
-      lineHeight: "1.7",
+      lineHeight: "1.75",
       margin: "24px 0",
     },
     img: {
