@@ -19,8 +19,11 @@ export function markdownToUnifiedHtml(markdown: string): string {
 
   // 为每个生成的块元素注入源码行号标记（data-ml-s / data-ml-e），
   // 供意图工具栏在「编辑器选区 ↔ Markdown 行」之间精确映射
-  const withLineMark = (html: string, s: number, e: number) =>
-    html.replace(/^<([a-zA-Z]+)/, `<$1 data-ml-s="${s}" data-ml-e="${e}">`);
+  const withLineMark = (html: string, s: number, e: number) => {
+    // 已含行号标记（如引用卡片模板自带）则不重复注入，避免属性被挤成文本
+    if (/data-ml-s=/.test(html)) return html;
+    return html.replace(/^<([a-zA-Z]+)/, `<$1 data-ml-s="${s}" data-ml-e="${e}"`);
+  };
 
   while (i < lines.length) {
     const blockStart = i;

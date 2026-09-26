@@ -693,7 +693,8 @@ export function convertPlainTextToMarkdown(
       /^type\s+[A-Za-z_$][\w$]*\s*[={]/.test(trimmed) ||
       /^\/\*\*/.test(trimmed) ||
       /^(?:if|for|while|switch|try)\s*[\(\{]/.test(trimmed) ||
-      /^(?:console\.|print\(|System\.out\.|echo\s)/.test(trimmed) ||
+      /^(?:console\.|print\(|System\.out\.)/.test(trimmed) ||
+      /^\/\/\s*\S/.test(trimmed) ||
       /^(?:\{\s*$|\[\s*$)/.test(trimmed) ||
       /^(?:\$|npm|pnpm|yarn|git|docker|curl|pip)\s+/.test(trimmed) ||
       /^(?:SELECT|INSERT|UPDATE|DELETE|CREATE\s+TABLE)\s+/i.test(trimmed);
