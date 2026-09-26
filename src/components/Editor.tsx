@@ -317,7 +317,7 @@ export function Editor({
           ) : (
             <button
               onClick={() => setDecisionPanelOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white text-xs font-medium rounded-full shadow-lg hover:bg-amber-600 cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-500/95 backdrop-blur text-white text-xs font-medium rounded-full shadow-lg shadow-amber-500/25 hover:bg-amber-600 cursor-pointer transition-all"
               title="点击展开识别确认列表"
             >
               ⚠ {lowConfidenceDecisions.length} 处识别需要确认
@@ -336,7 +336,7 @@ export function Editor({
       />
 
       {/* 顶部主工具栏 */}
-      <div className="h-11 border-b border-gray-200 flex items-center px-3 sm:px-4 text-sm text-gray-600 justify-between flex-shrink-0 bg-gray-50/50">
+      <div className="h-11 border-b border-gray-200/70 flex items-center px-3 sm:px-4 text-sm text-gray-600 justify-between flex-shrink-0 bg-white">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-gray-800 text-xs tracking-wider uppercase hidden sm:inline">
             输入内容
@@ -506,7 +506,7 @@ export function Editor({
       </div>
 
       {/* 智能检测状态提示浮条 */}
-      <div className="px-4 py-1.5 bg-blue-50/60 border-b border-blue-100 flex items-center justify-between text-xs text-gray-600 flex-shrink-0">
+      <div className="px-4 py-1.5 bg-blue-50/40 border-b border-blue-100/70 flex items-center justify-between text-xs text-gray-600 flex-shrink-0">
         <div className="flex items-center gap-1.5">
           {detection.isMarkdown ? (
             <span className="inline-flex items-center gap-1 font-medium text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full text-[11px]">
@@ -539,7 +539,7 @@ export function Editor({
       {/* 输入区：纯文本 / Markdown 源码（左边永远是源码，渲染效果只在右边预览） */}
       {/* 选中行意图转换工具栏（源码行级操作） */}
       {intentBar && (
-        <div className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 bg-gray-900 text-white text-xs flex-wrap">
+        <div className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 bg-gray-900/90 backdrop-blur text-white text-xs flex-wrap rounded-lg mx-3 mt-2">
           <span className="text-gray-400 mr-1">选中 {intentBar.e - intentBar.s + 1} 行：</span>
           {[
             { kind: 'h2', label: 'H2' },
@@ -576,7 +576,7 @@ export function Editor({
         onSelect={handleSelect}
         onPaste={handlePaste}
         placeholder="在这里输入或粘贴文章内容……纯文本即可，系统会自动识别结构并排版；也可以直接粘贴截图插入图片。"
-        className="flex-1 w-full resize-none outline-none p-4 text-[15px] leading-relaxed text-gray-800 bg-white"
+        className="flex-1 w-full resize-none outline-none px-5 py-5 text-[15px] leading-[1.9] tracking-[0.01em] text-gray-800 bg-white"
         spellCheck={false}
       />
 

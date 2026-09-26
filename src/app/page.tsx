@@ -339,13 +339,13 @@ function MainLayout() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
+    <div className="flex flex-col h-screen bg-[#f6f7f9]">
       <Header />
 
       {/* 桌面端：左右分栏布局 */}
       <main className="flex-1 flex overflow-hidden">
         {/* 左栏：编辑器 */}
-        <div className="hidden lg:flex w-[45%] border-r border-gray-200 flex-col">
+        <div className="hidden lg:flex w-[45%] border-r border-gray-200/70 flex-col">
           <Editor
             value={markdown}
             onChange={setMarkdown}
