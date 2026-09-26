@@ -1003,6 +1003,14 @@ export function convertPlainTextToMarkdown(
     // 以 "<字母" 开头的行开启 HTML 块，直到空行为止；块内行原样输出，
     // 杜绝条目标题提取/强调/间距等文本规则破坏 style 属性与卡片结构
     if (inHtmlBlock || /^<[a-zA-Z]/.test(trimmed)) {
+      if (!inHtmlBlock) {
+        // 首行开启 HTML 块：上报低置信度决策（原始 HTML 可能是「要渲染的卡片」或「要展示的代码」，
+        // 引擎无法判定意图，默认按卡片渲染，由用户在提示条一键切换）
+        const isKnownCard = /data-role="photo-card"/.test(trimmed);
+        if (!isKnownCard) {
+          noteDecision('HTML代码块', 0.5, trimmed.slice(0, 20));
+        }
+      }
       inHtmlBlock = true;
       lastNonEmptyWasImage = false;
       processedLines.push(trimmed);

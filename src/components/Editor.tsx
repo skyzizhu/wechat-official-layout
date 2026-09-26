@@ -543,7 +543,7 @@ export function Editor({
                         onClick={() => onResolveDecision(d)}
                         className="px-1.5 py-0.5 rounded border border-gray-300 bg-white hover:bg-gray-100 cursor-pointer"
                       >
-                        {d.type === '金句' ? '转为金句' : '改为正文'}
+                        {d.type === '金句' ? '转为金句' : d.type === 'HTML代码块' ? '转为代码块' : '改为正文'}
                       </button>
                     )}
                     {onKeepDecision && (

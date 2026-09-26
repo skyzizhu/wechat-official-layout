@@ -250,6 +250,21 @@ function MainLayout() {
     const key = `${d.type}:${d.snippet}`;
     logFeedback(d, d.type === '金句' ? '转为金句' : '改为正文');
 
+    // HTML 代码块：将草稿中对应原始 HTML 块用 ```html 围栏包裹（切换为源码展示）
+    if (d.type === 'HTML代码块') {
+      setMarkdown((prev) => {
+        const lines = prev.split('\n');
+        const startIdx = lines.findIndex((l) => l.trim().startsWith('<') && l.includes(d.snippet.slice(0, 10)));
+        if (startIdx < 0) return prev;
+        let endIdx = startIdx;
+        while (endIdx + 1 < lines.length && lines[endIdx + 1].trim() !== '') endIdx++;
+        const block = lines.slice(startIdx, endIdx + 1);
+        return [...lines.slice(0, startIdx), '```html', ...block, '```', ...lines.slice(endIdx + 1)].join('\n');
+      });
+      setDraftStatus('已将 HTML 块切换为源码展示');
+      return;
+    }
+
     // 金句：将草稿中对应段落包装为居中金句段（升级而非抑制）
     if (d.type === '金句') {
       setMarkdown((prev) => {
