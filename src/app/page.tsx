@@ -317,6 +317,7 @@ function MainLayout() {
     setDraftStatus('⏳ AI 正在排版…');
     try {
       const md = await enhanceWithAi(markdown, aiSettings);
+      setFirstLineAsTitle(true); // AI 输出的 # 大标题需要首句标题开启才能保留
       setMarkdown(md);
       try {
         localStorage.setItem('radiant_article_draft', md);

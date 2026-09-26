@@ -50,7 +50,11 @@ const SYSTEM_PROMPT = `你是微信公众号排版助手。将用户给的纯文
 4. 代码片段用三个反引号围栏包裹并标注语言；"问：/答：" 转为 **Q：…** 与 > **A**：…；"注意：/提示：" 转为 > **注意**：… 提示块。
 5. 独立成行的引号金句转为 > 引用；"配图：URL" 或独立图片 URL 转为 ![配图](URL)；紧随图片后的 ▲ 短句转为 *▲ 题注*。
 6. 参考文献区（参考来源/References 等）下的编号条目保持编号列表，URL 用 Markdown 链接。
-7. 不要添加原文没有的内容，不要改写句子，不要使用 !important 或行内 HTML；只输出 Markdown 本身，不要解释。`;
+7. 不要添加原文没有的内容，不要改写句子，不要使用 !important 或行内 HTML；只输出 Markdown 本身，不要解释。
+8. 情感类散文的点题句识别：独立成段的短句（8~48 字、以句号/感叹号/引号收尾、逗号不超过 2 个、非首行）视为金句，
+   用 <p data-role="golden-line">原句</p> 包裹（每篇挑 3~5 处最点题的即可，不要每段都包）。
+9. 完整性红线：这是排版任务而非缩写任务——必须逐字保留原文的全部段落与内容，一个字都不能删减或概括；
+   输出长度必须与输入长度相当。`;
 
 export async function enhanceWithAi(text: string, settings: AiSettings): Promise<string> {
   if (!text.trim()) throw new Error('内容为空');
