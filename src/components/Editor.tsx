@@ -10,19 +10,13 @@ import {
   ChevronDown,
   FileCheck2,
   Image as ImageIcon,
-  X,
   Loader2,
 } from 'lucide-react';
 import { detectContentFormat, convertPlainTextToMarkdown } from '@/lib/smart-parser';
 
 import { compressAndEncodeImage } from '@/lib/image-utils';
 import type { ConversionDecision } from '@/lib/smart-parser';
-import {
-  markdownToUnifiedHtml,
-  unifiedHtmlToMarkdown,
-  createSingleImageFigureNode,
-} from '@/lib/unified-editor-utils';
-import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 
 export type ContentMode = 'auto' | 'plain-text' | 'markdown';
 
@@ -61,33 +55,31 @@ export function Editor({
   const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
-  // 第二阶段：选中行意图转换工具栏 { 屏幕坐标, markdown 起止行 }
-  const [intentBar, setIntentBar] = useState<{ x: number; y: number; s: number; e: number } | null>(null);
+  // 第二阶段：选中行意图转换工具栏 { 起始行, 结束行（含） }
+  const [intentBar, setIntentBar] = useState<{ s: number; e: number } | null>(null);
 
   const menuRef = useRef<HTMLDivElement>(null);
-  const editorRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // 记录最后一次向外广播的 Markdown，避免用户正在输入时被外部 props 反向重写 innerHTML 导致光标丢失
-  const lastMarkdownRef = useRef<string>(value);
-  // 中文拼音输入法 IME 保护标志
-  const isComposingRef = useRef<boolean>(false);
-  const isInitializedRef = useRef<boolean>(false);
-
-  // 外部 value 改变时（如首次加载、载入范文、一键清空、切换草稿）且非本地用户输入时，更新编辑器 DOM
-  useEffect(() => {
-    if (!editorRef.current) return;
-
-    // 当 DOM 节点为空（如初次挂载、Strict Mode 双重挂载恢复）或外部 Markdown 真正发生变动时同步
-    if (!editorRef.current.innerHTML.trim() || value !== lastMarkdownRef.current) {
-      lastMarkdownRef.current = value;
-      editorRef.current.innerHTML = markdownToUnifiedHtml(value);
-    }
-  }, [value]);
 
   // 实时分析文本格式
   const detection = useMemo(() => detectContentFormat(value), [value]);
+
+  // 选中区域 → 行范围（0 起始，含端点）
+  const selectionLines = (): { s: number; e: number } | null => {
+    const ta = textareaRef.current;
+    if (!ta) return null;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    if (start === end) return null;
+    const s = value.slice(0, start).split('\n').length - 1;
+    const selected = value.slice(start, end);
+    const e = s + selected.split('\n').length - 1;
+    return { s, e };
+  };
+
+  const handleSelect = () => setIntentBar(selectionLines());
+  const handleTextareaBlur = () => setTimeout(() => setIntentBar(null), 200);
 
   // 点击外部自动关闭范文下拉菜单
   useEffect(() => {
@@ -97,53 +89,93 @@ export function Editor({
       }
     }
     if (showPresetMenu) {
-      document.addEventListener('click', handleClickOutside);
+      document.addEventListener('mousedown', handleClickOutside);
     }
     return () => {
-      document.removeEventListener('click', handleClickOutside);
+      document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showPresetMenu]);
 
-  // 同步编辑器当前 DOM 到外部 Markdown
-  const syncDomToMarkdown = useCallback(() => {
-    if (!editorRef.current) return;
-    const md = unifiedHtmlToMarkdown(editorRef.current);
-    lastMarkdownRef.current = md;
-    onChange(md);
-  }, [onChange]);
-
-  // ===== 第二阶段：选中行意图转换 =====
-  // 从当前选区推算覆盖的 Markdown 行范围（基于 markdownToUnifiedHtml 注入的 data-ml-s/e 标记）
-  const computeSelectionLines = () => {
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || !editorRef.current) return null;
-    const range = sel.getRangeAt(0);
-    if (!editorRef.current.contains(range.commonAncestorContainer)) return null;
-    const marked = Array.from(editorRef.current.querySelectorAll<HTMLElement>('[data-ml-s]')).filter((el) =>
-      range.intersectsNode(el)
-    );
-    if (marked.length === 0) return null;
-    const ranges = marked
-      .map((el) => ({
-        s: parseInt(el.getAttribute('data-ml-s') || '', 10),
-        e: parseInt(el.getAttribute('data-ml-e') || '', 10),
-      }))
-      .filter((v) => !Number.isNaN(v.s) && !Number.isNaN(v.e));
-    if (ranges.length === 0) return null;
-    const s = Math.min(...ranges.map((v) => v.s));
-    const e = Math.max(...ranges.map((v) => v.e));
-    const rect = range.getBoundingClientRect();
-    const containerRect = editorRef.current.getBoundingClientRect();
-    return {
-      x: Math.max(8, Math.min(rect.left - containerRect.left, containerRect.width - 340)),
-      y: Math.max(4, Math.max(rect.top - containerRect.top - 42, 4)),
-      s,
-      e,
-    };
+  // 一键将当前普通文本转为标准 Markdown 填回编辑器
+  const handleConvertToMarkdown = () => {
+    if (!value.trim()) return;
+    const converted = convertPlainTextToMarkdown(value, {
+      treatFirstLineAsTitle: firstLineAsTitle,
+    });
+    onChange(converted);
   };
 
-  const handleEditorMouseUp = () => setIntentBar(computeSelectionLines());
+  // 在光标处插入文本（粘贴图片/插入图片共用）
+  const insertAtCaret = (text: string) => {
+    const ta = textareaRef.current;
+    const start = ta?.selectionStart ?? value.length;
+    const end = ta?.selectionEnd ?? start;
+    const next = value.slice(0, start) + text + value.slice(end);
+    onChange(next);
+    // 等重渲染后把光标放到插入文本末尾
+    requestAnimationFrame(() => {
+      if (ta) {
+        ta.focus();
+        ta.selectionStart = ta.selectionEnd = start + text.length;
+      }
+    });
+  };
 
+  // 插入图片：压缩后以 Markdown 图片语法写入光标处（预览负责渲染）
+  const insertImageMarkdown = async (file: File) => {
+    try {
+      setIsUploading(true);
+      const { dataUrl, fileName } = await compressAndEncodeImage(file);
+      const cleanAlt = fileName.replace(/\.[^/.]+$/, '') || '配图';
+      insertAtCaret(`\n![${cleanAlt}](${dataUrl})\n`);
+    } catch (err) {
+      console.error('Image insertion failed', err);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // 粘贴：图片文件 → 转为 Markdown 图片语法；文本粘贴走浏览器原生行为
+  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const clipboardData = e.clipboardData;
+    if (!clipboardData) return;
+    const files = Array.from(clipboardData.files || []);
+    const items = Array.from(clipboardData.items || []);
+    const itemImg = items.find((item) => item.type.startsWith('image/'));
+    const imgFile = files.find((f) => f.type.startsWith('image/')) || (itemImg ? itemImg.getAsFile() : null);
+    if (!imgFile) return; // 普通文本粘贴放行原生行为
+    e.preventDefault();
+    await insertImageMarkdown(imgFile);
+  };
+
+  // 拖放图片支持
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files || []);
+    const imgFile = files.find((f) => f.type.startsWith('image/'));
+    if (imgFile) {
+      insertImageMarkdown(imgFile);
+    }
+  };
+
+  // 触发本地文件选择
+  const triggerImagePicker = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+      fileInputRef.current.click();
+    }
+  };
+
+  // 本地文件选取完成
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      insertImageMarkdown(file);
+    }
+  };
+
+  // 选中行意图转换（行级操作：直接改写源码行）
   const applyIntentTransform = (kind: string) => {
     if (!intentBar) return;
     const { s, e } = intentBar;
@@ -206,297 +238,8 @@ export function Editor({
         break;
     }
     const next = lines.join('\n');
-    lastMarkdownRef.current = next;
-    setIntentBar(null);
     onChange(next);
-  };
-
-  // 监听输入事件（处理文字录入与题注修改）
-  const handleInput = () => {
-    if (isComposingRef.current) return;
-    syncDomToMarkdown();
-  };
-
-  // 绑定原生捕获阶段事件监听器，确保子节点（如 figure 内 contenteditable="false" 嵌套的 figcaption）
-  // 发生的 input、keyup、blur、compositionend 事件能够百分之百被捕获并触发 DOM 状态向 Markdown 同步
-  useEffect(() => {
-    const el = editorRef.current;
-    if (!el) return;
-
-    const handleNativeEvent = () => {
-      if (isComposingRef.current) return;
-      syncDomToMarkdown();
-    };
-
-    const handleCompositionStart = () => {
-      isComposingRef.current = true;
-    };
-
-    const handleCompositionEnd = () => {
-      isComposingRef.current = false;
-      syncDomToMarkdown();
-    };
-
-    const handleBlur = () => {
-      isComposingRef.current = false;
-      syncDomToMarkdown();
-    };
-
-    el.addEventListener('input', handleNativeEvent, true);
-    el.addEventListener('keyup', handleNativeEvent, true);
-    el.addEventListener('blur', handleBlur, true);
-    el.addEventListener('compositionstart', handleCompositionStart, true);
-    el.addEventListener('compositionend', handleCompositionEnd, true);
-
-    return () => {
-      el.removeEventListener('input', handleNativeEvent, true);
-      el.removeEventListener('keyup', handleNativeEvent, true);
-      el.removeEventListener('blur', handleBlur, true);
-      el.removeEventListener('compositionstart', handleCompositionStart, true);
-      el.removeEventListener('compositionend', handleCompositionEnd, true);
-    };
-  }, [syncDomToMarkdown]);
-
-  // 一键将当前普通文本转为标准 Markdown 填入编辑器
-  const handleConvertToMarkdown = () => {
-    if (!value.trim()) return;
-    const converted = convertPlainTextToMarkdown(value, {
-      treatFirstLineAsTitle: firstLineAsTitle,
-    });
-    lastMarkdownRef.current = converted;
-    if (editorRef.current) {
-      editorRef.current.innerHTML = markdownToUnifiedHtml(converted);
-    }
-    onChange(converted);
-  };
-
-  // 插入单张图片到光标所在位置或末尾
-  const insertImageAtSelection = async (file: File) => {
-    try {
-      setIsUploading(true);
-      const { dataUrl, fileName } = await compressAndEncodeImage(file);
-      const cleanAlt = fileName.replace(/\.[^/.]+$/, '') || '配图';
-      const figure = createSingleImageFigureNode(dataUrl, cleanAlt, '');
-
-      if (!editorRef.current) return;
-      editorRef.current.focus();
-
-      const sel = window.getSelection();
-      let inserted = false;
-
-      if (sel && sel.rangeCount > 0) {
-        const range = sel.getRangeAt(0);
-        // 确保光标在当前编辑器内部
-        if (editorRef.current.contains(range.commonAncestorContainer)) {
-          range.deleteContents();
-          range.insertNode(figure);
-
-          // 若插入点位于文本段落内部，将所在段落按图片位置拆分为三段：
-          // 前文段落 / 图片卡片 / 后文段落，避免图片嵌在段落内导致文字随 Markdown 转换丢失
-          const parentEl = figure.parentElement;
-          if (parentEl && parentEl !== editorRef.current && parentEl.tagName === 'P') {
-            const headNodes: Node[] = [];
-            let m = figure.previousSibling;
-            while (m) {
-              headNodes.unshift(m);
-              m = m.previousSibling;
-            }
-            const tailNodes: Node[] = [];
-            let n = figure.nextSibling;
-            while (n) {
-              tailNodes.push(n);
-              n = n.nextSibling;
-            }
-            const mk = (nodes: Node[]) => {
-              const np = document.createElement('p');
-              if (nodes.length === 0) np.innerHTML = '<br>';
-              nodes.forEach((x) => np.appendChild(x));
-              return np;
-            };
-            const headP = mk(headNodes);
-            const tailP = mk(tailNodes);
-            parentEl.parentNode!.insertBefore(headP, parentEl);
-            parentEl.parentNode!.insertBefore(figure, parentEl);
-            parentEl.parentNode!.insertBefore(tailP, parentEl);
-            parentEl.remove();
-
-            // 光标移动到后文段落，方便继续键入文字
-            const newRange = document.createRange();
-            newRange.setStart(tailP, 0);
-            newRange.collapse(true);
-            sel.removeAllRanges();
-            sel.addRange(newRange);
-            inserted = true;
-          }
-
-          if (!inserted) {
-            // 插入点在顶层：紧接着插入一个新空段落，并将光标移动到该段落
-            const p = document.createElement('p');
-            p.innerHTML = '<br>';
-            figure.after(p);
-
-            const newRange = document.createRange();
-            newRange.setStart(p, 0);
-            newRange.collapse(true);
-            sel.removeAllRanges();
-            sel.addRange(newRange);
-            inserted = true;
-          }
-        }
-      }
-
-      if (!inserted) {
-        // 如果没有有效选区，则直接追加到文档末尾
-        editorRef.current.appendChild(figure);
-        const p = document.createElement('p');
-        p.innerHTML = '<br>';
-        editorRef.current.appendChild(p);
-      }
-
-      syncDomToMarkdown();
-    } catch (err) {
-      console.error('Image insertion failed', err);
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  // 核心粘贴处理：智能分流单图粘贴与全量图文粘贴
-  const handlePaste = async (e: React.ClipboardEvent) => {
-    const clipboardData = e.clipboardData;
-    if (!clipboardData) return;
-
-    const files = Array.from(clipboardData.files || []);
-    const items = Array.from(clipboardData.items || []);
-    const itemImg = items.find((item) => item.type.startsWith('image/'));
-    const imgFile = files.find((f) => f.type.startsWith('image/')) || (itemImg ? itemImg.getAsFile() : null);
-
-    // 场景 A：剪贴板直接包含单张截屏或图片文件
-    if (imgFile) {
-      e.preventDefault();
-      await insertImageAtSelection(imgFile);
-      return;
-    }
-
-    // 场景 B：粘贴全量混合内容（包含文字和多张图片，如从网页、Word、富文本粘贴）
-    const textPlain = clipboardData.getData('text/plain');
-
-    // 如果粘贴纯文本中包含了 Markdown 图片语法 ![...](...) 或纯文本配图标记
-    if (
-      textPlain &&
-      (textPlain.includes('![') ||
-        textPlain.includes('配图：') ||
-        textPlain.includes('图片：'))
-    ) {
-      e.preventDefault();
-      const generatedHtml = markdownToUnifiedHtml(textPlain);
-      let inserted = false;
-      try {
-        inserted = document.execCommand('insertHTML', false, generatedHtml);
-      } catch {}
-
-      if (!inserted) {
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = generatedHtml;
-        const sel = window.getSelection();
-        if (
-          sel &&
-          sel.rangeCount > 0 &&
-          editorRef.current?.contains(sel.getRangeAt(0).commonAncestorContainer)
-        ) {
-          const range = sel.getRangeAt(0);
-          range.deleteContents();
-          const frag = document.createDocumentFragment();
-          while (tempDiv.firstChild) {
-            frag.appendChild(tempDiv.firstChild);
-          }
-          range.insertNode(frag);
-        } else if (editorRef.current) {
-          while (tempDiv.firstChild) {
-            editorRef.current.appendChild(tempDiv.firstChild);
-          }
-        }
-      }
-      syncDomToMarkdown();
-      return;
-    }
-
-    // 普通纯文本粘贴：放行浏览器默认原生行为，确保光标与撤销栈自然流畅
-  };
-
-
-  // 委托捕获编辑器内部的交互操作（删除图片、查看大图）
-  const handleCanvasClick = (e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-
-    // 1. 删除单张图片
-    if (target.closest('.del-img-btn')) {
-      e.preventDefault();
-      e.stopPropagation();
-      const figure = target.closest('.unified-figure');
-      if (figure) {
-        figure.remove();
-        syncDomToMarkdown();
-      }
-      return;
-    }
-
-    // 2. 删除整个画廊
-    if (target.closest('.del-gallery-btn')) {
-      e.preventDefault();
-      e.stopPropagation();
-      const gallery = target.closest('.unified-gallery');
-      if (gallery) {
-        gallery.remove();
-        syncDomToMarkdown();
-      }
-      return;
-    }
-
-    // 3. 点击大图预览
-    if (target.closest('.view-img-trigger') || target.closest('.view-img-btn')) {
-      e.preventDefault();
-      e.stopPropagation();
-      const figure = target.closest('.unified-figure');
-      const img = figure?.querySelector('img');
-      if (img?.src) {
-        setPreviewImageUrl(img.src);
-      }
-      return;
-    }
-
-    // 4. 点击画廊中的图片预览
-    if (target.tagName === 'IMG' && target.closest('.unified-gallery')) {
-      setPreviewImageUrl((target as HTMLImageElement).src);
-      return;
-    }
-  };
-
-  // 触发本地文件选择
-  const triggerImagePicker = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-      fileInputRef.current.click();
-    }
-  };
-
-  // 本地文件选取完成
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && file.type.startsWith('image/')) {
-      insertImageAtSelection(file);
-    }
-  };
-
-  // 拖放图片支持
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files || []);
-    const imgFile = files.find((f) => f.type.startsWith('image/'));
-    if (imgFile) {
-      insertImageAtSelection(imgFile);
-    }
+    setIntentBar(null);
   };
 
   return (
@@ -510,7 +253,6 @@ export function Editor({
       }}
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
-      onMouseUp={handleEditorMouseUp}
     >
       {/* 第二阶段：低置信度识别决策提示条 —— 让「拿不准」可见，一键纠偏 */}
       {lowConfidenceDecisions && lowConfidenceDecisions.length > 0 && (
@@ -559,40 +301,6 @@ export function Editor({
               );
             })}
           </div>
-        </div>
-      )}
-
-      {/* 第二阶段：选中行意图转换工具栏 */}
-      {intentBar && (
-        <div
-          className="absolute z-30 flex items-center gap-0.5 bg-gray-900 text-white text-xs rounded-lg shadow-lg px-1 py-1"
-          style={{ left: Math.max(intentBar.x, 8), top: intentBar.y }}
-          onMouseDown={(e) => e.preventDefault()}
-        >
-          {[
-            { kind: 'h2', label: 'H2' },
-            { kind: 'h3', label: 'H3' },
-            { kind: 'list', label: '列表' },
-            { kind: 'table', label: '表格' },
-            { kind: 'quote', label: '引用' },
-            { kind: 'code', label: '代码' },
-            { kind: 'caption', label: '题注' },
-            { kind: 'text', label: '正文' },
-          ].map((item) => (
-            <button
-              key={item.kind}
-              onClick={() => applyIntentTransform(item.kind)}
-              className="px-2 py-1 rounded hover:bg-white/20 cursor-pointer whitespace-nowrap"
-            >
-              {item.label}
-            </button>
-          ))}
-          <button
-            onClick={() => setIntentBar(null)}
-            className="px-1.5 py-1 rounded hover:bg-white/20 text-gray-400 cursor-pointer"
-          >
-            ×
-          </button>
         </div>
       )}
 
@@ -660,7 +368,7 @@ export function Editor({
             onClick={() => triggerImagePicker()}
             disabled={isUploading}
             className="px-2 py-1 rounded-md text-xs text-blue-700 bg-blue-50 hover:bg-blue-100/80 border border-blue-200 transition-all flex items-center gap-1 cursor-pointer font-medium"
-            title="选择本地图片或在画布中按 Cmd+V / Ctrl+V 粘贴截屏"
+            title="选择本地图片，或直接在输入框 Cmd+V / Ctrl+V 粘贴截屏"
           >
             {isUploading ? (
               <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
@@ -712,7 +420,7 @@ export function Editor({
             {showPresetMenu && (
               <div
                 onClick={(e) => e.stopPropagation()}
-                className="absolute right-0 top-full mt-1.5 w-64 bg-white border border-gray-200 shadow-xl rounded-xl p-1.5 z-50 animate-in fade-in zoom-in-95 duration-100"
+                className="absolute right-0 top-full mt-1.5 w-64 bg-white border border-gray-200 shadow-xl rounded-xl p-1.5 z-50"
               >
                 <div className="px-2 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
                   选择测试范文类型
@@ -789,16 +497,10 @@ export function Editor({
               {detection.stats?.summaryText || '已识别：自然普通文本 (已智能提取标题、配图、表格与段落)'}
             </span>
           )}
-
-          {/* 统一整体操作提示 */}
-          <span className="hidden sm:inline text-[11px] text-gray-400 ml-1">
-            • 整篇为一个编辑整体，支持 Cmd+A 全选；截图按 Cmd+V 可直接插入
-          </span>
         </div>
 
         {/* 当是纯文本或自动识别时，提供一键格式化 */}
         <div className="flex items-center gap-1.5 sm:gap-2">
-
           {!detection.isMarkdown && value.trim().length > 0 && (
             <button
               onClick={handleConvertToMarkdown}
@@ -812,54 +514,53 @@ export function Editor({
         </div>
       </div>
 
-      {/* 编辑主体区域：单体图文混排统一整体连贯画布 */}
-      <div className="flex-1 overflow-y-auto bg-gray-50/10">
-        <div className="min-h-full p-4 sm:p-6 max-w-4xl mx-auto flex flex-col">
-          <div
-            ref={editorRef}
-            contentEditable={true}
-            suppressContentEditableWarning={true}
-            suppressHydrationWarning={true}
-            onInput={handleInput}
-            onPaste={handlePaste}
-            onClick={handleCanvasClick}
-            onCompositionStart={() => {
-              isComposingRef.current = true;
-            }}
-            onCompositionEnd={() => {
-              isComposingRef.current = false;
-              syncDomToMarkdown();
-            }}
-            className="flex-1 w-full min-h-[480px] outline-none text-sm text-gray-800 leading-relaxed font-sans focus:ring-0 empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 empty:before:pointer-events-none"
-            data-placeholder="在此输入文章全部内容。支持从外部一次性全量粘贴整篇文章（含文字与所有图片），或停在任意位置按 Cmd+V 直接插入单张截屏..."
-            spellCheck={false}
-          />
-        </div>
-      </div>
-
-      {/* 查看大图弹窗 */}
-      {previewImageUrl && (
-        <div
-          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4"
-          onClick={() => setPreviewImageUrl(null)}
-        >
-          <div
-            className="relative max-w-4xl max-h-[90vh] bg-white rounded-2xl p-2 overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-150"
-            onClick={(e) => e.stopPropagation()}
-          >
+      {/* 输入区：纯文本 / Markdown 源码（左边永远是源码，渲染效果只在右边预览） */}
+      {/* 选中行意图转换工具栏（源码行级操作） */}
+      {intentBar && (
+        <div className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 bg-gray-900 text-white text-xs flex-wrap">
+          <span className="text-gray-400 mr-1">选中 {intentBar.e - intentBar.s + 1} 行：</span>
+          {[
+            { kind: 'h2', label: 'H2' },
+            { kind: 'h3', label: 'H3' },
+            { kind: 'list', label: '列表' },
+            { kind: 'table', label: '表格' },
+            { kind: 'quote', label: '引用' },
+            { kind: 'code', label: '代码' },
+            { kind: 'caption', label: '题注' },
+            { kind: 'text', label: '正文' },
+          ].map((item) => (
             <button
-              onClick={() => setPreviewImageUrl(null)}
-              className="absolute top-3 right-3 p-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full transition-colors cursor-pointer z-10"
-              title="关闭预览"
+              key={item.kind}
+              onClick={() => applyIntentTransform(item.kind)}
+              className="px-2 py-0.5 rounded hover:bg-white/20 cursor-pointer whitespace-nowrap"
             >
-              <X className="w-4 h-4" />
+              {item.label}
             </button>
-            <img
-              src={previewImageUrl}
-              alt="原图预览"
-              className="max-h-[82vh] w-auto max-w-full rounded-xl object-contain mx-auto"
-            />
-          </div>
+          ))}
+          <button
+            onClick={() => setIntentBar(null)}
+            className="ml-1 px-1.5 py-0.5 rounded hover:bg-white/20 text-gray-400 cursor-pointer"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* 输入区：纯文本 / Markdown 源码（左边永远是源码，渲染效果只在右边预览） */}
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onSelect={handleSelect}
+        onPaste={handlePaste}
+        placeholder="在这里输入或粘贴文章内容……纯文本即可，系统会自动识别结构并排版；也可以直接粘贴截图插入图片。"
+        className="flex-1 w-full resize-none outline-none p-4 text-[15px] leading-relaxed text-gray-800 bg-white"
+        spellCheck={false}
+      />
+
+      {isDragging && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-blue-50/80 text-blue-600 text-sm font-medium pointer-events-none">
+          松开鼠标，插入图片
         </div>
       )}
     </div>
