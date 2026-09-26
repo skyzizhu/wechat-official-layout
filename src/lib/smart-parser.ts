@@ -961,7 +961,8 @@ export function convertPlainTextToMarkdown(
         return;
       }
       const m = t.match(arabicSectionLineRe);
-      if (m && !/^\d+(?:\.\d+)+/.test(t) && !/https?:\/\//i.test(t) && m[2].length <= 40 && !/[。！？…]$/.test(m[2]) && !/^\d/.test(m[2])) {
+      // 长度与句末标点不再设限：孤立编号行无论长短、无论是否带句号，均为小节标题（避免一字之差形态剧变）
+      if (m && !/^\d+(?:\.\d+)+/.test(t) && !/https?:\/\//i.test(t) && !/^\d/.test(m[2])) {
         arabicEntries.push({ index: idx, trimmed: t });
       }
     });
