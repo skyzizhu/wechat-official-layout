@@ -31,8 +31,11 @@ export function AiSettingsModal({ isOpen, settings, onClose, onSave }: AiSetting
 
         <div className="px-5 py-4 space-y-3 text-sm">
           <p className="text-xs text-gray-500 leading-relaxed">
-            配置任意 OpenAI 兼容接口（/chat/completions）。启用后点击「AI 排版」，系统会将纯文本发给
-            AI 按本系统的排版约定直接转换为 Markdown；未配置或请求失败时自动回退到内置智能识别。
+            两种用法任选：
+            ① <b>直连模式</b>——填 OpenAI 兼容接口（/chat/completions），适合无客户端限制的 API；
+            ② <b>代理模式</b>——若 API 网关限制客户端类型（如 AgentRouter），改为填写你自己服务器上
+            转发脚本的地址（随仓库 server/ai-proxy.php 提供），API Key 字段填脚本中设置的共享令牌。
+            启用后点击「AI 排版」，系统会将纯文本发给 AI 按排版约定转换为 Markdown；失败时自动回退内置识别。
           </p>
           <label className="block">
             <span className="text-gray-600">接口地址（完整 /chat/completions URL）</span>
