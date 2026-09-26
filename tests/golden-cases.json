@@ -1,0 +1,72 @@
+{
+  "cases": [
+    {
+      "name": "文章1-章节标题与编号体系",
+      "input": "2026年内容排版趋势观察报告\n\n导读：本报告通过大量真实案例分析纯文本输入的智能识别能力，覆盖章节、编号、多级结构三大维度。\n\n一、研究背景与目标\n\n长文排版的核心诉求是结构清晰。我们希望用户只需要专注写作内容本身，排版交给系统完成。\n\n二、中文序号的多种写法\n\n1、支持顿号分隔的标准写法，系统识别为有序列表。\n2、支持空格分隔的宽松写法，同样不会被遗漏。\n3、支持逗号分隔的非正式写法，也能正确归入列表。\n\n三、阿拉伯数字与章节体系\n\n第一章 研究方法说明\n\n本章介绍数据采集与清洗的完整流程，样本覆盖科技、教育、生活方式三个领域。\n\n第2节 数据分布特征\n\n从分布来看，长文用户的段落平均长度为三到五行，章节平均数量为四到六个。\n\n1.1 层级结构验证\n\n多级编号需要准确映射到对应的标题层级，不能出现层级跳跃。\n\n（一）一级子项说明\n\n括号编号在小节内部使用时，识别为三级小节标题。\n\n四、本章小结\n\n结构化排版能显著提升读者的完读率与转发率，是内容质量的放大器。"
+    },
+    {
+      "name": "文章2-列表与清单",
+      "input": "高效写作者的每日习惯清单\n\n导读：习惯的养成依赖简单可执行的规则，以下是经过验证的实操建议。\n\n一、每日写作流程\n\n1、早晨用十五分钟列出大纲\n2、上午完成初稿不看回改\n3、下午集中处理修辞与案例\n4、睡前记录明日选题灵感\n\n二、素材收集清单\n\n● 行业报告与数据图表\n● 用户访谈的真实原话\n● 竞品动态的截图存档\n\n三、发布前检查清单\n\n☑ 标题是否包含核心关键词\n☑ 摘要是否交代阅读收益\n□ 配图是否统一风格尺寸\n□ 文末是否附上参考来源\n\n四、常见误区提醒\n\n注意：不要在初稿阶段追求完美，先完成再完美是最高效的路径。"
+    },
+    {
+      "name": "文章3-表格全家福",
+      "input": "项目排期与资源配置说明\n\n导读：以下表格均由纯文本自动规整而成，覆盖四种常见写法。\n\n一、全角管道表格\n\n项目 ｜ 负责团队 ｜ 交付物\n需求分析 ｜ 产品组 ｜ PRD 文档\n交互设计 ｜ 设计组 ｜ 高保真原型\n\n二、半角管道表格\n\n模块 | 前端 | 后端 | 联调\n登录注册 | 张三 | 李四 | 第1周\n支付中心 | 王五 | 赵六 | 第2周\n\n三、制表符对齐表格\n\n阶段    负责人    预计耗时    当前状态\n需求梳理    产品组    1天    已完成\n算法设计    架构组    2天    已完成\n代码集成    研发组    3天    进行中\n线上发布    运维组    0.5天    待启动\n\n四、行间有空行的宽表格\n\n城市    人口规模    特色产业\n杭州    一千二百万    电商与直播\n成都    两千万    游戏与文创\n西安    一千三百万    硬科技与文旅"
+    },
+    {
+      "name": "文章4-代码与命令",
+      "input": "开发环境配置完整手册\n\n导读：以下代码均由纯文本自动识别语言，并套用对应的深色卡片样式。\n\n一、前端组件示例\n\nfunction ArticleCard(props) {\n  const { title, cover } = props;\n  return {\n    type: \"card\",\n    title: title,\n    cover: cover\n  };\n}\n\n二、接口配置示例\n\n{\n  \"project\": \"wenpai\",\n  \"version\": \"2.0.0\",\n  \"features\": [\"auto-detect\", \"smart-table\", \"code-card\"]\n}\n\n三、数据查询示例\n\nSELECT theme_name, COUNT(*) as total FROM articles GROUP BY theme_name;\n\n四、终端命令示例\n\nnpm install --save-dev wechat-formatter\nnpm run build -- --webpack"
+    },
+    {
+      "name": "文章5-问答引用金句",
+      "input": "内容创业十问精编（上）\n\n导读：我们整理了创作者最常遇到的典型问题，本期先刊出前五问。\n\n一、为什么我的文章没有人读？\n\n问：每天坚持更新但阅读量始终徘徊在两位数，问题出在哪里？\n答：多数情况下是选题问题而非文笔问题。先研究读者的搜索词与痛点，再动笔。\n\n二、金句的力量\n\n“好的设计是少，却更好。它让核心的事物更加纯粹与凸显，消除一切浮夸多余的装饰。”\n“把复杂留给自己，把简单留给读者，这是内容创作者的最高修养。”\n\n三、创作者的风险提示\n\n注意：搬运与洗稿会被平台限流，原创声明需要正文原创比例达标。\n提示：发布时间建议在工作日早七点或晚九点，打开率更高。\n\n四、写给新手的话\n\n坚持公开写作一年，你会收获远超预期的复利。"
+    },
+    {
+      "name": "文章6-配图链接与参考来源",
+      "input": "城市漫步 City Walk 完全指南\n\n导读：本文所有配图以链接形式给出，正文中的图片链接不会被误转为图片。\n\n一、路线推荐\n\n推荐路线参考图：/images/sample/sample-1.jpg\n▲ 图：武康路沿街的历史保护建筑\n\n二、装备清单\n\n● 舒适的运动鞋与一双备用袜子\n● 两万毫安的充电宝\n● 一部电量充足的手机\n\n三、延伸阅读与参考来源\n\n参考来源\n\n1) https://developer.mozilla.org/zh-CN/\n2. https://github.com/topics/citywalk\nhttps://mp.weixin.qq.com/s/demo"
+    },
+    {
+      "name": "边界-阿拉伯编号层级消歧",
+      "input": "2026 年度报告\n\n一、经营情况回顾\n\n正文内容。\n\n1、数据概览\n\n更多正文内容。\n\n2、重点事项\n\n更多正文内容。"
+    },
+    {
+      "name": "边界-纯阿拉伯文档",
+      "input": "2026 年度报告\n\n1、数据概览\n\n正文内容继续。"
+    },
+    {
+      "name": "边界-孤立短句不升标题",
+      "input": "前言\n\n正文继续。\n\n受益匪浅\n\n正文继续。"
+    },
+    {
+      "name": "边界-年份开头不误判",
+      "input": "2026 年的第一次旅行开始了\n\n后续正文内容。"
+    },
+    {
+      "name": "边界-负数开头不成列表",
+      "input": "-5 度的冬天怎么穿"
+    },
+    {
+      "name": "边界-图片URL只显示URL",
+      "input": "城市漫步指南\n\n一、路线推荐\n\n推荐路线参考图：/images/sample/sample-1.jpg\n▲ 图：武康路沿街的历史保护建筑\n\n配图：https://example.com/pic.png"
+    },
+    {
+      "name": "边界-损坏HTML自动修复",
+      "input": "## 3.4 视觉卡片测试\n\n&lt;section data — role=\"photo-card\" style=\"text-align: center;\"&gt;\n&lt;img src=\"/images/sample/sample-3.jpg\" style=\"max-width: 100%;\" /&gt;\n&lt;p style=\"font-size: 13px; color: #64748b;\"&gt;▲ 图：转义修复测试&lt;/p&gt;\n&lt;/section&gt;"
+    },
+    {
+      "name": "边界-粘贴Base64图片与题注",
+      "input": "这是开头段落，描述文章背景。\n\n![配图](/images/sample/sample-1.jpg)\n\n*▲ 图 1：武康路沿街的历史保护建筑*\n\n这是结尾段落，包含更多的总结性内容，验证文字不会丢失。"
+    },
+    {
+      "name": "用户案例-整篇纯代码",
+      "input": "interface ArticleTheme {\nreadonly id: string;\nreadonly name: string;\nreadonly typography: 'serif' | 'sans-serif' | 'monospace';\nreadonly accentColor: string;\nreadonly h2Decoration: 'wechat-badge' | 'magazine-centered' | 'pop-box' | 'academic-bracket';\n}\n/**\n * 智能编译自然文章为微信合规富文本\n */\nexport function renderOptimizedArticle(rawText: string, theme: ArticleTheme): string {\nconst normalized = detectAndFormat(rawText);\nreturn compileToWechatHtml(normalized, {\ntheme,\nenableFootnotes: true,\n});\n}"
+    },
+    {
+      "name": "回归-问答加粗与强调加粗",
+      "input": "推荐路线参考图：/images/sample/sample-1.jpg\n问：测试问题？\n需求梳理 - 产品组负责"
+    },
+    {
+      "name": "回归-连线段落不被星号破坏",
+      "input": "引言内容如下。\n\n**Q：这是一个正常的加粗问答行**\n\n结尾正文。"
+    }
+  ]
+}

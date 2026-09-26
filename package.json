@@ -3,10 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
+    "export": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:golden": "node tests/run-golden.mjs",
+    "test:golden:update": "node tests/run-golden.mjs --update"
   },
   "dependencies": {
     "html-to-image": "^1.11.13",

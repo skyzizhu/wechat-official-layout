@@ -893,6 +893,43 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
     return '';
   };
 
+  // ===== 第一阶段引擎：编号家族聚类与层级分配（文档级结构推断）=====
+  // 家族：相同数字体系+分隔风格的编号行归为一族（如「一、二、三」中文族、「1、2、3」阿拉伯族）
+  // 层级：中文族恒为 H2（章节）；阿拉伯族为小节——若文中存在中文族则降级 H3 形成父子层级
+  // 形态：族内相邻（含隔一空行）→ 有序列表；孤立（前后最近非空行都不是编号行）→ 小节标题
+  const cnSectionLineRe =
+    /^[一二三四五六七八九十百千万]+(?:\s*[、,，.．:：]\s*|\s+).+$/;
+  // 小节分类允许 1~4 位编号（如「2026 年度报告」）；连号密度检测仍为 1~3 位（年份不触发连号）
+  const arabicSectionLineRe = /^(\d{1,4})(?:\s*[、,，.．:：]\s*|\s+)(.+)$/;
+  let hasChineseNumberedSections = false;
+  const arabicSectionIndexes = new Set<number>();
+  const arabicSectionLevelMap = new Map<number, string>();
+  {
+    const arabicEntries: { index: number; trimmed: string }[] = [];
+    blockProcessedLines.forEach((l, idx) => {
+      const t = l.trim();
+      if (!t) return;
+      if (cnSectionLineRe.test(t)) {
+        hasChineseNumberedSections = true;
+        return;
+      }
+      const m = t.match(arabicSectionLineRe);
+      if (m && !/^\d+(?:\.\d+)+/.test(t) && !/https?:\/\//i.test(t) && m[2].length <= 40 && !/[。！？…]$/.test(m[2]) && !/^\d/.test(m[2])) {
+        arabicEntries.push({ index: idx, trimmed: t });
+      }
+    });
+    const arabicSectionLevel = hasChineseNumberedSections ? '###' : '##';
+    for (const entry of arabicEntries) {
+      const prevNearest = nearestNonEmptyLine(blockProcessedLines, entry.index - 1, -1);
+      const nextNearest = nearestNonEmptyLine(blockProcessedLines, entry.index + 1, 1);
+      const isDense = arabicNumberedRe.test(prevNearest) || arabicNumberedRe.test(nextNearest);
+      if (!isDense) {
+        arabicSectionIndexes.add(entry.index);
+        arabicSectionLevelMap.set(entry.index, arabicSectionLevel);
+      }
+    }
+  }
+
   for (let idx = 0; idx < blockProcessedLines.length; idx++) {
     const rawLine = blockProcessedLines[idx];
     const trimmed = rawLine.trim();
@@ -1202,29 +1239,11 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
       // 参考文献条目（含 URL）不走标题转换，保持编号列表形态
       const isReferenceLike = /https?:\/\//i.test(trimmed);
 
-      const prevNearest = nearestNonEmptyLine(blockProcessedLines, idx - 1, -1);
-      const nextNearest = nearestNonEmptyLine(blockProcessedLines, idx + 1, 1);
-      const isDenseNumbering =
-        arabicNumberedRe.test(prevNearest) || arabicNumberedRe.test(nextNearest);
-
-      // 层级消歧：当文档中已存在中文序号章节（一、二、三…）时，
-      // 阿拉伯数字编号行降一级作为小节标题 (H3)，与中文章节形成父子层级而非同级竞争
-      const hasChineseNumberedSections = blockProcessedLines.some((l) =>
-        /^[一二三四五六七八九十百千万]+(?:\s*[、,，.．:：]\s*|\s+).+$/.test(l.trim())
-      );
-      const sectionLevel = hasChineseNumberedSections ? '###' : '##';
-
-      const looksLikeSection =
-        !isDenseNumbering &&
-        !isMultiLevelNumbering &&
-        !isReferenceLike &&
-        !/^\d/.test(content) &&
-        content.length <= 40 &&
-        !/[。！？…]$/.test(content.trim());
-
-      if (looksLikeSection) {
+      // 层级与形态由第一阶段的「编号家族聚类」预计算（arabicSectionIndexes / arabicSectionLevelMap）：
+      // 孤立编号行 → 小节标题（文档含中文族时 H3，否则 H2）；密集编号行 → 有序列表项
+      if (!isMultiLevelNumbering && !isReferenceLike && arabicSectionIndexes.has(idx)) {
         processedLines.push('');
-        processedLines.push(`${sectionLevel} ${trimmed}`);
+        processedLines.push(`${arabicSectionLevelMap.get(idx)} ${trimmed}`);
         processedLines.push('');
         continue;
       }
