@@ -1097,10 +1097,26 @@ export function convertPlainTextToMarkdown(
     // 如 "1.1 架构设计", "（一）基本假设", "(一) 需求分析", "A. 数据清洗"
     const isH3Pattern =
       /^\d+\.\d+[\s、.．]+\S+/.test(trimmed) ||
-      /^[（(][一二三四五六七八九十]+[）)][\s、.．]*\S+/.test(trimmed) ||
-      /^[A-Z][.、．\s]+\S+/.test(trimmed);
+      /^[（(][一二三四五六七八九十]+[）)][\s、.．]*\S+/.test(trimmed);
+    const letterNumMatch = trimmed.match(/^([A-Z])[.、．]\s*(\S.*)$/);
 
     if (isH3Pattern) {
+      processedLines.push('');
+      processedLines.push(`### ${trimmed}`);
+      processedLines.push('');
+      continue;
+    }
+
+    // 字母编号消歧：A. B. C. 成组（前后最近非空行也是字母编号行）→ 有序列表；孤立 → H3
+    const letterNumRe = /^[A-Z][.、．]\s*\S+/;
+    if (letterNumMatch) {
+      const prevNearestLetter = nearestNonEmptyLine(blockProcessedLines, idx - 1, -1);
+      const nextNearestLetter = nearestNonEmptyLine(blockProcessedLines, idx + 1, 1);
+      const letterDense = letterNumRe.test(prevNearestLetter) || letterNumRe.test(nextNearestLetter);
+      if (letterDense) {
+        processedLines.push(`- **${letterNumMatch[1]}.** ${emphasizeItemHeader(letterNumMatch[2])}`);
+        continue;
+      }
       processedLines.push('');
       processedLines.push(`### ${trimmed}`);
       processedLines.push('');
@@ -1266,10 +1282,22 @@ export function convertPlainTextToMarkdown(
     }
 
     // 3.15 识别无序列表（•, ·, ●, ○, ◆, ◇, ★, ■, □, ▪, ▫, ▶, ▸, ➤, ※, ✦, ✧, 👉, 🔹, 🔸, 📌, ✅, ⭐, -）
+    // 嵌套支持：若上一输出行为有序/无序列表项且中间无空行 → 缩进为子列表项
     if (/^[•·●○◆◇★■□▪▫▶▸➤👉🔹🔸📌✅⭐✦✧※-]\s*(.+)$/.test(trimmed)) {
       const itemContent = trimmed.replace(/^[•·●○◆◇★■□▪▫▶▸➤👉🔹🔸📌✅⭐✦✧※-]\s*/, '');
       const emphasized = emphasizeItemHeader(itemContent);
-      processedLines.push(`- ${emphasized}`);
+      const prevOut = (() => {
+        for (let k = processedLines.length - 1; k >= 0; k--) {
+          const l = processedLines[k];
+          if (l.trim()) return l;
+          if (processedLines.length - 1 - k >= 1) return '';
+        }
+        return '';
+      })();
+      // 仅当上一行是有序列表项或已嵌套的子列表时才缩进；
+      // 上一行是顶层无序项（- x）时保持同级，兄弟符号行不应互相嵌套
+      const inList = /^(?:\d+\.\s|\s{2,}-\s)/.test(prevOut);
+      processedLines.push(`${inList ? '   ' : ''}- ${emphasized}`);
       continue;
     }
 
