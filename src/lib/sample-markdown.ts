@@ -96,7 +96,7 @@ export const SAMPLE_MARKDOWN = `# 排版之美：现代数字化长文的视觉�
 
 <section data-role="photo-card" style="margin: 20px auto; max-width: 100%; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 8px 10px 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); text-align: center;">
   <img src="/images/sample/sample-7.jpg" alt="沉浸式阅读与知识空间" style="width: 100%; border-radius: 6px; display: block; margin: 0 auto;" />
-  <p style="margin: 8px 0 0 0; font-size: 13px; color: #64748b; font-weight: 500; text-align: center;">▲ 图 3：拍立得衬底卡片，暗黑模式下自带留白护城河</p>
+  <p style="margin: 8px 0 0 0; font-size: 13px; font-weight: 500; text-align: center;">▲ 图 3：拍立得衬底卡片，暗黑模式下自带留白护城河</p>
 </section>
 
 ## 四、代码美学与多语言技术呈现

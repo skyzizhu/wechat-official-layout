@@ -193,6 +193,9 @@ function rehypeLayoutEnhancer() {
 export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
   const { elements, h2Decoration, markHighlight } = theme;
 
+  // 题注统一色：跟随主题的弱化文字色（td 单元格色优先，正文色兜底），暗色主题自动呈浅色、亮色主题呈深灰
+  const captionColor = (elements.td?.color as string) || (elements.p?.color as string) || '#64748b';
+
   const components: Components = {
     // 一级大标题：醒目、克制、大气通透，绝不附带无关字符
     h1: ({ children }) => <h1 style={elements.h1}>{children}</h1>,
@@ -363,7 +366,7 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
               textAlign: 'center',
               fontSize: '13px',
               lineHeight: 1.75,
-              color: '#64748b',
+              color: captionColor,
               fontStyle: 'normal',
               letterSpacing: '0.02em',
               boxSizing: 'border-box',
@@ -707,7 +710,7 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
               fontStyle: 'normal',
               fontSize: '13px',
               lineHeight: 1.75,
-              color: '#64748b',
+              color: captionColor,
               letterSpacing: '0.02em',
               boxSizing: 'border-box',
             }}
@@ -733,7 +736,7 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
               fontStyle: 'normal',
               fontSize: '13px',
               lineHeight: 1.75,
-              color: '#64748b',
+              color: captionColor,
               letterSpacing: '0.02em',
               boxSizing: 'border-box',
             }}

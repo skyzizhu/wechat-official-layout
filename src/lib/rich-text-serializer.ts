@@ -164,6 +164,8 @@ export function serializeToWeChatRichText(
 
   // 提取主题中的设计元数据
   const themeElements = theme?.elements;
+  // 题注统一色：跟随主题弱化文字色，暗色主题自动呈浅色
+  const captionColor = (themeElements?.td?.color as string) || (themeElements?.p?.color as string) || '#64748b';
   const containerStyle = theme?.container || {};
   const rawBgColor = (containerStyle.backgroundColor as string) || '#ffffff';
   const mainTextColor = (containerStyle.color as string) || '#27272a';
@@ -486,7 +488,7 @@ export function serializeToWeChatRichText(
 
       table.setAttribute(
         'style',
-        'width: 100%; border-collapse: collapse; margin: 24px auto; border: none; background: transparent; font-size: 13px; line-height: 1.75; color: #64748b; box-sizing: border-box; max-width: 100%; table-layout: fixed;'
+        `width: 100%; border-collapse: collapse; margin: 24px auto; border: none; background: transparent; font-size: 13px; line-height: 1.75; color: ${captionColor}; box-sizing: border-box; max-width: 100%; table-layout: fixed;`
       );
 
       table.querySelectorAll('th, td').forEach((cell) => {
@@ -503,7 +505,7 @@ export function serializeToWeChatRichText(
           // 题注文字单元格：显式注入安全 font-size 与 line-height: 1.75
           cell.setAttribute(
             'style',
-            `width: ${colWidth}; border: none; background: transparent; padding: 8px 4px 0 4px; vertical-align: top; text-align: center; font-size: 13px; line-height: 1.75; color: #64748b; letter-spacing: 0.02em; box-sizing: border-box; word-break: break-word;`
+            `width: ${colWidth}; border: none; background: transparent; padding: 8px 4px 0 4px; vertical-align: top; text-align: center; font-size: 13px; line-height: 1.75; color: ${captionColor}; letter-spacing: 0.02em; box-sizing: border-box; word-break: break-word;`
           );
 
           // 核心优化：解构题注内部的 em / p / span 标签，将纯文本提升至 cell 直接子节点
@@ -665,7 +667,7 @@ export function serializeToWeChatRichText(
           captionP.setAttribute('data-role', 'image-caption');
           captionP.setAttribute(
             'style',
-            'margin-top: 8px; margin-bottom: 26px; font-size: 13px; line-height: 1.75; color: #64748b; letter-spacing: 0.02em; text-align: center; word-break: break-word; box-sizing: border-box; max-width: 100%;'
+            `margin-top: 8px; margin-bottom: 26px; font-size: 13px; line-height: 1.75; color: ${captionColor}; letter-spacing: 0.02em; text-align: center; word-break: break-word; box-sizing: border-box; max-width: 100%;`
           );
           trailingNodes.forEach((n) => {
             if (n.nodeType === 1 && (n as HTMLElement).matches('em, span')) {
@@ -722,7 +724,7 @@ export function serializeToWeChatRichText(
     if (isCaption) {
       p.setAttribute(
         'style',
-        'margin-top: 8px; margin-bottom: 26px; font-size: 13px; line-height: 1.75; color: #64748b; letter-spacing: 0.02em; text-align: center; word-break: break-word; box-sizing: border-box; max-width: 100%;'
+        `margin-top: 8px; margin-bottom: 26px; font-size: 13px; line-height: 1.75; color: ${captionColor}; letter-spacing: 0.02em; text-align: center; word-break: break-word; box-sizing: border-box; max-width: 100%;`
       );
       // 解构题注内部的 em / span 标签，将纯文本提升至 p 的直接子节点，杜绝任何内联碎片导致叠字误判
       const inlineWrappers = Array.from(p.querySelectorAll('em, span'));
@@ -1036,7 +1038,7 @@ export function serializeToWeChatRichText(
     card.querySelectorAll('p').forEach((p) => {
       p.setAttribute(
         'style',
-        'margin: 12px 0 0 0; font-size: 13px; line-height: 1.75; color: #64748b; font-weight: 500; text-align: center; box-sizing: border-box;'
+        `margin: 12px 0 0 0; font-size: 13px; line-height: 1.75; color: ${captionColor}; font-weight: 500; text-align: center; box-sizing: border-box;`
       );
     });
   });
