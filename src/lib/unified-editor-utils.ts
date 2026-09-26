@@ -220,6 +220,15 @@ export function markdownToUnifiedHtml(markdown: string): string {
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
+    // 金句段落（引擎识别的观点句/点题句）：编辑器内以居中卡片呈现，回写保留原始标记行
+    if (/^<p data-role="golden-line">/.test(trimmed)) {
+      const innerRaw = trimmed.replace(/^<p data-role="golden-line">/, '').replace(/<\/p>$/, '');
+      const unescaped = innerRaw.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+      const goldenHtml = `<p class="unified-golden-line my-6 text-center font-semibold text-[15.5px] tracking-wide text-emerald-700" contenteditable="true">${unescaped}</p>`;
+      htmlParts.push(withLineMark(goldenHtml, blockStart, i));
+      i++;
+      continue;
+    }
     htmlParts.push(withLineMark(`<p>${escaped}</p>`, blockStart, i));
     i++;
   }
@@ -243,6 +252,13 @@ export function unifiedHtmlToMarkdown(container: HTMLElement): string {
 
     if (node.nodeType === Node.ELEMENT_NODE) {
       const el = node as HTMLElement;
+
+      // 0. 金句段落：原样保留标记行，保证往返稳定
+      if (el.matches('p[data-role="golden-line"]')) {
+        const t = el.textContent?.trim() || '';
+        if (t) parts.push(`<p data-role="golden-line">${t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`);
+        continue;
+      }
 
       // 1. 单图卡片 <figure>
       if (el.classList.contains('unified-figure') || el.tagName === 'FIGURE') {

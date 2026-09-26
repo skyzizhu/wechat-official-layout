@@ -704,8 +704,26 @@ export function serializeToWeChatRichText(
       return;
     }
 
-    // 2. 检查是否为图片题注段落
     const pRole = p.getAttribute('data-role');
+    const pTextForGolden = p.textContent?.trim() || '';
+
+    // 1.5 散文金句段落：居中 + 主题强调色 + 加粗，与预览一致
+    if (pRole === 'golden-line') {
+      p.setAttribute(
+        'style',
+        `margin: 28px 0; text-align: center; color: ${accentColor}; font-weight: 600; font-size: 15.5px; line-height: 1.9; letter-spacing: 0.5px; word-break: break-word; box-sizing: border-box; max-width: 100%;`
+      );
+      const inlineWrappers = Array.from(p.querySelectorAll('em, span, strong'));
+      inlineWrappers.forEach((el) => {
+        while (el.firstChild) {
+          el.parentElement?.insertBefore(el.firstChild, el);
+        }
+        el.remove();
+      });
+      return;
+    }
+
+    // 2. 检查是否为图片题注段落
     const pText = p.textContent?.trim() || '';
     const isPrevImgBlock =
       prev &&

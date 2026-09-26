@@ -356,12 +356,36 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
     // 保证 <p style="text-align: center"> 等用户意图不被主题覆盖
     p: ({ node, style: incomingStyle, children }: any) => {
       const photoCardColor = React.useContext(PhotoCardColorContext);
+      const isGoldenLine = node?.properties?.dataRole === 'golden-line';
       const isImageCaption = Boolean(node?.properties?.dataImageCaption);
       const isImageParagraph = Boolean(node?.properties?.dataImageParagraph);
       const hasCaption = Boolean(node?.properties?.dataHasCaption);
       const isBetweenHrs = Boolean(node?.properties?.dataBetweenHrs);
       const isBeforeHr = Boolean(node?.properties?.dataBeforeHr);
       const isAfterHr = Boolean(node?.properties?.dataAfterHr);
+
+      // (0) 散文金句：居中、主题强调色、加粗、舒展留白 —— 情感类文章的点题句
+      if (isGoldenLine) {
+        return (
+          <p
+            data-role="golden-line"
+            style={{
+              textAlign: 'center',
+              color: accentColor,
+              fontWeight: 600,
+              fontSize: '15.5px',
+              lineHeight: 1.9,
+              letterSpacing: '0.5px',
+              margin: '28px 0',
+              maxWidth: '100%',
+              wordBreak: 'break-word',
+              boxSizing: 'border-box',
+            }}
+          >
+            {children}
+          </p>
+        );
+      }
 
       // (1) 图片题注：紧凑居中、优雅小字、适度留白
       if (isImageCaption) {

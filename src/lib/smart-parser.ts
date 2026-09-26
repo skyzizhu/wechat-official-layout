@@ -924,6 +924,7 @@ export function convertPlainTextToMarkdown(
   let inCodeBlock = false;
   let inHtmlBlock = false;
   let lastNonEmptyWasImage = false;
+  let firstNonEmptySeenIdx = -1;
 
   // 阿拉伯数字编号行的智能消歧辅助：
   // 编号行在相邻位置（含仅隔一个空行）成组出现 → 有序列表；
@@ -996,6 +997,7 @@ export function convertPlainTextToMarkdown(
       processedLines.push('');
       continue;
     }
+    if (firstNonEmptySeenIdx === -1) firstNonEmptySeenIdx = idx;
 
     // 保留用户内嵌的显式 HTML 块（photo-card 图片卡片、自定义 section 等）：
     // 以 "<字母" 开头的行开启 HTML 块，直到空行为止；块内行原样输出，
@@ -1256,6 +1258,27 @@ export function convertPlainTextToMarkdown(
     }
 
     lastNonEmptyWasImage = false;
+
+    // 3.12.5 散文金句识别：独立成段的短句（观点句/点题句）→ 居中强调段（预览按主题强调色渲染）。
+    // 约束：非首段；前后皆为空行；长度 8~48 字；以句号/感叹/问号/引号收尾；中英文逗号分号合计不超过 2 个。
+    // 满足全部条件才判定为金句，最大限度避免把普通叙述段误判为金句。
+    {
+      const prevBlank = idx === 0 || !blockProcessedLines[idx - 1].trim();
+      const nextBlank = idx === blockProcessedLines.length - 1 || !blockProcessedLines[idx + 1].trim();
+      const commaCount = (trimmed.match(/[，,；]/g) || []).length;
+      const isGoldenLine =
+        idx > firstNonEmptySeenIdx &&
+        prevBlank &&
+        nextBlank &&
+        trimmed.length >= 8 &&
+        trimmed.length <= 48 &&
+        /[。！？”]$/.test(trimmed) &&
+        commaCount <= 2;
+      if (isGoldenLine) {
+        // 默认保持普通正文；作为低置信度决策（68%）提示用户，可在提示条一键「转为金句」
+        noteDecision('金句', 0.68, trimmed);
+      }
+    }
 
     // 3.13 识别任务复选清单 (Task Lists: [ ] / [x] / □ / ✓ / ☑)
     const uncheckedTask = trimmed.match(/^[\t ]*(?:\[\s*\]|□|○|待办[：:])\s*(.+)$/);

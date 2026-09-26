@@ -248,6 +248,21 @@ function MainLayout() {
 
   const handleResolveDecision = (d: ConversionDecision) => {
     const key = `${d.type}:${d.snippet}`;
+    logFeedback(d, d.type === '金句' ? '转为金句' : '改为正文');
+
+    // 金句：将草稿中对应段落包装为居中金句段（升级而非抑制）
+    if (d.type === '金句') {
+      setMarkdown((prev) => {
+        const lines = prev.split('\n');
+        const idx = lines.findIndex((l) => l.trim() === d.snippet || l.trim().includes(d.snippet));
+        if (idx >= 0) lines[idx] = `<p data-role="golden-line">${lines[idx].trim()}</p>`;
+        return lines.join('\n');
+      });
+      setDraftStatus(`已将「${d.snippet}」转为金句`);
+      return;
+    }
+
+    // 其他类型：抑制该识别决策（恢复普通正文渲染）
     setSuppressedKeys((prev) => {
       const next = prev.includes(key) ? prev : [...prev, key];
       try {
@@ -255,7 +270,6 @@ function MainLayout() {
       } catch {}
       return next;
     });
-    logFeedback(d, '改为正文');
     setDraftStatus(`已将「${d.snippet}」改为正文`);
   };
 
