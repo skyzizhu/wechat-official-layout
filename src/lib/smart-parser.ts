@@ -882,7 +882,7 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
   // 阿拉伯数字编号行的智能消歧辅助：
   // 编号行在相邻位置（含仅隔一个空行）成组出现 → 有序列表；
   // 孤立出现（前后都是正文/标题/空行隔断）→ 小节标题 (H2)
-  const arabicNumberedRe = /^\d{1,4}(?:\s*[、,，.．)）:：]\s*|\s)\s*\S+/;
+  const arabicNumberedRe = /^\d{1,3}(?:\s*[、,，.．)）:：]\s*|\s)\s*\S+/  // 1~3 位：四位数字（如年份）不参与编号消歧;
   const nearestNonEmptyLine = (arr: string[], from: number, step: number): string => {
     let k = from;
     while (k >= 0 && k < arr.length) {
@@ -1207,6 +1207,13 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
       const isDenseNumbering =
         arabicNumberedRe.test(prevNearest) || arabicNumberedRe.test(nextNearest);
 
+      // 层级消歧：当文档中已存在中文序号章节（一、二、三…）时，
+      // 阿拉伯数字编号行降一级作为小节标题 (H3)，与中文章节形成父子层级而非同级竞争
+      const hasChineseNumberedSections = blockProcessedLines.some((l) =>
+        /^[一二三四五六七八九十百千万]+(?:\s*[、,，.．:：]\s*|\s+).+$/.test(l.trim())
+      );
+      const sectionLevel = hasChineseNumberedSections ? '###' : '##';
+
       const looksLikeSection =
         !isDenseNumbering &&
         !isMultiLevelNumbering &&
@@ -1217,7 +1224,7 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
 
       if (looksLikeSection) {
         processedLines.push('');
-        processedLines.push(`## ${trimmed}`);
+        processedLines.push(`${sectionLevel} ${trimmed}`);
         processedLines.push('');
         continue;
       }

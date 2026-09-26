@@ -91,18 +91,27 @@ export function markdownToUnifiedHtml(markdown: string): string {
       const alt = singleImgMatch[1] || '配图';
       const url = singleImgMatch[2];
       let caption = '';
+      let hasCaption = false;
 
-      // 检查下一行是否是题注
-      if (i + 1 < lines.length) {
-        const nextLine = lines[i + 1].trim();
-        if (
-          nextLine.startsWith('*') ||
-          nextLine.startsWith('▲') ||
-          nextLine.startsWith('图') ||
-          nextLine.startsWith('注：')
-        ) {
+      // 检查接下来的行（允许跳过空行）是否是题注
+      let nextIdx = i + 1;
+      while (nextIdx < lines.length && !lines[nextIdx].trim()) {
+        nextIdx++;
+      }
+
+      if (nextIdx < lines.length) {
+        const nextLine = lines[nextIdx].trim();
+        const isCaption =
+          nextLine.length > 0 &&
+          nextLine.length <= 120 &&
+          (nextLine.startsWith('▲') ||
+            nextLine.startsWith('*▲') ||
+            /^\*?(?:图|表|Figure|阶段)\s*[\dA-Za-z\-]+/i.test(nextLine) ||
+            /^\*?注[：:]/.test(nextLine) ||
+            (nextLine.startsWith('*') && nextLine.endsWith('*') && !nextLine.startsWith('**')));
+        if (isCaption) {
           caption = nextLine.replace(/^[*_]+|[*_]+$/g, '').trim();
-          i++; // 消耗题注行
+          hasCaption = true;
         }
       }
 
@@ -130,7 +139,7 @@ export function markdownToUnifiedHtml(markdown: string): string {
         <p><br></p>
       `;
       htmlParts.push(figureHtml.trim());
-      i++;
+      i = hasCaption ? nextIdx + 1 : i + 1;
       continue;
     }
 
@@ -141,12 +150,18 @@ export function markdownToUnifiedHtml(markdown: string): string {
       const altMatch = trimmed.match(/alt=["']([^"']*)["']/i);
       const alt = altMatch ? altMatch[1] : '配图';
       let caption = '';
+      let hasCaption = false;
 
-      if (i + 1 < lines.length) {
-        const nextLine = lines[i + 1].trim();
+      let nextIdx = i + 1;
+      while (nextIdx < lines.length && !lines[nextIdx].trim()) {
+        nextIdx++;
+      }
+
+      if (nextIdx < lines.length) {
+        const nextLine = lines[nextIdx].trim();
         if (nextLine.startsWith('*') || nextLine.startsWith('▲') || nextLine.startsWith('<p>')) {
           caption = nextLine.replace(/<[^>]+>/g, '').replace(/^[*_]+|[*_]+$/g, '').trim();
-          i++;
+          hasCaption = true;
         }
       }
 
@@ -167,7 +182,7 @@ export function markdownToUnifiedHtml(markdown: string): string {
         <p><br></p>
       `;
       htmlParts.push(figureHtml.trim());
-      i++;
+      i = hasCaption ? nextIdx + 1 : i + 1;
       continue;
     }
 
@@ -214,12 +229,15 @@ export function unifiedHtmlToMarkdown(container: HTMLElement): string {
         const caption = figcaption?.textContent?.trim() || '';
 
         if (url) {
-          let s = `![${alt}](${url})`;
+          parts.push(`![${alt}](${url})`);
           if (caption) {
-            const formattedCap = caption.startsWith('*') ? caption : `*${caption}*`;
-            s += `\n${formattedCap}`;
+            const cleanCap = caption.replace(/^[*_]+|[*_]+$/g, '').trim();
+            const textOnly = cleanCap.replace(/^▲\s*/, '').trim();
+            if (textOnly) {
+              const formattedCap = cleanCap.startsWith('▲') ? cleanCap : `▲ ${cleanCap}`;
+              parts.push(`*${formattedCap}*`);
+            }
           }
-          parts.push(s);
         }
         continue;
       }
@@ -238,7 +256,14 @@ export function unifiedHtmlToMarkdown(container: HTMLElement): string {
         if (items.length > 0) {
           const imgCells = items.map((it) => `![${it.alt}](${it.url})`);
           const sepCells = items.map(() => ':---:');
-          const capCells = items.map((it) => (it.caption ? `*${it.caption}*` : ' '));
+          const capCells = items.map((it) => {
+            if (!it.caption) return ' ';
+            const cleanCap = it.caption.replace(/^[*_]+|[*_]+$/g, '').trim();
+            const textOnly = cleanCap.replace(/^▲\s*/, '').trim();
+            if (!textOnly) return ' ';
+            const formatted = cleanCap.startsWith('▲') ? cleanCap : `▲ ${cleanCap}`;
+            return `*${formatted}*`;
+          });
 
           const imgRow = `| ${imgCells.join(' | ')} |`;
           const sepRow = `| ${sepCells.join(' | ')} |`;
@@ -250,13 +275,30 @@ export function unifiedHtmlToMarkdown(container: HTMLElement): string {
       }
 
       // 3. 普通文本段落与块级标签
-      // 如果内部包含直接的 <img> 标签（如用户直接粘贴或浏览器原生创建的）
+      // 如果内部包含直接的 <img> 标签（如历史内容中图片嵌在段落里）：
+      // 必须保留段落中图片前后的文字与题注，绝不能只输出图片导致整段文字丢失
       const standaloneImg = el.querySelector('img');
       if (standaloneImg && !el.classList.contains('unified-figure') && !el.classList.contains('unified-gallery')) {
         const src = standaloneImg.getAttribute('src');
         const alt = standaloneImg.getAttribute('alt') || '配图';
+        const capEl = el.querySelector('figcaption');
+        const capText = capEl?.textContent?.replace(/^[*_]+|[*_]+$/g, '').trim() || '';
         if (src) {
-          parts.push(`![${alt}](${src})`);
+          const segs: string[] = [];
+          let imgEmitted = false;
+          Array.from(el.childNodes).forEach((n) => {
+            if (n === standaloneImg) {
+              segs.push(`![${alt}](${src})`);
+              imgEmitted = true;
+              if (capText) segs.push(`*▲ ${capText}*`);
+              return;
+            }
+            if (n.nodeType === Node.ELEMENT_NODE && (n as HTMLElement).tagName === 'FIGCAPTION') return;
+            const t = n.nodeType === Node.TEXT_NODE ? n.textContent : (n as HTMLElement).innerText;
+            if (t && t.trim()) segs.push(t.trim());
+          });
+          if (!imgEmitted) segs.push(`![${alt}](${src})`);
+          parts.push(segs.join('\n\n'));
           continue;
         }
       }
@@ -274,7 +316,56 @@ export function unifiedHtmlToMarkdown(container: HTMLElement): string {
     }
   }
 
-  return parts.join('\n\n');
+  if (parts.length === 0) return '';
+
+  let result = '';
+  let inCodeBlock = false;
+
+  for (let i = 0; i < parts.length; i++) {
+    const curr = parts[i];
+    if (i === 0) {
+      result = curr;
+      if (curr.startsWith('```')) {
+        inCodeBlock = curr.trim() === '```' || !curr.trim().slice(3).includes('```');
+      }
+      continue;
+    }
+
+    const prev = parts[i - 1];
+    const isCurrTable = curr.startsWith('|');
+    const isPrevTable = prev.startsWith('|');
+    const isCurrList = /^(\s*[-*+]|\s*\d+[.)])\s/.test(curr);
+    const isPrevList = /^(\s*[-*+]|\s*\d+[.)])\s/.test(prev);
+    const isCurrQuote = curr.startsWith('>');
+    const isPrevQuote = prev.startsWith('>');
+
+    let sep = '\n\n';
+
+    if (inCodeBlock) {
+      sep = '\n';
+      if (curr.startsWith('```')) {
+        inCodeBlock = false;
+      }
+    } else {
+      if (curr.startsWith('```')) {
+        inCodeBlock = curr.trim() === '```' || !curr.trim().slice(3).includes('```');
+        sep = '\n\n';
+      } else if (isPrevTable && isCurrTable) {
+        // 连续表格行：必须使用单换行，双换行会破坏 GFM 表格语法
+        sep = '\n';
+      } else if (isPrevList && isCurrList) {
+        // 连续列表项：紧凑列表使用单换行
+        sep = '\n';
+      } else if (isPrevQuote && isCurrQuote) {
+        // 连续引用块
+        sep = '\n';
+      }
+    }
+
+    result += sep + curr;
+  }
+
+  return result;
 }
 
 /**
