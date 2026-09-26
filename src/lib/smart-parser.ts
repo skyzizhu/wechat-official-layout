@@ -1,10 +1,13 @@
 /**
- * 智能文本/Markdown 识别与排版格式化工具
+ * 智能文本/Markdown 识别与排版格式化工具 (Omni Plain-Text Semantic Parser)
  * 能够自动区分用户输入是 Markdown 源码还是普通自然文本，
  * 并对普通自然纯文本进行全能智能语义层级解析：
- * 涵盖标题（H1~H4）、列表、条目标题自动加粗强调、表格（管道符/全角符/制表符）、
- * 代码块（JavaScript/Python/JSON/SQL/Shell等多语言推断）、
- * 注释与旁白（※注）、Q&A问答访谈、流程步骤、引用金句与提示警告块、裸外链与参考文献等。
+ * 涵盖标题（H1~H5）、多形态数据表格（Excel/TSV/多空格/半全角管道符/CSV）、
+ * 任务复选清单（[ ] / [x] / □ / ✓）、有序/无序项目列表、
+ * 提示警告与导读卡片（Callout）、名人金句（Pull-Quote）、问答访谈（Q&A）、
+ * 代码块与命令行（Mac 窗口风格与多语言推断）、
+ * 注释与旁白（※注）、条目标题自动高亮强调、纯文本配图与题注、
+ * 参考文献与外链脚注、段落呼吸感重构与盘古之白。
  */
 
 export interface FormatDetectionResult {
@@ -12,10 +15,271 @@ export interface FormatDetectionResult {
   confidence: number; // 0 到 100
   features: string[];
   suggestedMode: 'markdown' | 'plain-text';
+  // 丰富统计特征，用于界面实时展示给用户
+  stats?: {
+    headingCount: number;
+    tableCount: number;
+    listCount: number;
+    taskCount: number;
+    calloutCount: number;
+    imageCount: number;
+    codeCount: number;
+    summaryText: string;
+  };
 }
 
 /**
- * 智能检测输入文本是否为 Markdown 源码
+ * 章节/序号通用分隔符集合正则字符集：
+ * 支持顿号(、)、半角逗号(,)、全角逗号(，)、半角句点(.)、全角句点(．)、
+ * 半角冒号(:)、全角冒号(：)、空格(\s)、制表符(\t)、短横线(-)、中文破折号(——)、波浪号(~)
+ */
+export const NUM_SEPARATORS_CLASS = '[、,，.．:：\\s\\-—–_~]';
+export const CHINESE_NUMERALS_CLASS = '[一二三四五六七八九十百千万壹贰叁肆伍陆柒捌玖拾]';
+
+export interface HeadingMatchResult {
+  isHeading: boolean;
+  level: 2 | 3 | 4 | 5;
+  num: string;
+  title: string;
+  raw: string;
+}
+
+/**
+ * 匹配中文序号章节标题（如 "一、"、"一，"、"一,"、"一."、"一 "、"第一章"、"首先，"、"（一）" 等）
+ */
+export function matchChineseHeading(trimmed: string): HeadingMatchResult | null {
+  if (!trimmed || trimmed.length > 55 || /[。！？…!?;；]$/.test(trimmed)) {
+    return null;
+  }
+
+  // 1. 完整括号中文/阿拉伯数字：（一）标题、(一) 标题、【一】标题
+  const bracketNumMatch = trimmed.match(
+    new RegExp(`^[（(【［\\[](${CHINESE_NUMERALS_CLASS}+)[）)】］\\]]\\s*(.+)$`)
+  );
+  if (bracketNumMatch) {
+    return {
+      isHeading: true,
+      level: 3,
+      num: bracketNumMatch[1],
+      title: bracketNumMatch[2].trim(),
+      raw: trimmed,
+    };
+  }
+
+  // 2. 中文数字开头 + 分隔符/单右括号 + 标题内容（一、 一， 一, 一. 一． 一  一： 一: 一 - 一—— 一） ）
+  const chineseNumMatch = trimmed.match(
+    new RegExp(`^(${CHINESE_NUMERALS_CLASS}+)(?:${NUM_SEPARATORS_CLASS}+|[)）]\\s*)(.+)$`)
+  );
+  if (chineseNumMatch) {
+    return {
+      isHeading: true,
+      level: 2,
+      num: chineseNumMatch[1],
+      title: chineseNumMatch[2].trim(),
+      raw: trimmed,
+    };
+  }
+
+  // 3. "第" + 中文/阿拉伯数字 + 章节部篇 / 分隔符（第一章、第1节、第一部分、第一、第一，第一. 第一 ）
+  const diMatch =
+    trimmed.match(
+      new RegExp(`^第([一二三四五六七八九十0-9]+)(?:[章节篇部卷集讲堂课回期分步]|阶段)?(?:${NUM_SEPARATORS_CLASS}+|[)）]\\s*)(.+)$`)
+    ) ||
+    trimmed.match(/^第([一二三四五六七八九十0-9]+)[章节篇部卷集讲堂课回期分]+(?:\s*[:：、,，.．\-—–_~]\s*|\s+)(.+)$/);
+  if (diMatch) {
+    return {
+      isHeading: true,
+      level: 2,
+      num: diMatch[1],
+      title: (diMatch[2] || '').trim(),
+      raw: trimmed,
+    };
+  }
+
+  // 4. "其" + 中文/阿拉伯数字（其一、其二，其三.）
+  const qiMatch = trimmed.match(
+    new RegExp(`^其([一二三四五六七八九十0-9]+)(?:${NUM_SEPARATORS_CLASS}+|[)）]\\s*)(.+)$`)
+  );
+  if (qiMatch) {
+    return {
+      isHeading: true,
+      level: 2,
+      num: qiMatch[1],
+      title: qiMatch[2].trim(),
+      raw: trimmed,
+    };
+  }
+
+  // 5. 序数过渡词（首先、其次、再次、最后、起初、接着、最终）
+  const seqMatch = trimmed.match(
+    new RegExp(`^(首先|其次|再次|最后|起初|接着|最终)(?:${NUM_SEPARATORS_CLASS}+)(.+)$`)
+  );
+  if (seqMatch) {
+    return {
+      isHeading: true,
+      level: 2,
+      num: seqMatch[1],
+      title: seqMatch[2].trim(),
+      raw: trimmed,
+    };
+  }
+
+  // 6. 英文 Chapter / Part / Section / Step / Phase
+  const engMatch = trimmed.match(
+    new RegExp(`^(?:Chapter|Section|Part|Step|Phase)\\s+([0-9IVXLCDM]+)(?:${NUM_SEPARATORS_CLASS}+)(.+)$`, 'i')
+  );
+  if (engMatch) {
+    return {
+      isHeading: true,
+      level: 2,
+      num: engMatch[1],
+      title: engMatch[2].trim(),
+      raw: trimmed,
+    };
+  }
+
+  // 7. 独立无序号常规核心大纲词（前言、概述、总结等）
+  if (/^(?:前言|引言|背景|背景介绍|概述|核心观点|业务架构|技术实现|结语|总结|写在最后|写在前面|结语与展望)$/.test(trimmed)) {
+    return {
+      isHeading: true,
+      level: 2,
+      num: '',
+      title: trimmed,
+      raw: trimmed,
+    };
+  }
+
+  // 8. 独立方括号/书名号标题：【核心选型】、「技术架构」
+  if (/^[【\[「『［][^】\]」』］]{2,25}[】\]」』］]$/.test(trimmed)) {
+    return {
+      isHeading: true,
+      level: 2,
+      num: '',
+      title: trimmed.slice(1, -1).trim(),
+      raw: trimmed,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * 匹配阿拉伯数字章节标题（1、, 1，, 1, , 1. , 1 , 01 , 01、, 第1、, 1.1, 1.1.1 等）
+ * @param hasChineseHeadings 全文是否已存在大写中文数字章节（若有，阿拉伯数字降级为二级 H3，否则升级为主章节 H2）
+ */
+export function matchArabicHeading(
+  trimmed: string,
+  prevLine: string = '',
+  hasChineseHeadings: boolean = false
+): HeadingMatchResult | null {
+  if (!trimmed || trimmed.length > 50 || /[。！？…!?;；]$/.test(trimmed)) {
+    return null;
+  }
+
+  // 1. 多级数字：1.1, 1.1.1, 1.1.1.1
+  const multiDecimal = trimmed.match(/^(\d+\.\d+(?:\.\d+)?(?:\.\d+)?)(?:[、,，.．:：\s\-—–_~]+|[)）]\s*)(.+)$/);
+  if (multiDecimal) {
+    const dots = (multiDecimal[1].match(/\./g) || []).length;
+    let level: 2 | 3 | 4 | 5 = 3;
+    if (dots === 1) level = hasChineseHeadings ? 4 : 3;
+    else if (dots === 2) level = hasChineseHeadings ? 5 : 4;
+    else level = 5;
+
+    return {
+      isHeading: true,
+      level,
+      num: multiDecimal[1],
+      title: multiDecimal[2].trim(),
+      raw: trimmed,
+    };
+  }
+
+  // 2. 完整括号阿拉伯数字：（1）标题、(1) 标题、【1】标题、1) 标题、1）标题
+  const bracketNumMatch =
+    trimmed.match(/^[（(【［\[](\d{1,2})[）)】］\]]\s*(.+)$/) ||
+    trimmed.match(/^(\d{1,2})[)）]\s*(.+)$/);
+  if (bracketNumMatch) {
+    return {
+      isHeading: true,
+      level: hasChineseHeadings ? 4 : 3,
+      num: bracketNumMatch[1],
+      title: bracketNumMatch[2].trim(),
+      raw: trimmed,
+    };
+  }
+
+  // 3. 英文字母序号：A. 数据清洗、B、特征工程
+  const letterMatch = trimmed.match(/^[A-Z][.、．,，:：\s]+\s*(.+)$/);
+  if (letterMatch) {
+    return {
+      isHeading: true,
+      level: hasChineseHeadings ? 4 : 3,
+      num: trimmed[0],
+      title: letterMatch[1].trim(),
+      raw: trimmed,
+    };
+  }
+
+  // 4. 单级阿拉伯数字：1、, 1，, 1, , 1. , 1 , 01 , 01、, 第1、, 1:
+  const arabicMatch = trimmed.match(
+    new RegExp(`^(?:第)?(0\\d|\\d{1,2})(?:(${NUM_SEPARATORS_CLASS}+)|([)）])\\s*)(.+)$`)
+  );
+  if (!arabicMatch) return null;
+
+  const num = arabicMatch[1];
+  const sep = arabicMatch[2] || arabicMatch[3];
+  const title = arabicMatch[4].trim();
+
+  // 若标题为空或超过 45 字符
+  if (!title || title.length > 45) return null;
+
+  // 排除浮点数/版本号：如 "1.234" 后面是纯数字
+  if (sep.includes('.') && /^\d+$/.test(title)) return null;
+
+  // 判定是否是显式标题强特征：
+  // - 逗号/冒号/破折号分隔符（1， 1, 1： 1: 1 - 1——）
+  // - 零补齐数字（01 02 03）
+  // - "第" 前缀（第1、 第1，）
+  // - 纯空格分隔符（1 架构思考）
+  const isDefiniteHeading =
+    /[，,:：\-—–_~]/.test(sep) ||
+    num.startsWith('0') ||
+    trimmed.startsWith('第') ||
+    /^\s+$/.test(sep);
+
+  if (isDefiniteHeading) {
+    return {
+      isHeading: true,
+      level: hasChineseHeadings ? 3 : 2,
+      num,
+      title,
+      raw: trimmed,
+    };
+  }
+
+  // 对于 1、 或 1. 分隔符：
+  // 检查前置行是否为列表引导行（如以冒号结尾，或包含 "如下" / "清单"）
+  const prevTrimmed = prevLine.trim();
+  const isPrecededByListLeadIn =
+    /[：:]$/.test(prevTrimmed) ||
+    /(?:如下|以下|清单|包括|维度|建议|原则|步骤)[：:]?$/.test(prevTrimmed);
+
+  if (isPrecededByListLeadIn) {
+    // 属于前置说明引导的列表项，不作为标题
+    return null;
+  }
+
+  return {
+    isHeading: true,
+    level: hasChineseHeadings ? 3 : 2,
+    num,
+    title,
+    raw: trimmed,
+  };
+}
+
+/**
+ * 智能检测输入文本的格式与语义特征
  */
 export function detectContentFormat(text: string): FormatDetectionResult {
   if (!text || text.trim().length === 0) {
@@ -24,6 +288,16 @@ export function detectContentFormat(text: string): FormatDetectionResult {
       confidence: 0,
       features: [],
       suggestedMode: 'plain-text',
+      stats: {
+        headingCount: 0,
+        tableCount: 0,
+        listCount: 0,
+        taskCount: 0,
+        calloutCount: 0,
+        imageCount: 0,
+        codeCount: 0,
+        summaryText: '空白内容',
+      },
     };
   }
 
@@ -31,15 +305,17 @@ export function detectContentFormat(text: string): FormatDetectionResult {
   let score = 0;
 
   // 1. 检测标准的 Markdown 标题 (# )
-  if (/^#{1,6}\s+\S+/m.test(text)) {
-    score += 40;
-    features.push('Markdown 标题 (#)');
+  const mdHeadings = text.match(/^#{1,6}\s+\S+/gm);
+  if (mdHeadings && mdHeadings.length > 0) {
+    score += 45;
+    features.push(`Markdown 标题 (${mdHeadings.length}处)`);
   }
 
   // 2. 检测代码块 (```)
-  if (/```[\s\S]*?```/.test(text)) {
+  const codeBlocks = text.match(/```[\s\S]*?```/g);
+  if (codeBlocks && codeBlocks.length > 0) {
     score += 35;
-    features.push('代码块 (```)');
+    features.push(`代码块 (${codeBlocks.length}处)`);
   }
 
   // 3. 检测行内代码 (`code`)
@@ -49,42 +325,122 @@ export function detectContentFormat(text: string): FormatDetectionResult {
   }
 
   // 4. 检测引用语法 (> )
-  if (/^>\s+\S+/m.test(text)) {
+  const blockquotes = text.match(/^>\s+\S+/gm);
+  if (blockquotes && blockquotes.length > 0) {
     score += 25;
-    features.push('Markdown 引用 (>)');
+    features.push(`引用语法 (${blockquotes.length}处)`);
   }
 
-  // 5. 检测标准 Markdown 链接或图片 [text](url) 或 ![alt](url)
-  if (/!?\[[^\]]+\]\([^)]+\)/.test(text)) {
-    score += 30;
-    features.push('链接/图片语法 [text](url)');
+  // 5. 检测标准 Markdown 链接 [text](url) 或图片 ![alt](url)
+  const linksAndImgs = text.match(/!?\[[^\]]+\]\([^)]+\)/g);
+  if (linksAndImgs && linksAndImgs.length > 0) {
+    // 仅当包含普通超链接时计入 Markdown 特征分，单张插入的图片不应压倒性判定为 Markdown 源码
+    const hasNormalLinks = linksAndImgs.some((m) => !m.startsWith('!'));
+    if (hasNormalLinks) {
+      score += 25;
+      features.push('Markdown 链接');
+    }
   }
 
   // 6. 检测 Markdown 表格 (| --- |)
-  if (/\|[ \t]*[-:]+[-| :]*\|/.test(text)) {
+  const mdTables = text.match(/\|[ \t]*[-:]+[-| :]*\|/g);
+  if (mdTables && mdTables.length > 0) {
     score += 35;
-    features.push('Markdown 表格');
+    features.push('Markdown 标头表格');
   }
 
   // 7. 检测加粗或斜体 (**text** or *text*)
   if (/\*\*[^*\n]+\*\*/.test(text) || /__[^_\n]+__/.test(text)) {
-    score += 20;
-    features.push('加粗语法 (**text**)');
-  }
-
-  // 8. 检测标准无序列表 (- 或 * 后面加空格)
-  if (/^[\t ]*[-*+]\s+\S+/m.test(text)) {
     score += 15;
-    features.push('标准列表项 (- )');
+    features.push('加粗强调 (**text**)');
   }
 
-  const isMarkdown = score >= 35;
+  // 8. 检测标准 Markdown 任务列表 (- [ ] / - [x])
+  const taskLists = text.match(/^[\t ]*[-*]\s+\[[ xX]\]\s+\S+/gm);
+  if (taskLists && taskLists.length > 0) {
+    score += 30;
+    features.push(`任务复选清单 (${taskLists.length}项)`);
+  }
+
+  // 9. 统计纯文本语义特征
+  let headingCount = mdHeadings ? mdHeadings.length : 0;
+  let tableCount = mdTables ? mdTables.length : 0;
+  let listCount = 0;
+  let taskCount = taskLists ? taskLists.length : 0;
+  let calloutCount = blockquotes ? blockquotes.length : 0;
+  let imageCount = (text.match(/!\[[^\]]*\]\([^)]+\)/g) || []).length;
+  let codeCount = codeBlocks ? codeBlocks.length : 0;
+
+  // 纯文本章节与列表智能匹配（覆盖中文序号 一、 一， 一, 一. 一  以及阿拉伯数字 1、 1， 1. 1  01  第1 等全部变体）
+  const textLines = text.split('\n');
+  const hasChineseHeadingsInDoc = textLines.some((l) => Boolean(matchChineseHeading(l.trim())));
+
+  for (let idx = 0; idx < textLines.length; idx++) {
+    const trimmedLine = textLines[idx].trim();
+    if (!trimmedLine || trimmedLine.startsWith('```') || trimmedLine.startsWith('|') || trimmedLine.startsWith('#')) {
+      continue;
+    }
+    const prevLine = idx > 0 ? textLines[idx - 1] : '';
+    const isHeading = Boolean(matchChineseHeading(trimmedLine) || matchArabicHeading(trimmedLine, prevLine, hasChineseHeadingsInDoc));
+    if (isHeading) {
+      headingCount++;
+    } else {
+      if (/^[\t ]*(?:[•·●◆◇■▶►👉🔹🔸📌✅⭐]|\d+[、.．,，)）]|[①②③④⑤⑥⑦⑧⑨⑩⑴⑵⑶⑷⑸⑹⑺⑻⑼⑽])\s+\S+/.test(trimmedLine)) {
+        listCount++;
+      }
+    }
+  }
+
+  // 纯文本表格匹配 (TSV / 管道符)
+  const tsvLines = text.match(/^[^\n\t]+\t[^\n\t]+/gm);
+  if (tsvLines && tsvLines.length >= 2) tableCount += 1;
+  const pipeLines = text.match(/^[^\n|｜]+[|｜][^\n|｜]+/gm);
+  if (pipeLines && pipeLines.length >= 2 && !mdTables) tableCount += 1;
+
+  // 纯文本任务列表 (□ / ✓ / [ ])
+  const rawTasks = text.match(/^[\t ]*(?:\[\s*\]|\[[xX]\]|□|✓|☑|✔)\s+\S+/gm);
+  if (rawTasks) taskCount += rawTasks.length;
+
+  // 纯文本提示与导读 (导读：/ 提示：/ 💡 提示：)
+  const rawCallouts = text.match(/^(?:(?:💡|⚠️|❗|📌|🎯|📝|⚡|🔥|💬|🔔)\s*)?(?:导读|导言|编者按|摘要|前言|引言|核心看点|核心观点|总结|思考|提示|警告|注意|重要|小贴士|Tips?|Warning|Note|Notice|Caution)[：:]\s*\S+/gim);
+  if (rawCallouts) calloutCount += rawCallouts.length;
+
+  // 纯文本配图 (配图：/ 图片：)
+  const rawImages = text.match(/^(?:配图|图片|插图)[：:]\s*\S+/gm);
+  if (rawImages) imageCount += rawImages.length;
+
+  // 构造用户友好的格式汇总提示文案
+  const summaryParts: string[] = [];
+  if (headingCount > 0) summaryParts.push(`${headingCount}个章节标题`);
+  if (tableCount > 0) summaryParts.push(`${tableCount}个数据表格`);
+  if (calloutCount > 0) summaryParts.push(`${calloutCount}条提示导读`);
+  if (taskCount > 0) summaryParts.push(`${taskCount}项任务清单`);
+  if (listCount > 0) summaryParts.push(`${listCount}条项目列表`);
+  if (imageCount > 0) summaryParts.push(`${imageCount}张配图`);
+  if (codeCount > 0) summaryParts.push(`${codeCount}处代码`);
+
+  const summaryText =
+    summaryParts.length > 0 ? `✨ 已智能识别：${summaryParts.join('、')}` : '已识别：自然普通文本';
+
+  // 仅当用户成体系书写了标准 Markdown 标题、代码块、引用块，且没有大量纯文本序号章节时，才视作纯粹的 Markdown 源码
+  const hasSubstantialMarkdown = score >= 50 && Boolean(mdHeadings && mdHeadings.length >= 2);
+  const isMarkdown = hasSubstantialMarkdown;
 
   return {
     isMarkdown,
     confidence: Math.min(100, Math.max(0, score)),
     features,
     suggestedMode: isMarkdown ? 'markdown' : 'plain-text',
+    stats: {
+      headingCount,
+      tableCount,
+      listCount,
+      taskCount,
+      calloutCount,
+      imageCount,
+      codeCount,
+      summaryText,
+    },
   };
 }
 
@@ -103,12 +459,13 @@ export function addPanguSpacing(text: string): string {
 
 /**
  * 判断是否为图片类型的 URL。
- * 纯文本输入中的图片类型 URL 按排版需求保持原样：仅显示用户输入的 URL 文本，
- * 不自动转为图片，也不转为短标签链接。
+ * 支持 http/https 外链、本地静态路径 (/images/...) 及 base64 图像
  */
 export function isImageUrl(url: string): boolean {
+  if (!url) return false;
   return (
-    /^https?:\/\/\S+\.(?:jpg|jpeg|png|webp|gif|svg|avif)(?:\?.*)?$/i.test(url) ||
+    /^(?:https?:\/\/|\/|\.\/)\S+\.(?:jpg|jpeg|png|webp|gif|svg|avif)(?:\?.*)?$/i.test(url) ||
+    /^data:image\/(?:png|jpeg|jpg|webp|gif|svg\+xml);base64,/i.test(url) ||
     /^https?:\/\/images\.unsplash\.com\/\S+/i.test(url) ||
     /^https?:\/\/mmbiz\.qpic\.cn\/\S+/i.test(url)
   );
@@ -118,12 +475,10 @@ export function isImageUrl(url: string): boolean {
  * 智能转换正文中的裸 URL 为 Markdown 链接，以便文末脚注引擎识别
  */
 export function formatBareUrls(text: string): string {
-  // 匹配未被 []() 围闭的独立 http/https 链接
-  // 负向回顾确保不在 []() 语法内
   const bareUrlRegex = /(?<![(\[="'])(https?:\/\/[a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=%]+)(?![)\]"'])/g;
 
   return text.replace(bareUrlRegex, (url) => {
-    // 图片类型 URL：保持用户输入的 URL 原样显示（不转图片、不转短标签）
+    // 图片类型 URL：保持原样显示
     if (isImageUrl(url)) {
       return url;
     }
@@ -170,8 +525,11 @@ function inferCodeLanguage(code: string): string {
   if (/(?:SELECT\s+.+\s+FROM|INSERT\s+INTO|CREATE\s+TABLE|UPDATE\s+\w+\s+SET)/i.test(code)) {
     return 'sql';
   }
-  if (/(?:^\s*\$\s+|^\s*(?:npm|pnpm|yarn|git|docker|curl|chmod|brew|npx)\s+)/m.test(code)) {
+  if (/(?:^\s*\$\s+|^\s*(?:npm|pnpm|yarn|git|docker|curl|chmod|brew|npx|pip)\s+)/m.test(code)) {
     return 'bash';
+  }
+  if (/(?:<\/?[a-z][\s\S]*>)/i.test(code) && /<\/(?:div|p|span|section|h[1-6])>/i.test(code)) {
+    return 'html';
   }
   return '';
 }
@@ -182,8 +540,8 @@ function inferCodeLanguage(code: string): string {
  * 自动提取加粗为 "**字体的呼吸感**：不同字体拥有..."，以无缝激活模板的荧光笔加粗高亮样式
  */
 function emphasizeItemHeader(text: string): string {
-  // 0. 如果是以 http:// 或 https:// 开头，或者包含完整 URL，不当作条目标题
-  if (/^\s*https?:\/\//i.test(text)) {
+  // 0. 如果是以 http:// 或 https:// 开头，或者包含完整 URL，或者本身是 Markdown 标题/引用/斜体/粗体/图片/链接，不当作条目标题
+  if (/^\s*https?:\/\//i.test(text) || /^\s*[#>*!_\[]/.test(text)) {
     return text;
   }
 
@@ -200,20 +558,14 @@ function emphasizeItemHeader(text: string): string {
     return `**${header}** ${rest}`.trim();
   }
 
-  // 3. 匹配冒号或破折号前面的条目标题：条目标题：具体说明...
-  // 限制条目标题长度在 2 到 18 个字符以内，且不能是 URL 协议头，不包含逗号句号顿号
+  // 3. 匹配冒号前面的条目标题：条目标题：具体说明...
   const colonMatch = text.match(/^([^：:——\-，。！？\n]{2,18})([：:])\s*(.+)$/);
   if (colonMatch) {
     const title = colonMatch[1].trim();
     const punct = '：';
     const rest = colonMatch[3].trim();
-    // 防止把 URL 协议的冒号误判为条目标题分隔符（如 "普通链接 https://..." 会被拆成 "**普通链接 https**：//..." 损坏 URL）：
-    // 标题以协议名结尾（https/http/ftp/file/ws/wss），或冒号后紧跟 //，均视为 URL 的一部分，保持原样
-    if (
-      /^(?:https?|ftp|file|ws|wss)$/i.test(title) ||
-      /(?:https?|ftp|file|ws|wss)$/i.test(title) ||
-      /^\/\//.test(rest)
-    ) {
+    // 防止把 URL 协议的冒号误判为条目标题分隔符
+    if (/(?:https?|ftp|file|ws|wss)$/i.test(title) || /^\/\//.test(rest)) {
       return text;
     }
     return `**${title}**${punct}${rest}`;
@@ -224,11 +576,7 @@ function emphasizeItemHeader(text: string): string {
   if (dashMatch) {
     const title = dashMatch[1].trim();
     const rest = dashMatch[3].trim();
-    // 同上：标题以 URL 协议名结尾时保持原样，避免损坏链接
-    if (
-      /^(?:https?|ftp|file|ws|wss)$/i.test(title) ||
-      /(?:https?|ftp|file|ws|wss)$/i.test(title)
-    ) {
+    if (/(?:https?|ftp|file|ws|wss)$/i.test(title)) {
       return text;
     }
     return `**${title}** — ${rest}`;
@@ -246,7 +594,7 @@ export interface ParserOptions {
 }
 
 /**
- * 将普通中文长文本智能转换为结构化优雅的 Markdown
+ * 将普通中文/英文长文本智能转换为结构化优雅的 Markdown
  */
 export function convertPlainTextToMarkdown(text: string, options?: ParserOptions): string {
   if (!text || text.trim().length === 0) return '';
@@ -259,12 +607,12 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
     .replace(/\r/g, '\n')
     // 去除段首无意义的中文全角空格 "　　"
     .replace(/^[　 \t]+/gm, (match) => {
-      // 保留可能的代码缩进（4个半角空格以上），但清除全角缩进
+      // 保留可能的代码缩进（4个半角空格以上），清除全角缩进
       return match.includes('　') ? '' : match;
     })
     .split('\n');
 
-  // 2. 第一阶段：多行块探测与规整（代码块、表格块）
+  // 2. 第一阶段：多行块探测与规整（代码块、全形态表格块）
   const blockProcessedLines: string[] = [];
   let i = 0;
 
@@ -272,11 +620,28 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
     const line = rawLines[i];
     const trimmed = line.trim();
 
+    // 2.0 若行本身已处于 Markdown 代码块内 (```)，保留并原样放行
+    if (trimmed.startsWith('```')) {
+      blockProcessedLines.push(line);
+      i++;
+      while (i < rawLines.length) {
+        blockProcessedLines.push(rawLines[i]);
+        if (rawLines[i].trim().startsWith('```')) {
+          i++;
+          break;
+        }
+        i++;
+      }
+      continue;
+    }
+
     // 2.1 检查是否是纯文本代码块（如连续几行包含代码特征或 JSON 结构）
     const isCodeStart =
-      /^(?:const|let|var|function|import|export|class|def|public|private)\s+/.test(trimmed) ||
+      /^(?:const|let|var|function|import|export|class|def|public|private|protected|static|void|async)\s+/.test(trimmed) ||
+      /^(?:if|for|while|switch|try)\s*[\(\{]/.test(trimmed) ||
+      /^(?:console\.|print\(|System\.out\.|echo\s)/.test(trimmed) ||
       /^(?:\{\s*$|\[\s*$)/.test(trimmed) ||
-      /^(?:\$|npm|pnpm|yarn|git|docker|curl)\s+/.test(trimmed) ||
+      /^(?:\$|npm|pnpm|yarn|git|docker|curl|pip)\s+/.test(trimmed) ||
       /^(?:SELECT|INSERT|UPDATE|DELETE|CREATE\s+TABLE)\s+/i.test(trimmed);
 
     if (isCodeStart) {
@@ -297,15 +662,14 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
         }
 
         consecutiveEmpty = 0;
-        // 判断是否仍是代码行特征
         const isStillCode =
           /^(?:const|let|var|function|import|export|class|def|return|if|else|for|while|switch|case|try|catch|finally|console|print)\b/.test(nextTrimmed) ||
           /^[}\]\);,]/.test(nextTrimmed) ||
-          /["'][\w\-]+["']\s*:\s*/.test(nextTrimmed) || // JSON 键值对
-          /^(?:\$|npm|pnpm|yarn|git|docker|curl)\s+/.test(nextTrimmed) ||
+          /["'][\w\-]+["']\s*:\s*/.test(nextTrimmed) ||
+          /^(?:\$|npm|pnpm|yarn|git|docker|curl|pip)\s+/.test(nextTrimmed) ||
           /^(?:FROM|WHERE|GROUP\s+BY|ORDER\s+BY|LIMIT|JOIN|HAVING)\b/i.test(nextTrimmed) ||
-          /^[a-zA-Z0-9_$.]+\(.*\)[;]?$/.test(nextTrimmed) || // 函数调用
-          /^\s{2,}\S+/.test(nextLine); // 缩进行
+          /^[a-zA-Z0-9_$.]+\(.*\)[;]?$/.test(nextTrimmed) ||
+          /^\s{2,}\S+/.test(nextLine);
 
         if (isStillCode) {
           codeLines.push(nextLine);
@@ -315,9 +679,9 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
         }
       }
 
-      // 如果代码行数量 >= 2，或者单行包含了完整的 JSON/Shell 指令，封装为代码块
+      // 如果代码行数量 >= 2，或者单行包含了完整的 JSON/Shell 指令，封装为标准代码块
       const joinedCode = codeLines.join('\n').trim();
-      if (codeLines.length >= 2 || /^(?:\$|npm|pnpm|yarn|git|docker|curl)\s+/.test(trimmed)) {
+      if (codeLines.length >= 2 || /^(?:\$|npm|pnpm|yarn|git|docker|curl|pip)\s+/.test(trimmed)) {
         const lang = inferCodeLanguage(joinedCode);
         blockProcessedLines.push('');
         blockProcessedLines.push(`\`\`\`${lang}`);
@@ -333,49 +697,47 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
     const hasPipe = (trimmed.includes('|') || trimmed.includes('｜')) && trimmed.length >= 3;
     if (hasPipe) {
       const tableLines: string[] = [line];
-      let j = i + 1;
+      let jTable = i + 1;
       let blankRun = 0;
-      while (j < rawLines.length) {
-        const nextTrimmed = rawLines[j].trim();
+      while (jTable < rawLines.length) {
+        const nextTrimmed = rawLines[jTable].trim();
         if (!nextTrimmed) {
-          // 允许表格行之间出现单个空行（用户粘贴的表格行间常有空行）；连续两个空行视为表格结束
           blankRun++;
           if (blankRun >= 2) break;
-          j++;
+          jTable++;
           continue;
         }
         blankRun = 0;
         if (nextTrimmed.includes('|') || nextTrimmed.includes('｜')) {
-          tableLines.push(rawLines[j]);
-          j++;
+          tableLines.push(rawLines[jTable]);
+          jTable++;
         } else {
           break;
         }
       }
 
-      // 连续 2 行以上带竖线（忽略行间单个空行），规整为合法 Markdown 表格
       const nonEmptyTableLines = tableLines.filter((l) => l.trim());
       if (nonEmptyTableLines.length >= 2) {
         const normalizedTable: string[] = [];
         let colCount = 0;
 
         nonEmptyTableLines.forEach((tLine, idx) => {
-          // 将全角 ｜ 替换为半角 |
           const replaced = tLine.replace(/｜/g, '|').trim();
           const rawCells = replaced
             .split('|')
             .map((c) => c.trim())
             .filter((c, cellIdx, arr) => {
-              // 过滤掉首尾因为 | 切割产生的多余空串
               if ((cellIdx === 0 || cellIdx === arr.length - 1) && c === '') {
                 return false;
               }
               return true;
             });
 
-          // 单元格中的图片类型 URL 保持用户输入的 URL 原样显示（不自动转为图片）；仅保留 ▲ 题注的斜体强调
           const cells = rawCells.map((cellText) => {
             const cellTrimmed = cellText.trim();
+            if (isImageUrl(cellTrimmed) && !cellTrimmed.startsWith('![')) {
+              return `![配图](${cellTrimmed})`;
+            }
             if (/^▲\s*.+$/.test(cellTrimmed) && !cellTrimmed.startsWith('*')) {
               return `*${cellTrimmed}*`;
             }
@@ -392,7 +754,7 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
               nonEmptyTableLines.length > 1 &&
               /^\|?[\s\-:]+(\|[\s\-:]+)+\|?$/.test(nonEmptyTableLines[1].replace(/｜/g, '|').trim());
             if (!hasDividerNext) {
-              const divider = `| ${Array(cells.length).fill(':---:').join(' | ')} |`;
+              const divider = `| ${Array(cells.length).fill(':---').join(' | ')} |`;
               normalizedTable.push(divider);
             }
           }
@@ -401,24 +763,24 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
         blockProcessedLines.push('');
         blockProcessedLines.push(...normalizedTable);
         blockProcessedLines.push('');
-        i = j;
+        i = jTable;
         continue;
       }
     }
 
-    // 2.3 检查是否是制表符 (Tab) 或多空格对齐数据表格
-    // 连续 2 行以上，每行包含 \t 或 >=2 个连续空格切分的 2~8 列
+    // 2.3 检查是否是 Excel / WPS 粘贴的制表符 (Tab - \t) 或多空格对齐数据表格
+    // 连续 2 行以上，每行包含 \t 或 >=2 个连续空格切分的 2~12 列
     const splitBySpaceOrTab = (str: string) => {
       if (str.includes('\t')) {
-        return str.split('\t').map((s) => s.trim()).filter(Boolean);
+        return str.split('\t').map((s) => s.trim()).filter((s) => s !== '');
       }
-      return str.split(/\s{2,}/).map((s) => s.trim()).filter(Boolean);
+      return str.split(/\s{2,}/).map((s) => s.trim()).filter((s) => s !== '');
     };
 
     const initialColumns = splitBySpaceOrTab(trimmed);
     const isPotentialSpaceTable =
       initialColumns.length >= 2 &&
-      initialColumns.length <= 8 &&
+      initialColumns.length <= 12 &&
       !trimmed.startsWith('-') &&
       !trimmed.startsWith('*') &&
       !/^[0-9]+[、.]/.test(trimmed) &&
@@ -426,38 +788,45 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
 
     if (isPotentialSpaceTable) {
       const spaceTableLines: string[][] = [initialColumns];
-      let j = i + 1;
+      let jSpace = i + 1;
       let blankRun = 0;
 
-      while (j < rawLines.length) {
-        const nextTrimmed = rawLines[j].trim();
+      while (jSpace < rawLines.length) {
+        const nextTrimmed = rawLines[jSpace].trim();
         if (!nextTrimmed) {
-          // 允许表格行之间出现单个空行（用户粘贴的表格行间常有空行）；连续两个空行视为表格结束
           blankRun++;
           if (blankRun >= 2) break;
-          j++;
+          jSpace++;
           continue;
         }
         blankRun = 0;
         const nextCols = splitBySpaceOrTab(nextTrimmed);
-        // 如果列数与第一行一致（或相差不超过 1 列）
+        // 如果列数与第一行相近（相差不超过 1 列）且 >= 2 列
         if (Math.abs(nextCols.length - initialColumns.length) <= 1 && nextCols.length >= 2) {
           spaceTableLines.push(nextCols);
-          j++;
+          jSpace++;
         } else {
           break;
         }
       }
 
-      // 如果连续 2 行以上满足空格/Tab 分割表格特征
       if (spaceTableLines.length >= 2) {
         const maxCols = Math.max(...spaceTableLines.map((r) => r.length));
         const formattedTable: string[] = [];
 
         spaceTableLines.forEach((row, rIdx) => {
-          // 补齐列数
           while (row.length < maxCols) row.push('-');
-          formattedTable.push(`| ${row.join(' | ')} |`);
+          const cells = row.map((cellText) => {
+            const cellTrimmed = cellText.trim();
+            if (isImageUrl(cellTrimmed) && !cellTrimmed.startsWith('![')) {
+              return `![配图](${cellTrimmed})`;
+            }
+            if (/^▲\s*.+$/.test(cellTrimmed) && !cellTrimmed.startsWith('*')) {
+              return `*${cellTrimmed}*`;
+            }
+            return cellText;
+          });
+          formattedTable.push(`| ${cells.join(' | ')} |`);
           if (rIdx === 0) {
             formattedTable.push(`| ${Array(maxCols).fill(':---').join(' | ')} |`);
           }
@@ -466,7 +835,7 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
         blockProcessedLines.push('');
         blockProcessedLines.push(...formattedTable);
         blockProcessedLines.push('');
-        i = j;
+        i = jSpace;
         continue;
       }
     }
@@ -478,25 +847,54 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
   // 3. 第二阶段：单行语义分析与转换
   const processedLines: string[] = [];
   let isFirstNonEmpty = true;
+  let inCodeBlock = false;
+  let lastNonEmptyWasImage = false;
+
+  // 阿拉伯数字编号行的智能消歧辅助：
+  // 编号行在相邻位置（含仅隔一个空行）成组出现 → 有序列表；
+  // 孤立出现（前后都是正文/标题/空行隔断）→ 小节标题 (H2)
+  const arabicNumberedRe = /^\d{1,4}(?:\s*[、,，.．)）:：]\s*|\s)\s*\S+/;
+  const nearestNonEmptyLine = (arr: string[], from: number, step: number): string => {
+    let k = from;
+    while (k >= 0 && k < arr.length) {
+      const t = (arr[k] || '').trim();
+      if (t) return t;
+      k += step;
+    }
+    return '';
+  };
 
   for (let idx = 0; idx < blockProcessedLines.length; idx++) {
     const rawLine = blockProcessedLines[idx];
     const trimmed = rawLine.trim();
+
+    if (trimmed.startsWith('```')) {
+      inCodeBlock = !inCodeBlock;
+      processedLines.push(rawLine);
+      continue;
+    }
+
+    if (inCodeBlock) {
+      processedLines.push(rawLine);
+      continue;
+    }
 
     if (!trimmed) {
       processedLines.push('');
       continue;
     }
 
-    // 保留已由第一阶段格式化的代码块或表格行
-    if (trimmed.startsWith('```') || trimmed.startsWith('|')) {
+    // 保留表格行
+    if (trimmed.startsWith('|')) {
+      lastNonEmptyWasImage = false;
       processedLines.push(trimmed);
       continue;
     }
 
-    // 保留显式 Markdown 图片语法（含粘贴截图生成的 Base64 图片）整行原样输出：
-    // 不参与条目标题提取与间距改写，避免 data:URL 中的冒号被误拆导致图片损坏
+    // 保留显式 Markdown 图片语法
     if (/^!\[[^\]]*\]\(.+\)$/.test(trimmed)) {
+      isFirstNonEmpty = false;
+      lastNonEmptyWasImage = true;
       processedLines.push(trimmed);
       continue;
     }
@@ -509,7 +907,17 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
       continue;
     }
 
-    // 3.2 识别首行文章大标题 (H1)（受 treatFirstLineAsTitle 开关控制，默认关闭作为详情内容首段）
+    // 3.2 识别首行文章大标题 (H1)
+    // 无论是 explicit "标题：..." 还是第一行短文本（由 treatFirstLineAsTitle 开关控制）
+    const explicitTitleMatch = trimmed.match(/^(?:文章大标题|文章标题|文章题目|标题|题目|Title)[：:]\s*(.+)$/i);
+    if (explicitTitleMatch) {
+      processedLines.push('');
+      processedLines.push(`# ${explicitTitleMatch[1].trim()}`);
+      processedLines.push('');
+      isFirstNonEmpty = false;
+      continue;
+    }
+
     if (isFirstNonEmpty) {
       isFirstNonEmpty = false;
       if (treatFirstLineAsTitle) {
@@ -527,13 +935,26 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
       }
     }
 
-    // 3.3 识别二级标题 (H2)
-    // 中文序号：如 "一、背景介绍", "第一章 绪论", "壹、核心问题", "第一部分 系统架构"
-    if (
-      /^[一二三四五六七八九十百千万]+[、.．\s]+.+$/.test(trimmed) ||
+    // 3.2.5 若已有 Markdown 标题语法 (# )，原样放行并确保前后空行
+    if (/^#{1,6}\s+/.test(trimmed)) {
+      processedLines.push('');
+      processedLines.push(trimmed);
+      processedLines.push('');
+      continue;
+    }
+
+    // 3.3 识别一级大章节 (H2)
+    // 中文序号：如 "一、背景介绍", "第一章 绪论", "壹、核心问题", "第一部分 系统架构", "第1节 原理剖析"
+    // 分隔符灵活支持：顿号/点/逗号(中英)/冒号(中英)/空格，如 "一 背景" "一，背景" "一:背景" "1、背景"
+    const isH2Pattern =
+      /^[一二三四五六七八九十百千万]+(?:\s*[、,，.．:：]\s*|\s+).+$/.test(trimmed) ||
+      /^[壹贰叁肆伍陆柒捌玖拾]+(?:\s*[、,，.．:：]\s*|\s+).+$/.test(trimmed) ||
       /^第[一二三四五六七八九十0-9]+[章节篇部卷集讲堂课回期分]+[\s：:].*$/.test(trimmed) ||
-      /^(?:前言|背景|概述|结语|总结|写在最后|结语与展望)$/.test(trimmed)
-    ) {
+      /^(?:Chapter|Section|Part)\s+[0-9IVXLCDM]+[\s：:].*$/i.test(trimmed) ||
+      /^(?:前言|背景|背景介绍|概述|核心观点|业务架构|技术实现|结语|总结|写在最后|写在前面|结语与展望)$/.test(trimmed) ||
+      /^(?:阶段|Phase|Step)\s*[一二三四五六七八九十0-9]+[：:、.\s]+.+$/i.test(trimmed);
+
+    if (isH2Pattern) {
       processedLines.push('');
       processedLines.push(`## ${trimmed}`);
       processedLines.push('');
@@ -549,8 +970,28 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
       continue;
     }
 
-    // 3.4 识别三级标题 (H3) 与四级标题 (H4)
-    // 如 "1.1 架构设计", "1.1.1 缓存机制", "（一）基本假设", "(1) 需求分析"
+    // 3.4 识别二级小节 (H3)
+    // 如 "1.1 架构设计", "（一）基本假设", "(一) 需求分析", "A. 数据清洗"
+    const isH3Pattern =
+      /^\d+\.\d+[\s、.．]+\S+/.test(trimmed) ||
+      /^[（(][一二三四五六七八九十]+[）)][\s、.．]*\S+/.test(trimmed) ||
+      /^[A-Z][.、．\s]+\S+/.test(trimmed);
+
+    if (isH3Pattern) {
+      processedLines.push('');
+      processedLines.push(`### ${trimmed}`);
+      processedLines.push('');
+      continue;
+    }
+
+    // 3.5 识别三级小节 (H4) 与四级小节 (H5)
+    // 如 "1.1.1 缓存机制", "（1）细节规范", "(1) 细节规范", "1) 补充说明"
+    if (/^\d+\.\d+\.\d+\.\d+[\s、.．]*\S+/.test(trimmed)) {
+      processedLines.push('');
+      processedLines.push(`##### ${trimmed}`);
+      processedLines.push('');
+      continue;
+    }
     if (/^\d+\.\d+\.\d+[\s、.．]*\S+/.test(trimmed)) {
       processedLines.push('');
       processedLines.push(`#### ${trimmed}`);
@@ -558,24 +999,25 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
       continue;
     }
     if (
-      /^[（(][一二三四五六七八九十0-9]+[）)][\s、.．]*\S+/.test(trimmed) ||
-      /^\d+\.\d+[\s、.．]*\S+/.test(trimmed)
+      /^[（(]\d+[）)][\s、.．]*\S+/.test(trimmed) ||
+      /^\d+[)）][\s、.．]*\S+/.test(trimmed)
     ) {
+      // 避免误判单行简短选项（如 "(1) 选项A" 当处于紧凑段落时作为列表）
       processedLines.push('');
-      processedLines.push(`### ${trimmed}`);
+      processedLines.push(`#### ${trimmed}`);
       processedLines.push('');
       continue;
     }
 
-    // 3.5 识别 Q&A 问答与访谈录结构
-    const questionMatch = trimmed.match(/^(?:问|Q|Question)[：:]\s*(.+)$/i);
+    // 3.6 识别 Q&A 问答与访谈录结构
+    const questionMatch = trimmed.match(/^(?:问|Q|Question|提问|读者问)[：:]\s*(.+)$/i);
     if (questionMatch) {
       processedLines.push('');
       processedLines.push(`**Q：${questionMatch[1].trim()}**`);
       processedLines.push('');
       continue;
     }
-    const answerMatch = trimmed.match(/^(?:答|A|Answer)[：:]\s*(.+)$/i);
+    const answerMatch = trimmed.match(/^(?:答|A|Answer|回答|作者答)[：:]\s*(.+)$/i);
     if (answerMatch) {
       processedLines.push('');
       processedLines.push(`> **A**：${answerMatch[1].trim()}`);
@@ -583,20 +1025,34 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
       continue;
     }
 
-    // 3.6 识别导读、编者按、摘要、注意、警告等 Callout 提示框
-    const calloutMatch = trimmed.match(
-      /^(导读|导言|编者按|摘要|前言|总结|注意|提示|警告|重要|声明|Tips?|Warning|Summary|Note)[：:]\s*(.+)$/i
+    // 3.7 识别导读、编者按、摘要、核心看点等文章先导 Callout
+    const leadCalloutMatch = trimmed.match(
+      /^(导读|导言|编者按|摘要|前言|引言|核心看点|核心观点|总结|思考|声明)[：:]\s*(.+)$/i
     );
-    if (calloutMatch) {
-      const tag = calloutMatch[1];
-      const content = calloutMatch[2];
+    if (leadCalloutMatch) {
+      const tag = leadCalloutMatch[1];
+      const content = leadCalloutMatch[2];
       processedLines.push('');
       processedLines.push(`> **${tag}**：${content}`);
       processedLines.push('');
       continue;
     }
 
-    // 3.7 识别独立注释与旁白说明（注：、※、补充说明）
+    // 3.8 识别带 Emoji 或标准提示语的重点、警告、提示 Callout
+    const alertCalloutMatch = trimmed.match(
+      /^(?:(💡|⚠️|❗|📌|🎯|📝|⚡|🔥|💬|🔔)\s*)?((?:核心|重要|特别|关键)?(?:提示|警告|注意|注意事项|要点|小贴士|目标|提醒)|Tips?|Warning|Note|Notice|Caution)[：:]\s*(.+)$/i
+    );
+    if (alertCalloutMatch) {
+      const emoji = alertCalloutMatch[1] ? `${alertCalloutMatch[1]} ` : '';
+      const tag = alertCalloutMatch[2];
+      const content = alertCalloutMatch[3];
+      processedLines.push('');
+      processedLines.push(`> **${emoji}${tag}**：${content}`);
+      processedLines.push('');
+      continue;
+    }
+
+    // 3.9 识别独立注释与旁白说明（注：、※、补充说明）
     const noteMatch = trimmed.match(/^(?:注|注\d+|※|补充说明|附注|PS)[：:]\s*(.+)$/i);
     if (noteMatch) {
       const noteContent = noteMatch[1].trim();
@@ -606,28 +1062,71 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
       continue;
     }
 
-    // 3.8 识别独立成行的金句（整行被引号包裹）
-    if (/^[“"『「].+[”"』」]$/.test(trimmed) && trimmed.length < 100) {
+    // 3.10 识别带破折号署名的名言金句 (Pull-Quote)
+    const quoteWithAuthor = trimmed.match(/^[“"『「](.+)[”"』」]\s*(?:——|-|—|by|By|——\s*By)\s*(.+)$/);
+    if (quoteWithAuthor) {
+      const quoteText = quoteWithAuthor[1].trim();
+      const author = quoteWithAuthor[2].trim();
+      processedLines.push('');
+      processedLines.push(`> “${quoteText}”\n>\n> —— ${author}`);
+      processedLines.push('');
+      continue;
+    }
+
+    // 识别独立成行的金句（整行被引号包裹且长度合适）
+    if (/^[“"『「].+[”"』」]$/.test(trimmed) && trimmed.length >= 8 && trimmed.length <= 160) {
       processedLines.push('');
       processedLines.push(`> ${trimmed}`);
       processedLines.push('');
       continue;
     }
 
-    // 3.8.5 图片类 URL 不再自动转为图片（配图：URL、[图片] URL、独立图片链接、Base64 均保持用户输入原样）：
-    // 纯文本输入遵循「URL 只显示 URL」的排版需求；仅当用户显式写出 Markdown 图片语法 ![alt](url) 时才按图片渲染
-
-    // 3.9 识别图片题注或图表标注：如 "▲ 图1：系统整体架构" 或 "▲ 阶段 1：草图"
-    if (
-      /^(?:▲\s*|\[)?(?:图|表|Figure|阶段)\s*[\dA-Za-z\-]+[\s：:.-]+([^\]\n]+)(?:\])?$/i.test(trimmed) ||
-      /^▲\s*.+$/.test(trimmed)
-    ) {
-      processedLines.push(`*${trimmed}*`);
+    // 3.11 识别自然纯文本中的配图与图片 URL
+    const plainImgMatch = trimmed.match(/^(?:配图|图片|插图)[：:]\s*(\S+)$/i) || trimmed.match(/^\[(?:配图|图片|插图)\]\s*(\S+)$/i);
+    if (plainImgMatch && isImageUrl(plainImgMatch[1])) {
+      const imgUrl = plainImgMatch[1];
+      processedLines.push('');
+      processedLines.push(`![配图](${imgUrl})`);
+      lastNonEmptyWasImage = true;
       continue;
     }
 
-    // 3.10 识别流程步骤与时间线：如 "步骤一：初始化系统", "2025年：发布2.0"
-    const stepMatch = trimmed.match(/^(?:步骤|阶段|Step|Phase)\s*([一二三四五六七八九十0-9]+)[：:、.\s]+(.+)$/i);
+    // 3.12 识别图片题注或图表标注：如 "▲ 图1：系统整体架构" 或 "▲ 阶段 1：草图" 或 "*▲ 图1：系统架构*"
+    const isCaptionPattern =
+      /^\*?(?:▲\s*|\[)?(?:图|表|Figure|阶段)\s*[\dA-Za-z\-]+/i.test(trimmed) ||
+      /^\*?▲\s*.+$/i.test(trimmed) ||
+      /^\*?注[：:]/.test(trimmed) ||
+      (lastNonEmptyWasImage &&
+        trimmed.length > 0 &&
+        trimmed.length < 120 &&
+        !/[。！？]$/.test(trimmed));
+
+    if (isCaptionPattern) {
+      const cleanCap = trimmed.replace(/^[*_]+|[*_]+$/g, '').trim();
+      const formattedCap = cleanCap.startsWith('▲') ? cleanCap : `▲ ${cleanCap}`;
+      processedLines.push(`*${formattedCap}*`);
+      lastNonEmptyWasImage = false;
+      continue;
+    }
+
+    lastNonEmptyWasImage = false;
+
+    // 3.13 识别任务复选清单 (Task Lists: [ ] / [x] / □ / ✓ / ☑)
+    const uncheckedTask = trimmed.match(/^[\t ]*(?:\[\s*\]|□|○|待办[：:])\s*(.+)$/);
+    if (uncheckedTask) {
+      const taskContent = emphasizeItemHeader(uncheckedTask[1].trim());
+      processedLines.push(`- [ ] ${taskContent}`);
+      continue;
+    }
+    const checkedTask = trimmed.match(/^[\t ]*(?:\[[xX]\]|✓|✔|☑|已完成[：:])\s*(.+)$/);
+    if (checkedTask) {
+      const taskContent = emphasizeItemHeader(checkedTask[1].trim());
+      processedLines.push(`- [x] ${taskContent}`);
+      continue;
+    }
+
+    // 3.14 识别流程步骤与时间线：如 "步骤一：初始化系统", "阶段1：需求调研"
+    const stepMatch = trimmed.match(/^(?:步骤|Step)\s*([一二三四五六七八九十0-9]+)[：:、.\s]+(.+)$/i);
     if (stepMatch) {
       const stepName = `步骤 ${stepMatch[1]}`;
       const stepDesc = stepMatch[2].trim();
@@ -636,15 +1135,18 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
       continue;
     }
 
-    // 3.11 识别无序列表（•, ·, ◆, ★, ■, ▶, -）
-    if (/^[•·◆★■▶-]\s*(.+)$/.test(trimmed)) {
-      const itemContent = trimmed.replace(/^[•·◆★■▶-]\s*/, '');
+    // 3.15 识别无序列表（•, ·, ●, ○, ◆, ◇, ★, ■, □, ▪, ▫, ▶, ▸, ➤, ※, ✦, ✧, 👉, 🔹, 🔸, 📌, ✅, ⭐, -）
+    if (/^[•·●○◆◇★■□▪▫▶▸➤👉🔹🔸📌✅⭐✦✧※-]\s*(.+)$/.test(trimmed)) {
+      const itemContent = trimmed.replace(/^[•·●○◆◇★■□▪▫▶▸➤👉🔹🔸📌✅⭐✦✧※-]\s*/, '');
       const emphasized = emphasizeItemHeader(itemContent);
       processedLines.push(`- ${emphasized}`);
       continue;
     }
 
-    // 3.12 识别有序列表项（1、, 1. , ①, ⑴）
+    // 3.16 识别有序列表项与小节编号（1、, 1. , 1 , 1, , 1: , ①, ⑴, 一) ）
+    // 智能消歧：阿拉伯数字编号行若成组出现（相邻或仅隔一个空行）→ 有序列表；
+    // 孤立出现（前后最近的非空行都不是编号行）且内容短小 → 小节标题 (H2)，
+    // 让 "1 xxx" "1,xxx" "1:xxx" 等任意分隔风格都能按意图正确呈现
     const circleNumMatch = trimmed.match(/^([①②③④⑤⑥⑦⑧⑨⑩⑴⑵⑶⑷⑸⑹⑺⑻⑼⑽])\s*(.+)$/);
     if (circleNumMatch) {
       const symbols = '①②③④⑤⑥⑦⑧⑨⑩⑴⑵⑶⑷⑸⑹⑺⑻⑼⑽';
@@ -657,16 +1159,41 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
       continue;
     }
 
-    const numMatch = trimmed.match(/^(\d+)[、.．)）]\s*(.+)$/);
+    const numMatch = trimmed.match(/^(\d{1,4})(?:\s*[、,，.．:：]\s*|\s+)(.+)$/);
     if (numMatch) {
       const num = numMatch[1];
       const content = numMatch[2];
+      // 多级编号保护："1.1 架构设计"、"3.14.5" 等由上方 H3/H4/H5 规则处理
+      const isMultiLevelNumbering = /^\d+(?:\.\d+)+/.test(trimmed);
+      // 参考文献条目（含 URL）不走标题转换，保持编号列表形态
+      const isReferenceLike = /https?:\/\//i.test(trimmed);
+
+      const prevNearest = nearestNonEmptyLine(blockProcessedLines, idx - 1, -1);
+      const nextNearest = nearestNonEmptyLine(blockProcessedLines, idx + 1, 1);
+      const isDenseNumbering =
+        arabicNumberedRe.test(prevNearest) || arabicNumberedRe.test(nextNearest);
+
+      const looksLikeSection =
+        !isDenseNumbering &&
+        !isMultiLevelNumbering &&
+        !isReferenceLike &&
+        !/^\d/.test(content) &&
+        content.length <= 40 &&
+        !/[。！？…]$/.test(content.trim());
+
+      if (looksLikeSection) {
+        processedLines.push('');
+        processedLines.push(`## ${trimmed}`);
+        processedLines.push('');
+        continue;
+      }
+
       const emphasized = emphasizeItemHeader(content);
       processedLines.push(`${num}. ${emphasized}`);
       continue;
     }
 
-    // 3.13 孤立短行（前后空行，无标点，2~18字）识别为小节标题
+    // 3.17 孤立短行（前后空行，无标点，2~18字）识别为小节标题
     const isPrevEmpty = idx > 0 && !blockProcessedLines[idx - 1].trim();
     const isNextEmpty = idx < blockProcessedLines.length - 1 && !blockProcessedLines[idx + 1].trim();
     if (
@@ -675,22 +1202,23 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
       trimmed.length >= 2 &&
       trimmed.length <= 18 &&
       !/[，。；！？…、“”'’（）()：:]/.test(trimmed) &&
-      !trimmed.startsWith('#')
+      !trimmed.startsWith('#') &&
+      !trimmed.startsWith('-')
     ) {
       processedLines.push(`### ${trimmed}`);
       continue;
     }
 
-    // 3.14 识别参考文献段落标头
-    if (/^(?:参考资料|参考文献|参考链接|References)[：:]?$/i.test(trimmed)) {
+    // 3.18 识别参考文献段落标头（覆盖常见中英文关键词）
+    if (/^(?:参考资料|参考文献|参考链接|引用来源|资料来源|相关阅读|延伸阅读|参考|引用|链接|References?|Links?|Sources?)[：:]?$/i.test(trimmed)) {
       processedLines.push('');
       processedLines.push(`### 🔗 ${trimmed.replace(/[：:]$/, '')}`);
       processedLines.push('');
       continue;
     }
 
-    // 3.14.5 识别参考文献条目形如 [1] 标题: https://... 或 1. 标题: https://...
-    const refItemMatch = trimmed.match(/^(?:\[(\d+)\]|(\d+)[.、])\s*(.*)$/);
+    // 3.19 识别参考文献条目形如 [1] 标题: https://... 、1. 标题: https://... 、1) 标题: https://...
+    const refItemMatch = trimmed.match(/^(?:\[(\d+)\]|(\d+)(?:[.、)）])?)\s*(.*)$/);
     if (refItemMatch && /https?:\/\//i.test(trimmed)) {
       const refNum = refItemMatch[1] || refItemMatch[2];
       const rest = refItemMatch[3].trim();
@@ -699,14 +1227,14 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
       continue;
     }
 
-    // 3.14.6 如果整行就是纯裸 URL，转为清晰的列表链接
+    // 3.20 如果整行就是纯裸 URL，转为清晰的列表链接
     if (/^https?:\/\/\S+$/i.test(trimmed)) {
       const formattedLink = formatBareUrls(trimmed);
       processedLines.push(`- ${formattedLink}`);
       continue;
     }
 
-    // 3.15 普通正文行：进行条目标题自动强调提取 + 裸链接转换 + 盘古排版间距优化
+    // 3.21 普通正文行：条目标题自动强调提取 + 裸链接转换 + 盘古排版间距优化
     const withEmphasize = emphasizeItemHeader(trimmed);
     const withUrls = formatBareUrls(withEmphasize);
     const formattedLine = addPanguSpacing(withUrls);
@@ -714,26 +1242,32 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
     processedLines.push(formattedLine);
   }
 
-  // 4. 第三阶段：自然段落呼吸感重构（防止换行被 Markdown 强行挤压合并）
+  // 4. 第三阶段：自然段落呼吸感重构（防止软换行被 Markdown 强行拼接挤压）
   const finalResult: string[] = [];
   let emptyCounter = 0;
+  let inCodeBlockStage3 = false;
 
   for (let j = 0; j < processedLines.length; j++) {
     const curLine = processedLines[j];
 
+    if (curLine.trim().startsWith('```')) {
+      inCodeBlockStage3 = !inCodeBlockStage3;
+    }
+
     if (!curLine) {
       emptyCounter++;
-      // 保持最多 1 个空行分隔
-      if (emptyCounter === 1 && finalResult.length > 0) {
+      if (inCodeBlockStage3) {
+        finalResult.push('');
+      } else if (emptyCounter === 1 && finalResult.length > 0) {
         finalResult.push('');
       }
     } else {
       emptyCounter = 0;
 
-      // 检查当前行与上一行，如果两者都是普通文本（非列表、非表格、非标题、非引用、非代码），
-      // 且上一行以句号、感叹号、问号、省略号结尾，即使没有手动打空行，也智能补足空行，
-      // 保证微信文章段落间的纯净呼吸感！
-      if (finalResult.length > 0) {
+      // 检查当前行与上一行：如果两者都是普通文本（非列表、非表格、非标题、非引用、非代码），
+      // 且上一行以句号、感叹号、问号、冒号、省略号或破折号结尾，即使没有手动打空行，
+      // 也智能补足空行，彻底解决从 Word / 微信 / 网页粘贴无空行段落挤压的顽疾！
+      if (!inCodeBlockStage3 && finalResult.length > 0) {
         const lastLine = finalResult[finalResult.length - 1];
         const isLastLineSpecial =
           lastLine === '' ||
@@ -758,8 +1292,7 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
           curLine.startsWith('<');
 
         if (!isLastLineSpecial && !isCurLineSpecial) {
-          // 上一行是句子结尾
-          if (/[。！？…]$/.test(lastLine.trim())) {
+          if (/[。！？…!?:：~”’"）)]$|^[一二三四五六七八九十0-9]/.test(lastLine.trim())) {
             finalResult.push('');
           }
         }
@@ -773,9 +1306,52 @@ export function convertPlainTextToMarkdown(text: string, options?: ParserOptions
 }
 
 /**
+ * 根据「首句标题」开关调整首行标题状态：
+ * - treatAsTitle = true: 首个有效文本行若非大标题，则提升为 # 大标题
+ * - treatAsTitle = false: 首个有效文本行若是 H1 大标题 (# 开头)，则移除 # 降为普通正文段落
+ */
+export function adjustFirstLineTitle(markdown: string, treatAsTitle: boolean): string {
+  if (!markdown) return markdown;
+
+  const lines = markdown.split('\n');
+  let targetIdx = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    const trimmed = lines[i].trim();
+    if (!trimmed) continue;
+    if (trimmed.startsWith('<!--') || trimmed.startsWith('---') || trimmed.startsWith('***')) continue;
+    if (trimmed.startsWith('![') || trimmed.startsWith('<img') || trimmed.startsWith('<section data-role="photo-card"')) {
+      return markdown;
+    }
+
+    targetIdx = i;
+    break;
+  }
+
+  if (targetIdx === -1) return markdown;
+
+  const trimmed = lines[targetIdx].trim();
+
+  if (treatAsTitle) {
+    if (!trimmed.startsWith('#')) {
+      const isSpecialBlock = /^[>\-*+`|]/.test(trimmed) || /^\d+\.\s/.test(trimmed);
+      if (!isSpecialBlock) {
+        lines[targetIdx] = `# ${trimmed}`;
+      }
+    }
+  } else {
+    if (/^#\s+/.test(trimmed)) {
+      lines[targetIdx] = trimmed.replace(/^#\s+/, '');
+    }
+  }
+
+  return lines.join('\n');
+}
+
+/**
  * 智能预处理器：根据模式决定是否应用转换
  * @param content 输入内容
- * @param mode 'auto' (自动侦测) | 'plain-text' (强制格式化纯文本) | 'markdown' (原样输出)
+ * @param mode 'auto' (自动侦测并格式化) | 'plain-text' (强制格式化纯文本) | 'markdown' (纯 Markdown 直通)
  * @param options 纯文本解析选项，如是否识别首句为大标题
  */
 export function processContentByMode(
@@ -788,37 +1364,31 @@ export function processContentByMode(
   isTransformed: boolean;
 } {
   const detected = detectContentFormat(content);
+  const treatAsTitle = options?.treatFirstLineAsTitle ?? false;
 
-  if (mode === 'markdown') {
-    return {
-      renderedMarkdown: content,
-      detectedFormat: detected,
-      isTransformed: false,
-    };
+  let baseMd: string;
+  let isTransformed: boolean;
+
+  // 在 auto 模式与 plain-text 模式下，统一执行全能语义规整与格式转换：
+  // 保持文档中已有的代码块、图片与标准表格不被破坏的同时，
+  // 将文档中未格式化的各级章节、表格、清单、提示、列表与段落全面升级为语义化结构！
+  // 仅当用户显式选择 'markdown' 模式时才直通跳过。
+  if (mode === 'plain-text' || mode === 'auto') {
+    baseMd = convertPlainTextToMarkdown(content, {
+      ...options,
+      treatFirstLineAsTitle: treatAsTitle,
+    });
+    isTransformed = baseMd !== content;
+  } else {
+    baseMd = content;
+    isTransformed = false;
   }
 
-  if (mode === 'plain-text') {
-    return {
-      renderedMarkdown: convertPlainTextToMarkdown(content, options),
-      detectedFormat: detected,
-      isTransformed: true,
-    };
-  }
+  const finalMd = adjustFirstLineTitle(baseMd, treatAsTitle);
 
-  // 自动模式 (auto)
-  if (!detected.isMarkdown) {
-    // 纯文本 -> 智能转排版
-    return {
-      renderedMarkdown: convertPlainTextToMarkdown(content, options),
-      detectedFormat: detected,
-      isTransformed: true,
-    };
-  }
-
-  // 已是 Markdown
   return {
-    renderedMarkdown: content,
+    renderedMarkdown: finalMd,
     detectedFormat: detected,
-    isTransformed: false,
+    isTransformed: isTransformed || finalMd !== content,
   };
 }
