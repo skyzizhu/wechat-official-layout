@@ -375,15 +375,18 @@ export function Editor({
     const imgFile = files.find((f) => f.type.startsWith('image/')) || (itemImg ? itemImg.getAsFile() : null);
     if (!imgFile) return;
     e.preventDefault();
+    // currentTarget 在异步等待后会置空，必须在事件同步阶段先捕获
+    const ta = e.currentTarget;
+    const caretStart = ta.selectionStart ?? 0;
+    const caretEnd = ta.selectionEnd ?? caretStart;
     setIsUploading(true);
     try {
       const { dataUrl, fileName } = await compressAndEncodeImage(imgFile);
       const cleanAlt = fileName.replace(/\.[^/.]+$/, '') || '配图';
       const { token, persisted } = putImageDataUrl(dataUrl);
       const src = persisted ? token : dataUrl;
-      const ta = e.currentTarget;
-      const start = ta.selectionStart ?? 0;
-      const end = ta.selectionEnd ?? start;
+      const start = caretStart;
+      const end = caretEnd;
       const b = blocks[blockIdx];
       const text = b && b.kind === 'text' ? b.lines.join('\n') : '';
       const next = text.slice(0, start) + '\n\n![' + cleanAlt + '](' + src + ')\n\n' + text.slice(end);
