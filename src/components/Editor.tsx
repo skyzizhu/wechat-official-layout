@@ -223,11 +223,14 @@ function ImageBlockCard(props: {
 }) {
   const { block, canLayout, onLayout, onCaption, onRemove } = props;
   const cols = block.layout;
-  // 题注本地草稿态：输入时只改本地，失焦/回车才提交一次（避免每次击键都全篇序列化往返）
+  // 题注本地草稿态：输入时只改本地，失焦/回车才提交一次（避免每次击键都全篇序列化往返）。
+  // 外部 captions 变化（引用比较）时在渲染期同步草稿，不经过 effect
   const [draftCaps, setDraftCaps] = useState<string[]>(block.captions);
-  useEffect(() => {
+  const [lastSeenCaps, setLastSeenCaps] = useState<string[]>(block.captions);
+  if (lastSeenCaps !== block.captions) {
+    setLastSeenCaps(block.captions);
     setDraftCaps(block.captions);
-  }, [block.captions]);
+  }
   const commitCaption = (k: number) => {
     const v = (draftCaps[k] || '').trim();
     if (v !== (block.captions[k] || '')) onCaption(k, v);
