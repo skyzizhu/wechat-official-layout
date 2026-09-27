@@ -38,6 +38,28 @@ const ListDepthContext = React.createContext<ListRenderContextValue>({
 const OlItemIndexContext = React.createContext(0);
 
 /**
+ * 松散列表（li 内容被包裹为 p 等块级元素）时，把标记（徽章/圆点）注入首个块级元素内部——
+ * 否则行内标记后面紧跟块级元素，标记会独占一行，与内容换行分离
+ */
+function prependMarker(children: React.ReactNode[], marker: React.ReactNode): React.ReactNode[] {
+  // react-markdown 传入的子元素是渲染后的组件（type 为函数），真实标签名在 props.node.tagName
+  const isBlockish = (c: React.ReactNode) => {
+    if (!React.isValidElement(c)) return false;
+    const tag = (c.props as { node?: { tagName?: string } })?.node?.tagName;
+    if (typeof tag === 'string' && ['p', 'div', 'section'].includes(tag)) return true;
+    return typeof c.type === 'string' && ['p', 'div', 'section'].includes(c.type);
+  };
+  const idx = children.findIndex(isBlockish);
+  if (idx === -1) return [marker, ...children];
+  const first = children[idx] as React.ReactElement<{ children?: React.ReactNode }>;
+  const inner = React.Children.toArray(first.props.children);
+  const cloned = React.cloneElement(first, {}, marker, ...inner);
+  const out = [...children];
+  out[idx] = cloned;
+  return out;
+}
+
+/**
  * 递归提取 AST 节点中的纯文本
  */
 function getNodeText(node: any): string {
@@ -597,8 +619,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
       if (listInfo.depth === 1 && listInfo.ordered && olIndex > 0) {
         return (
           <li style={{ ...listStyles.depth1Li, listStyleType: 'none' }} className={liClassName}>
-            <span style={listStyles.badge}>{olIndex}</span>
-            {processedChildren}
+            {prependMarker(processedChildren, <span style={listStyles.badge}>{olIndex}</span>)}
           </li>
         );
       }
@@ -606,8 +627,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
       if (listInfo.depth === 1 && !listInfo.isTaskList) {
         return (
           <li style={{ ...listStyles.depth1Li, listStyleType: 'none' }} className={liClassName}>
-            <span style={listStyles.dot} />
-            {processedChildren}
+            {prependMarker(processedChildren, <span style={listStyles.dot} />)}
           </li>
         );
       }
