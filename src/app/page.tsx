@@ -18,6 +18,7 @@ import { SAMPLE_MARKDOWN, SAMPLE_PLAIN_TEXT, SAMPLE_PRESETS } from '@/lib/sample
 import { processContentByMode, ConversionDecision } from '@/lib/smart-parser';
 import { enhanceWithAi, loadAiSettings, saveAiSettings, AiSettings } from '@/lib/ai-enhance';
 import { AiSettingsModal } from '@/components/AiSettingsModal';
+import { AppPromoBadge } from '@/components/AppPromoBadge';
 import { convertLinksToFootnotes } from '@/lib/link-footnotes';
 import { extractAndTokenizeDataUrls } from '@/lib/image-store';
 import { PenLine, Eye } from 'lucide-react';
@@ -537,6 +538,9 @@ function MainLayout() {
           )}
         </div>
       </main>
+
+      {/* 右下角悬浮：引导前往 XTools 官网（新标签页） */}
+      <AppPromoBadge />
 
       {/* 移动端底部 Tab 栏 */}
       <div className="lg:hidden flex-shrink-0 bg-white border-t border-gray-200 flex">
