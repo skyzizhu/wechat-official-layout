@@ -15,7 +15,7 @@
 
 # next.js
 /.next/
-/out/
+# /out/  # 已改为纳入版本控制：服务器无 Node 环境，直接 git pull 部署静态产物
 
 # production
 /build
