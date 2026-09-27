@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  FlaskConical,
   Trash2,
   Sparkles,
   FileText,
@@ -387,7 +388,7 @@ export function Editor({
             {showPresetMenu && (
               <div
                 onClick={(e) => e.stopPropagation()}
-                className="absolute right-0 top-full mt-1.5 w-64 bg-white border border-gray-200 shadow-xl rounded-xl p-1.5 z-50"
+                className="absolute right-0 top-full mt-1.5 w-72 max-h-[70vh] overflow-y-auto custom-scrollbar bg-white border border-gray-200 shadow-xl rounded-xl p-1.5 z-50"
               >
                 <div className="px-2 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
                   选择测试范文类型
@@ -432,6 +433,158 @@ export function Editor({
                     <div className="text-[11px] text-gray-400 leading-tight mt-1">
                       自然文本配图、管道符表格、纯文本代码段、问答访谈、智能分段呼吸感
                     </div>
+                  </div>
+                </button>
+
+                <div className="px-2 pt-1.5 pb-1 text-[10px] font-semibold text-blue-400 uppercase tracking-wider border-t border-gray-100 mt-1">Ten Test Articles · 智能识别压测</div>
+                <button
+                  onClick={() => {
+                    onRestoreSample('test01-plain');
+                    setShowPresetMenu(false);
+                  }}
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                >
+                  <FlaskConical className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-gray-800 group-hover:text-blue-800 flex items-center gap-1.5">
+                      <span>测试01 · 深度评测长文</span>
+                    </div>
+                    <div className="text-[11px] text-gray-400 leading-tight mt-0.5">多级章节、对齐表格、编号列表、小数评分边界</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    onRestoreSample('test02-plain');
+                    setShowPresetMenu(false);
+                  }}
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                >
+                  <FlaskConical className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-gray-800 group-hover:text-blue-800 flex items-center gap-1.5">
+                      <span>测试02 · 图文安装教程</span>
+                    </div>
+                    <div className="text-[11px] text-gray-400 leading-tight mt-0.5">步骤编号与配图穿插、图注、缩进代码块</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    onRestoreSample('test03-plain');
+                    setShowPresetMenu(false);
+                  }}
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                >
+                  <FlaskConical className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-gray-800 group-hover:text-blue-800 flex items-center gap-1.5">
+                      <span>测试03 · 创始人访谈</span>
+                    </div>
+                    <div className="text-[11px] text-gray-400 leading-tight mt-0.5">问答结构、引用行、金句候选短段</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    onRestoreSample('test04-plain');
+                    setShowPresetMenu(false);
+                  }}
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                >
+                  <FlaskConical className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-gray-800 group-hover:text-blue-800 flex items-center gap-1.5">
+                      <span>测试04 · 政务公文风</span>
+                    </div>
+                    <div className="text-[11px] text-gray-400 leading-tight mt-0.5">第一章/第一节/一、/（一）四级章节体系</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    onRestoreSample('test05-plain');
+                    setShowPresetMenu(false);
+                  }}
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                >
+                  <FlaskConical className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-gray-800 group-hover:text-blue-800 flex items-center gap-1.5">
+                      <span>测试05 · 工程手记</span>
+                    </div>
+                    <div className="text-[11px] text-gray-400 leading-tight mt-0.5">多语言代码块、围栏与语言标记、文末链接</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    onRestoreSample('test06-plain');
+                    setShowPresetMenu(false);
+                  }}
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                >
+                  <FlaskConical className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-gray-800 group-hover:text-blue-800 flex items-center gap-1.5">
+                      <span>测试06 · 运营周报</span>
+                    </div>
+                    <div className="text-[11px] text-gray-400 leading-tight mt-0.5">时间线日程、日期段落、百分比、跳号清单</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    onRestoreSample('test07-plain');
+                    setShowPresetMenu(false);
+                  }}
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                >
+                  <FlaskConical className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-gray-800 group-hover:text-blue-800 flex items-center gap-1.5">
+                      <span>测试07 · 旅行攻略</span>
+                    </div>
+                    <div className="text-[11px] text-gray-400 leading-tight mt-0.5">★●◆符号列表、callout提示、✓✗任务</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    onRestoreSample('test08-plain');
+                    setShowPresetMenu(false);
+                  }}
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                >
+                  <FlaskConical className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-gray-800 group-hover:text-blue-800 flex items-center gap-1.5">
+                      <span>测试08 · 读书笔记</span>
+                    </div>
+                    <div className="text-[11px] text-gray-400 leading-tight mt-0.5">书名号、引用块、编号参考文献与链接</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    onRestoreSample('test09-plain');
+                    setShowPresetMenu(false);
+                  }}
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                >
+                  <FlaskConical className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-gray-800 group-hover:text-blue-800 flex items-center gap-1.5">
+                      <span>测试09 · 需求文档</span>
+                    </div>
+                    <div className="text-[11px] text-gray-400 leading-tight mt-0.5">多级编号、任务清单、✅❌验收对照</div>
+                  </div>
+                </button>
+                <button
+                  onClick={() => {
+                    onRestoreSample('test10-plain');
+                    setShowPresetMenu(false);
+                  }}
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                >
+                  <FlaskConical className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <div>
+                    <div className="font-semibold text-gray-800 group-hover:text-blue-800 flex items-center gap-1.5">
+                      <span>测试10 · 观点随笔</span>
+                    </div>
+                    <div className="text-[11px] text-gray-400 leading-tight mt-0.5">无结构长段、金句短段、数字边界压测</div>
                   </div>
                 </button>
               </div>
