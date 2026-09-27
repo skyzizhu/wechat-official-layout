@@ -289,13 +289,13 @@ function AutoTextarea(props: {
 /** 图片块卡片：真实图片按布局网格展示，悬停出现布局切换与删除，图下可编辑题注 */
 function ImageBlockCard(props: {
   block: Extract<EditorBlock, { kind: 'images' }>;
-  canLayout: Record<1 | 2 | 3, boolean>;
   onLayout: (l: 1 | 2 | 3) => void;
   onCaption: (k: number, cap: string) => void;
   onRemove: () => void;
   onPolaroid: (v: boolean) => void;
+  onPickSlotImage: (slot: number, file: File) => void;
 }) {
-  const { block, canLayout, onLayout, onCaption, onRemove, onPolaroid } = props;
+  const { block, onLayout, onCaption, onRemove, onPolaroid, onPickSlotImage } = props;
   const cols = block.layout;
   // 题注本地草稿态：输入时只改本地，失焦/回车才提交一次（避免每次击键都全篇序列化往返）。
   // 外部 captions 变化（引用比较）时在渲染期同步草稿，不经过 effect
@@ -309,37 +309,24 @@ function ImageBlockCard(props: {
     const v = (draftCaps[k] || '').trim();
     if (v !== (block.captions[k] || '')) onCaption(k, v);
   };
+  // 空位补图：点击占位格选择本地图片
+  const [pickSlot, setPickSlot] = useState<number | null>(null);
+  const slotInputRef = useRef<HTMLInputElement>(null);
   return (
     <div className="relative group rounded-xl border border-gray-200 bg-gray-50/50 p-3">
       <div className="absolute right-2 top-2 z-10 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 rounded-lg border border-gray-200 px-1 py-0.5 shadow-sm">
-        {([1, 2, 3] as const).map((n) => {
-          const enabled = canLayout[n];
-          const title =
-            n === 1
-              ? '单图（各占一行）'
-              : enabled
-              ? n === 2
-                ? '两列画廊'
-                : '三列画廊'
-              : '需与此图片块相邻（中间无文字）的图片凑满 ' + n + ' 张';
-          return (
-            <button
-              key={n}
-              onClick={() => enabled && onLayout(n)}
-              disabled={!enabled}
-              title={title}
-              className={`px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
-                block.layout === n
-                  ? 'bg-blue-600 text-white'
-                  : enabled
-                  ? 'text-gray-500 hover:bg-gray-100 cursor-pointer'
-                  : 'text-gray-300 cursor-not-allowed'
-              }`}
-            >
-              {n}列
-            </button>
-          );
-        })}
+        {([1, 2, 3] as const).map((n) => (
+          <button
+            key={n}
+            onClick={() => onLayout(n)}
+            title={n === 1 ? '单图（各占一行）' : n + ' 列画廊；图片不足的格子可点击后补图'}
+            className={`px-1.5 py-0.5 rounded text-[11px] font-medium cursor-pointer transition-colors ${
+              block.layout === n ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-100'
+            }`}
+          >
+            {n}列
+          </button>
+        ))}
         {block.images.length === 1 && block.layout === 1 && (
           <button
             onClick={() => onPolaroid(!block.polaroid)}
@@ -360,9 +347,29 @@ function ImageBlockCard(props: {
         </button>
       </div>
       <div className={`grid gap-2 ${cols === 1 ? 'grid-cols-1' : cols === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-        {block.images.map((img, k) => {
-          const resolved = resolveImageSrc(img.src) || img.src;
-          return (
+        {(() => {
+          const rowCount = Math.max(1, Math.ceil(block.images.length / cols));
+          const cellCount = Math.max(block.images.length, rowCount * cols);
+          return Array.from({ length: cellCount }, (_, k) => {
+            const img = block.images[k];
+            if (!img || !img.src) {
+              return (
+                <button
+                  key={'slot-' + k}
+                  onClick={() => {
+                    setPickSlot(k);
+                    slotInputRef.current?.click();
+                  }}
+                  className="rounded-lg border border-dashed border-gray-300 bg-white flex flex-col items-center justify-center gap-1 min-h-[140px] text-gray-400 hover:border-blue-400 hover:text-blue-500 transition-colors cursor-pointer"
+                  title="选择本地图片填充此格子"
+                >
+                  <ImageIcon className="w-6 h-6" />
+                  <span className="text-[11px]">添加图片</span>
+                </button>
+              );
+            }
+            const resolved = resolveImageSrc(img.src) || img.src;
+            return (
             <div key={k} className="flex flex-col gap-1.5 min-w-0">
               <div
                 className={
@@ -396,8 +403,9 @@ function ImageBlockCard(props: {
                 className="w-full text-[12px] text-gray-500 bg-transparent border-b border-dashed border-gray-200 focus:border-blue-400 outline-none px-1 py-0.5 text-center"
               />
             </div>
-          );
-        })}
+            );
+          });
+        })()}
       </div>
     </div>
   );
@@ -474,29 +482,8 @@ export function Editor({
     updateBlocks(blocks.filter((_, k) => k !== idx));
   };
 
-  // 可合并张数：自身 + 相邻（中间无文本块）图片块的图片总数，决定布局按钮是否可用
-  const mergeableImageCount = (idx: number) => {
-    let count = 0;
-    let s = idx;
-    let e = idx;
-    const isImageBlock = (k: number) => blocks[k] && blocks[k].kind === 'images';
-    while (s - 1 >= 0 && isImageBlock(s - 1)) {
-      s--;
-      const b = blocks[s];
-      if (b.kind === 'images') count += b.images.length;
-    }
-    const self = blocks[idx];
-    if (self && self.kind === 'images') count += self.images.length;
-    while (e + 1 < blocks.length && isImageBlock(e + 1)) {
-      e++;
-      const b = blocks[e];
-      if (b.kind === 'images') count += b.images.length;
-    }
-    return count;
-  };
-
-  // 布局切换：2/3 列时把相邻（中间无文本块）的图片块合并进来，凑成真正的多列画廊；
-  // 相邻图片张数不足列数时不强行补空位，保持原状
+  // 布局切换：2/3 列时合并相邻（中间无文本块）的图片块；
+  // 图片不足列数也允许切换——不足的格子渲染为「添加图片」占位，随后补图
   const setImageLayout = (idx: number, layout: 1 | 2 | 3) => {
     const target = blocks[idx];
     if (!target || target.kind !== 'images') return;
@@ -533,10 +520,6 @@ export function Editor({
         groupImages.push(im);
         groupCaptions.push(b.captions[kk] || '');
       });
-    }
-    if (groupImages.length < layout) {
-      // 相邻图片凑不满该列数：维持现状，避免出现空列
-      return;
     }
     const merged: EditorBlock = { kind: 'images', images: groupImages, captions: groupCaptions, layout, polaroid: false };
     updateBlocks([...blocks.slice(0, start), merged, ...blocks.slice(end + 1)]);
@@ -1228,12 +1211,27 @@ export function Editor({
               <ImageBlockCard
                 key={idx}
                 block={b}
-                canLayout={{
-                  1: true,
-                  2: mergeableImageCount(idx) >= 2,
-                  3: mergeableImageCount(idx) >= 3,
-                }}
                 onLayout={(l) => setImageLayout(idx, l)}
+                onPickSlotImage={async (slot, file) => {
+                  try {
+                    setIsUploading(true);
+                    const { dataUrl, fileName } = await compressAndEncodeImage(file);
+                    const cleanAlt = fileName.replace(/\.[^/.]+$/, '') || '配图';
+                    const { token, persisted } = putImageDataUrl(dataUrl);
+                    const nextBlocks = blocks.map((b, k) => {
+                      if (k !== idx || b.kind !== 'images') return b;
+                      const images = b.images.map((im, kk) => (kk === slot ? { alt: cleanAlt, src: persisted ? token : dataUrl } : im));
+                      const captions = b.captions.map((c, kk) => (kk === slot ? c || '' : c));
+                      while (captions.length < images.length) captions.push('');
+                      return { ...b, images, captions };
+                    });
+                    commitBlocks(nextBlocks, true);
+                  } catch (err) {
+                    console.error('Slot image failed', err);
+                  } finally {
+                    setIsUploading(false);
+                  }
+                }}
                 onPolaroid={(v) => updateImageBlock(idx, { polaroid: v })}
                 onCaption={(k, cap) =>
                   updateImageBlock(idx, { captions: b.captions.map((c, kk) => (kk === k ? cap : c)) })
