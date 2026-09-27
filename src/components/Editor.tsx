@@ -79,7 +79,7 @@ function parseEditorBlocks(value: string): EditorBlock[] {
     const isStandaloneImage = IMAGE_LINE_RE.test(t);
     const isGalleryRow = t.startsWith('|') && t.includes('![');
     // photo-card 拍立得 HTML 块 → 可视化图片块（不再以源码形式示人）
-    if (/^<section\b/i.test(t) && /data-role=["']photo-card["']/i.test(t)) {
+    if (/^<section\b/i.test(t) && /data[-–—\s]*role\s*=\s*["']photo-card["']/i.test(t)) {
       flush();
       let html = '';
       let j = i;
@@ -402,7 +402,9 @@ function ImageBlockCard(props: {
                 </button>
               );
             }
-            const resolved = resolveImageSrc(img.src) || img.src;
+            // display-only：剥掉 src 上的 title 后缀（如 /a.jpg "标题"），避免卡片加载失败
+            const displaySrc = (resolveImageSrc(img.src) || img.src).replace(/\s+(["'])(?:(?!\1).)*\1\s*$/, '');
+            const resolved = displaySrc;
             return (
             <div key={k} className="flex flex-col gap-1.5 min-w-0">
               <div
