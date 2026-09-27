@@ -230,6 +230,128 @@ for (const file of cases) {
       expect(has('proxy_pass'), '嵌套缩进内容丢失');
       expect(has('不规则空行是粘贴最常见的痕迹'), '说明段落丢失');
       break;
+    case 'case31':
+      expect(has('《活着》读书笔记'), '书名号标题丢失');
+      expect(/#{2,3} 一、/.test(md), '书名号章节内序号标题未生成');
+      break;
+    case 'case32':
+      expect(has('**核心结论：方案 B 通过'), '加粗整行内容丢失');
+      expect(has('**风险提示：上线窗口只有一天。**'), '末尾加粗整行丢失');
+      break;
+    case 'case33':
+      expect(has('85% 的用户'), '百分比开头段落丢失');
+      expect(has('¥9.9 一杯'), '单价开头段落丢失');
+      expect(hasNot('1. 85') && hasNot('1. ¥'), '百分比/单价被误判为编号');
+      break;
+    case 'case34':
+      expect(has('09:00 签到入场'), '时间线条目丢失');
+      expect(has('12:00 午餐'), '末尾时间条目丢失');
+      break;
+    case 'case35':
+      expect(has('2024-01-15 是项目正式启动'), '日期段落丢失');
+      expect(/2024\s*年\s*3\s*月/.test(md), '年月段落丢失');
+      expect(hasNot('1. 2024') && hasNot('## 2024'), '日期行被误判');
+      break;
+    case 'case36':
+      expect(/#{1,3} 第1章 引言/.test(md), '第1章未转标题');
+      expect(/#{1,3} 第3章 预期结果/.test(md), '第3章未转标题');
+      break;
+    case 'case37':
+      expect(has('你居然不知道'), '问号叹号混排内容丢失');
+      expect(has('Really?'), '英文标点混排丢失');
+      break;
+    case 'case38':
+      expect(has('**Step 1**') || /Step 1/.test(md), '英文步骤丢失');
+      expect(has('Build once, verify twice.'), '步骤内容丢失');
+      break;
+    case 'case39':
+      expect(has('**步骤 一**') || has('**步骤一**') || has('步骤一'), '中文步骤丢失');
+      expect(has('控制在十五分钟内'), '阶段内容丢失');
+      break;
+    case 'case40':
+      expect((md.match(/blockquote|>/gm) || []).length >= 3 || (md.match(/提示|警告|注意|小贴士|重要/g) || []).length >= 5, 'callout 内容丢失');
+      expect(has('数据备份是唯一不可省略的步骤'), '重要 callout 丢失');
+      break;
+    case 'case41':
+      expect(has('正确做法') && has('错误做法'), '对比清单内容丢失');
+      expect(has('让问题在合并前暴露'), '结尾段落丢失');
+      break;
+    case 'case42':
+      expect(has('{"code": 0'), '单行 JSON 丢失');
+      expect(has('{"code": 401'), '失败 JSON 丢失');
+      break;
+    case 'case43':
+      expect(has('AT&amp;T'), 'HTML 实体丢失');
+      expect(has('&lt;script&gt;'), '尖括号实体丢失');
+      break;
+    case 'case44':
+      expect(has('a | b'), '行内代码管道符丢失');
+      expect(has('并不是表格'), '说明段落丢失');
+      break;
+    case 'case45':
+      expect(has('粘贴事故现场') || has('第一列'), '伪表格内容丢失');
+      expect(/table/.test(md) === false || (md.match(/^\|/gm) || []).length >= 4, '伪表格要么补齐要么保持文本');
+      break;
+    case 'case46':
+      expect(has('这是使用全角空格缩进的传统段落'), '全角缩进段落丢失');
+      expect(has('段落语义应当被保留'), '第二段丢失');
+      break;
+    case 'case47':
+      expect(has('第一条被保留') && has('第三条被保留') && has('第五条被保留'), '跳号内容丢失');
+      expect(has('1. ') && (has('3. ') || has('5. ')), '跳号未保持列表形态');
+      break;
+    case 'case48':
+      expect(has('新闻的底色是时间'), '引用行内容丢失');
+      expect(has('准确是速度的前提'), '末行引用丢失');
+      break;
+    case 'case49':
+      expect(has('导出能力') && has('长图模式') && has('富文本复制'), '深层嵌套内容丢失');
+      expect(has('16 套预设'), '二级主题内容丢失');
+      break;
+    case 'case50':
+      expect(has('《红楼梦》是清代小说的巅峰'), '书名号开头段落丢失');
+      expect(hasNot('### 《红楼梦》'), '书名号段落被误判为标题');
+      break;
+    case 'case51':
+      expect((md.match(/^# /gm) || []).length >= 3, '多 H1 未保持');
+      expect(has('跑一遍冒烟测试即视为成功'), '末节内容丢失');
+      break;
+    case 'case52':
+      expect(has('请勿直接在生产数据库执行迁移脚本'), '重要 callout 丢失');
+      expect(has('回滚脚本未经验证视为不存在'), '警告 callout 丢失');
+      break;
+    case 'case53':
+      expect(has('![步骤一图示]') && has('![步骤二图示]'), '步骤配图丢失');
+      expect(has('1. 拆开包装') || has('1. **拆开包装'), '编号一丢失');
+      expect(has('3. 按照屏幕引导') || has('3. **按照屏幕引导'), '编号三丢失');
+      break;
+    case 'case54':
+      expect(has('campaign_source_medium_term_content'), '长 URL 参数丢失');
+      expect(has('最常见的形态'), '说明段落丢失');
+      break;
+    case 'case55':
+      expect(has('*轻声地说*'), '斜体丢失');
+      expect(has('渲染层要能正确闭合'), '内容丢失');
+      break;
+    case 'case56':
+      expect(has('半角括号开头的行') && has('全角括号开头的行') && has('又切回半角'), '混用括号行内容丢失');
+      expect(hasNot('### (1)') && hasNot('#### （2）'), '混用括号行被误判为标题');
+      break;
+    case 'case57':
+      expect(/#{2,3} 一、/.test(md) && has('《微信公众平台开发规范》要点'), '书名号标题未生成');
+      break;
+    case 'case58':
+      expect(has('边界符号') && has('空引用行') && has('空列表行'), '边界说明内容丢失');
+      break;
+    case 'case59':
+      expect(has('第一项') && has('第二项') && has('第三项'), '跨空行编号内容丢失');
+      expect(has('1. ') && has('2. ') && has('3. '), '跨空行编号未保持列表');
+      break;
+    case 'case60':
+      expect(has('![压测配图]') && has('```bash') && has('边界输入零崩溃'), '压测综合内容丢失');
+      expect(has('- **1.1、**') || has('- **1.1**'), '压测嵌套列表丢失');
+      expect(hasNot('### 3.7') && hasNot('1. 7分'), '压测小数被误判');
+      break;
   }
 
   if (fails.length === 0) passCount++;

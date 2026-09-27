@@ -1,0 +1,5 @@
+问题复现环境
+
+https://example.com/very/long/path?query=abcdefg&session=1234567890&track=campaign_source_medium_term_content
+
+把链接直接贴成一行是转载文章里最常见的形态。

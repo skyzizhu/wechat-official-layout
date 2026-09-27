@@ -573,6 +573,11 @@ function emphasizeItemHeader(text: string): string {
     if (/(?:https?|ftp|file|ws|wss)$/i.test(title) || /^\/\//.test(rest)) {
       return text;
     }
+    // 标题段必须是"干净的"标题样文本（含中文/字母）：
+    // 纯数字引导段（时间 "09:00 签到"）或含符号噪声的段（JSON `{"code":`）不强调
+    if (!isTitleLikeHeader(title)) {
+      return text;
+    }
     return `**${title}**${punct}${rest}`;
   }
 
@@ -585,10 +590,21 @@ function emphasizeItemHeader(text: string): string {
     if (/(?:https?|ftp|file|ws|wss)$/i.test(title)) {
       return text;
     }
+    if (!isTitleLikeHeader(title)) {
+      return text;
+    }
     return `**${title}** — ${rest}`;
   }
 
   return text;
+}
+
+/** 条目标题引导段须为"干净"标题文本：中英文、数字、空格与常规括号，且至少含一个中文或字母 */
+function isTitleLikeHeader(title: string): boolean {
+  return (
+    /^[\u4e00-\u9fa5A-Za-z0-9][\u4e00-\u9fa5A-Za-z0-9\s（）()]*$/.test(title) &&
+    /[\u4e00-\u9fa5A-Za-z]/.test(title)
+  );
 }
 
 export interface ParserOptions {
@@ -1011,7 +1027,14 @@ export function convertPlainTextToMarkdown(
     let k = from;
     while (k >= 0 && k < arr.length) {
       const t = (arr[k] || '').trim();
-      if (t) return t;
+      if (t) {
+        // 独占整行的图片视为"附件"，对编号邻接判定透明：图片不应打断上下编号行的连续性
+        if (/^!\[[^\]]*\]\([^)]+\)$/.test(t)) {
+          k += step;
+          continue;
+        }
+        return t;
+      }
       k += step;
     }
     return '';
@@ -1403,6 +1426,17 @@ export function convertPlainTextToMarkdown(
     // 仅显式 Markdown 图片语法 ![alt](url) 与 <img> 标签才在预览中按图片渲染
 
     // 3.12 识别图片题注或图表标注：如 "▲ 图1：系统整体架构" 或 "▲ 阶段 1：草图" 或 "*▲ 图1：系统架构*"
+    // 邻接判定必须排除结构行：编号行/列表行/任务行跟在图片后是正文延续，不是题注
+    const structuralLine =
+      /^\d{1,4}(?:\s*[、,，.．:：]\s*|\s+)\S+/.test(trimmed) ||
+      /^[•·●○◆◇★■□▪▫▶▸➤👉🔹🔸📌✅⭐✦✧※-]\s*\S/.test(trimmed) ||
+      /^(?:\[[xX\s]\]|□|✓|✔|☑|✗|✘)\s*\S/.test(trimmed) ||
+      /^[（(]\d{1,3}[）)]/.test(trimmed) ||
+      /^\d{1,3}[)）]/.test(trimmed) ||
+      /^[A-Za-z][.、．]\s*\S/.test(trimmed) ||
+      /^[（(][一二三四五六七八九十百千万]+[）)]/.test(trimmed) ||
+      /^[一二三四五六七八九十百千万]+[、.．]/.test(trimmed) ||
+      /^#{1,6}\s/.test(trimmed);
     const explicitCaption =
       /^\*?(?:▲\s*|\[)?(?:图|表|Figure|阶段)\s*[\dA-Za-z\-]+/i.test(trimmed) ||
       /^\*?▲\s*.+$/i.test(trimmed) ||
@@ -1411,6 +1445,7 @@ export function convertPlainTextToMarkdown(
       lastNonEmptyWasImage &&
       trimmed.length > 0 &&
       trimmed.length < 120 &&
+      !structuralLine &&
       !/[。！？]$/.test(trimmed);
     const isCaptionPattern = explicitCaption || adjacencyCaption;
 

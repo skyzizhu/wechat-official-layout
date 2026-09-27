@@ -1,0 +1,7 @@
+接口返回示例
+
+成功时返回 {"code": 0, "msg": "ok", "data": null} 这样的结构。
+
+失败时 {"code": 401, "msg": "unauthorized"} 会触发重新登录。
+
+两种结构用 code 字段区分。

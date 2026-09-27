@@ -1,0 +1,13 @@
+Deployment Guide
+
+Step 1: Install dependencies
+
+Run the package manager with locked versions.
+
+Step 2: Configure environment
+
+Copy the example env file and fill in secrets.
+
+Step 3: Ship it
+
+Build once, verify twice.
