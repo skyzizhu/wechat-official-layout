@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useMemo, useEffect } from 'react';
+import { useState, useRef, useMemo, useEffect, useDeferredValue, useCallback, useSyncExternalStore } from 'react';
 import { Header } from '@/components/Header';
 import { Editor, ContentMode } from '@/components/Editor';
 import { Preview } from '@/components/Preview';
@@ -20,6 +20,20 @@ import { enhanceWithAi, loadAiSettings, saveAiSettings, AiSettings } from '@/lib
 import { AiSettingsModal } from '@/components/AiSettingsModal';
 import { convertLinksToFootnotes } from '@/lib/link-footnotes';
 import { PenLine, Eye } from 'lucide-react';
+
+/** 桌面端（lg 断点）判定：桌面与移动端各自只挂载所需的编辑器/预览，杜绝隐藏面板的重复渲染 */
+function useIsDesktop(): boolean {
+  const subscribe = useCallback((onChange: () => void) => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return useSyncExternalStore(
+    subscribe,
+    () => window.matchMedia('(min-width: 1024px)').matches,
+    () => false // 服务端渲染时按移动端兜底，水合后立即校正
+  );
+}
 
 export default function Home() {
   return (
@@ -52,6 +66,27 @@ function MainLayout() {
   const [aiApplying, setAiApplying] = useState(false);
 
   const previewRef = useRef<HTMLDivElement>(null);
+  const scrollSyncLastRef = useRef(0);
+  const isDesktop = useIsDesktop();
+
+  // 编辑器 → 预览 比例滚动同步（单向联动；时间戳节流 ~60fps，不依赖 rAF 以免后台标签页被节流后失效）
+  const handleEditorScroll = useCallback((ratio: number) => {
+    const now = performance.now();
+    if (now - scrollSyncLastRef.current < 16) return;
+    scrollSyncLastRef.current = now;
+    const container = previewRef.current?.parentElement;
+    if (!container) return;
+    const max = container.scrollHeight - container.clientHeight;
+    if (max > 0) container.scrollTop = ratio * max;
+  }, []);
+
+  // 移动端在编辑 Tab 下点复制/导出：先切到预览 Tab 等预览挂载，保证 previewRef 可用
+  const ensurePreviewMounted = useCallback(async () => {
+    if (!previewRef.current) {
+      setActiveTab('preview');
+      await new Promise<void>((resolve) => setTimeout(resolve, 80));
+    }
+  }, []);
 
   // 1. 初始化从浏览器 LocalStorage 恢复草稿与用户偏好
   useEffect(() => {
@@ -219,9 +254,13 @@ function MainLayout() {
     return applyFontSizeToTheme(coloredTheme, fontSize);
   }, [rawTheme, customColor, fontSize]);
 
+  // 输入即时响应：左侧编辑框直接跟随按键，全量智能解析与预览渲染降级为低优先级更新，
+  // 快速打字时 React 自动合并中间态，长文也不会阻塞输入
+  const deferredMarkdown = useDeferredValue(markdown);
+
   // 智能区分与预处理输入内容，并根据开关自动执行外链转文末脚注与首句标题识别
   const processed = useMemo(() => {
-    const rawResult = processContentByMode(markdown, mode, {
+    const rawResult = processContentByMode(deferredMarkdown, mode, {
       treatFirstLineAsTitle: firstLineAsTitle,
       suppressedDecisions: suppressedKeys,
     });
@@ -231,7 +270,7 @@ function MainLayout() {
       renderedMarkdown: withFootnotes.content,
       footnotes: withFootnotes.footnotes,
     };
-  }, [markdown, mode, linkFootnotes, firstLineAsTitle, suppressedKeys]);
+  }, [deferredMarkdown, mode, linkFootnotes, firstLineAsTitle, suppressedKeys]);
 
   // 第二阶段：低置信度识别决策的纠偏与反馈
   const lowConfidenceDecisions = (processed.decisions || []).filter(
@@ -389,28 +428,31 @@ function MainLayout() {
     <div className="flex flex-col h-screen bg-[#f6f7f9]">
       <Header />
 
-      {/* 桌面端：左右分栏布局 */}
+      {/* 桌面端：左右分栏布局（仅桌面挂载，移动端不渲染这份隐藏预览，省一半渲染开销） */}
       <main className="flex-1 flex overflow-hidden">
         {/* 左栏：编辑器 */}
-        <div className="hidden lg:flex w-[45%] border-r border-gray-200/70 flex-col">
-          <Editor
-            value={markdown}
-            onChange={setMarkdown}
-            mode={mode}
-            onModeChange={setMode}
-            onClear={handleClear}
-            onRestoreSample={handleRestoreSample}
-            draftStatus={draftStatus}
-            firstLineAsTitle={firstLineAsTitle}
-            onToggleFirstLineAsTitle={handleToggleFirstLineAsTitle}
-            lowConfidenceDecisions={lowConfidenceDecisions}
-            onResolveDecision={handleResolveDecision}
-            onKeepDecision={handleKeepDecision}
-            onResolveAllDecisions={handleResolveAllDecisions}
-            onKeepAllDecisions={handleKeepAllDecisions}
-            onExportFeedback={handleExportFeedback}
-          />
-        </div>
+        {isDesktop && (
+          <div className="hidden lg:flex w-[45%] border-r border-gray-200/70 flex-col">
+            <Editor
+              value={markdown}
+              onChange={setMarkdown}
+              mode={mode}
+              onModeChange={setMode}
+              onClear={handleClear}
+              onRestoreSample={handleRestoreSample}
+              draftStatus={draftStatus}
+              firstLineAsTitle={firstLineAsTitle}
+              onToggleFirstLineAsTitle={handleToggleFirstLineAsTitle}
+              lowConfidenceDecisions={lowConfidenceDecisions}
+              onResolveDecision={handleResolveDecision}
+              onKeepDecision={handleKeepDecision}
+              onResolveAllDecisions={handleResolveAllDecisions}
+              onKeepAllDecisions={handleKeepAllDecisions}
+              onExportFeedback={handleExportFeedback}
+              onScrollRatio={handleEditorScroll}
+            />
+          </div>
+        )}
 
         {/* 右栏：导出工具栏 + 实时排版预览 */}
         <div className="flex-1 flex flex-col min-w-0">
@@ -429,45 +471,51 @@ function MainLayout() {
             aiApplying={aiApplying}
             onAiEnhance={handleAiEnhance}
             onOpenAiSettings={() => setShowAiSettings(true)}
+            onPrepareExport={ensurePreviewMounted}
           />
 
-          {/* 移动端切换视图 */}
-          <div className="flex-1 flex flex-col overflow-hidden lg:hidden">
-            {activeTab === 'edit' ? (
-              <Editor
-                value={markdown}
-                onChange={setMarkdown}
-                mode={mode}
-                onModeChange={setMode}
-                onClear={handleClear}
-                onRestoreSample={handleRestoreSample}
-                draftStatus={draftStatus}
-                firstLineAsTitle={firstLineAsTitle}
-                onToggleFirstLineAsTitle={handleToggleFirstLineAsTitle}
-                lowConfidenceDecisions={lowConfidenceDecisions}
-                onResolveDecision={handleResolveDecision}
-                onKeepDecision={handleKeepDecision}
-                onExportFeedback={handleExportFeedback}
-                onResolveAllDecisions={handleResolveAllDecisions}
-                onKeepAllDecisions={handleKeepAllDecisions}
-              />
-            ) : (
+          {/* 移动端切换视图（仅移动端挂载；桌面端不再渲染这份隐藏预览） */}
+          {!isDesktop && (
+            <div className="flex-1 flex flex-col overflow-hidden lg:hidden">
+              {activeTab === 'edit' ? (
+                <Editor
+                  value={markdown}
+                  onChange={setMarkdown}
+                  mode={mode}
+                  onModeChange={setMode}
+                  onClear={handleClear}
+                  onRestoreSample={handleRestoreSample}
+                  draftStatus={draftStatus}
+                  firstLineAsTitle={firstLineAsTitle}
+                  onToggleFirstLineAsTitle={handleToggleFirstLineAsTitle}
+                  lowConfidenceDecisions={lowConfidenceDecisions}
+                  onResolveDecision={handleResolveDecision}
+                  onKeepDecision={handleKeepDecision}
+                  onExportFeedback={handleExportFeedback}
+                  onResolveAllDecisions={handleResolveAllDecisions}
+                  onKeepAllDecisions={handleKeepAllDecisions}
+                  onScrollRatio={handleEditorScroll}
+                />
+              ) : (
+                <Preview
+                  content={processed.renderedMarkdown}
+                  theme={theme}
+                  previewRef={previewRef}
+                />
+              )}
+            </div>
+          )}
+
+          {/* 桌面端始终显示预览（仅桌面挂载） */}
+          {isDesktop && (
+            <div className="hidden lg:flex flex-1 flex-col overflow-hidden">
               <Preview
                 content={processed.renderedMarkdown}
                 theme={theme}
                 previewRef={previewRef}
               />
-            )}
-          </div>
-
-          {/* 桌面端始终显示预览 */}
-          <div className="hidden lg:flex flex-1 flex-col overflow-hidden">
-            <Preview
-              content={processed.renderedMarkdown}
-              theme={theme}
-              previewRef={previewRef}
-            />
-          </div>
+            </div>
+          )}
         </div>
       </main>
 

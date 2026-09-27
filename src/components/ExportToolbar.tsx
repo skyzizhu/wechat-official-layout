@@ -22,6 +22,8 @@ interface ExportToolbarProps {
   aiApplying?: boolean;
   onAiEnhance?: () => void;
   onOpenAiSettings?: () => void;
+  /** 导出前的准备钩子：移动端编辑 Tab 下预览未挂载时，先切到预览 Tab 等待挂载完成 */
+  onPrepareExport?: () => Promise<void> | void;
 }
 
 export function ExportToolbar({
@@ -40,12 +42,14 @@ export function ExportToolbar({
   aiApplying,
   onAiEnhance,
   onOpenAiSettings,
+  onPrepareExport,
 } : ExportToolbarProps) {
   const { showToast } = useToast();
   const [exporting, setExporting] = useState(false);
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
 
   const handleCopyRichText = async () => {
+    if (onPrepareExport) await onPrepareExport();
     if (!previewRef.current) return;
     try {
       await copyRichText(previewRef.current, theme, currentColor);
@@ -56,6 +60,7 @@ export function ExportToolbar({
   };
 
   const handleExportImage = async () => {
+    if (onPrepareExport) await onPrepareExport();
     if (!previewRef.current) return;
     try {
       setExporting(true);

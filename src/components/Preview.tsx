@@ -10,7 +10,8 @@ interface PreviewProps {
   previewRef: React.RefObject<HTMLDivElement | null>;
 }
 
-export function Preview({ content, theme, previewRef }: PreviewProps) {
+// React.memo：content/theme 未变时跳过重渲染（配合 page 的 useDeferredValue，长文输入不再全量重排）
+export const Preview = React.memo(function Preview({ content, theme, previewRef }: PreviewProps) {
   return (
     <div className="flex-1 overflow-y-auto custom-scrollbar bg-[#eef0f3] p-4 sm:p-10 flex justify-center items-start">
       <div
@@ -25,4 +26,4 @@ export function Preview({ content, theme, previewRef }: PreviewProps) {
       </div>
     </div>
   );
-}
+});

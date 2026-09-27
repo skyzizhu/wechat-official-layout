@@ -36,6 +36,8 @@ interface EditorProps {
   onExportFeedback?: () => void;
   onResolveAllDecisions?: (ds: ConversionDecision[]) => void;
   onKeepAllDecisions?: (ds: ConversionDecision[]) => void;
+  /** 编辑器滚动比例（0~1）上报，用于联动右侧预览滚动 */
+  onScrollRatio?: (ratio: number) => void;
 }
 
 export function Editor({
@@ -54,6 +56,7 @@ export function Editor({
   onExportFeedback,
   onResolveAllDecisions,
   onKeepAllDecisions,
+  onScrollRatio,
 }: EditorProps) {
   const charCount = value.replace(/\s/g, '').length;
   const [showPresetMenu, setShowPresetMenu] = useState(false);
@@ -171,6 +174,14 @@ export function Editor({
       fileInputRef.current.value = '';
       fileInputRef.current.click();
     }
+  };
+
+  // 编辑器滚动 → 按比例联动右侧预览（单向同步，无回环）
+  const handleTextareaScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
+    if (!onScrollRatio) return;
+    const el = e.currentTarget;
+    const max = el.scrollHeight - el.clientHeight;
+    onScrollRatio(max > 0 ? el.scrollTop / max : 0);
   };
 
   // 本地文件选取完成
@@ -509,6 +520,7 @@ export function Editor({
         onChange={(e) => onChange(e.target.value)}
         onSelect={handleSelect}
         onPaste={handlePaste}
+        onScroll={handleTextareaScroll}
         placeholder="在这里输入或粘贴文章内容……纯文本即可，系统会自动识别结构并排版；也可以直接粘贴截图插入图片。"
         className="flex-1 w-full resize-none outline-none px-5 py-5 text-[15px] leading-[1.9] tracking-[0.01em] text-gray-800 bg-white"
         spellCheck={false}

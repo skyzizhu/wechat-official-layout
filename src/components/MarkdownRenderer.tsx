@@ -214,7 +214,11 @@ function rehypeLayoutEnhancer() {
   };
 }
 
-export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
+// React.memo：content/theme 未变时跳过整棵 Markdown 重渲染（如草稿提示等其他状态变化不再拖累预览）
+export const MarkdownRenderer = React.memo(function MarkdownRenderer({
+  content,
+  theme,
+}: MarkdownRendererProps) {
   const { elements, h2Decoration, markHighlight } = theme;
 
   // 题注统一色：跟随主题的弱化文字色（td 单元格色优先，正文色兜底），暗色主题自动呈浅色、亮色主题呈深灰
@@ -921,4 +925,4 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
       </ReactMarkdown>
     </div>
   );
-}
+});
