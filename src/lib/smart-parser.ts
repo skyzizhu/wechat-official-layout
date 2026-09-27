@@ -756,6 +756,72 @@ export function convertPlainTextToMarkdown(
       }
     }
 
+    // 2.1b 缩进代码块检测：没有围栏、但整块缩进的文本（手贴的 nginx / ini / 日志片段）
+    // 形态一：连续多行全部缩进 ≥4 空格（或 Tab）；
+    // 形态二：首行以 "{" 收尾（如 "server {"），后续行持续缩进 ≥4 空格。
+    {
+      const indentOf = (l: string) => {
+        let n = 0;
+        for (const ch of l.match(/^[ \t]*/)![0]) n += ch === '\t' ? 4 : 1;
+        return n;
+      };
+      // 去缩进后不应是结构性标记（列表/引用/标题/表格），否则可能是刻意的层级排版
+      const looksStructural = (l: string) => /^\s*(?:[-*+]\s|\d{1,3}[、.．)）]\s*|>\s*|#{1,6}\s|\|)/.test(l);
+
+      const selfIndented = trimmed.length > 0 && indentOf(line) >= 4 && !looksStructural(line);
+      const openerBrace = trimmed.length > 0 && indentOf(line) < 4 && /\{\s*$/.test(line);
+      if (selfIndented || openerBrace) {
+        const codeLines: string[] = [line];
+        let j = i + 1;
+        if (openerBrace) {
+          // 形态二：吞并紧随的缩进行；仅含闭括号的未缩进行（如 "}"）视为块结尾一并吞并
+          while (j < rawLines.length && rawLines[j].trim()) {
+            const l = rawLines[j];
+            if (indentOf(l) >= 4 || /^[}\])];?\s*$/.test(l.trim())) {
+              codeLines.push(l);
+              j++;
+              continue;
+            }
+            break;
+          }
+        } else {
+          // 形态一：连续缩进行（允许夹一个空行，空行后须继续缩进）
+          while (j < rawLines.length) {
+            const nextLine = rawLines[j];
+            if (!nextLine.trim()) {
+              if (j + 1 < rawLines.length && indentOf(rawLines[j + 1]) >= 4 && rawLines[j + 1].trim()) {
+                codeLines.push(nextLine);
+                j++;
+                continue;
+              }
+              break;
+            }
+            if (indentOf(nextLine) >= 4 && !looksStructural(nextLine)) {
+              codeLines.push(nextLine);
+              j++;
+              continue;
+            }
+            break;
+          }
+        }
+        const meaningful = codeLines.filter((l) => l.trim()).length;
+        const indentedCount = codeLines.filter((l) => indentOf(l) >= 4).length;
+        if (meaningful >= 2 && indentedCount >= 2) {
+          const dedented = codeLines
+            .map((l) => (/^\s*$/.test(l) ? '' : l.replace(/^(?: {1,4}|\t)/, '')))
+            .join('\n');
+          const lang = inferCodeLanguage(dedented) || '';
+          blockProcessedLines.push('');
+          blockProcessedLines.push('```' + lang);
+          blockProcessedLines.push(dedented);
+          blockProcessedLines.push('```');
+          blockProcessedLines.push('');
+          i = j;
+          continue;
+        }
+      }
+    }
+
     // 2.2 检查是否是表格行（包含半角 | 或全角 ｜ 管道符）
     const hasPipe = (trimmed.includes('|') || trimmed.includes('｜')) && trimmed.length >= 3;
     if (hasPipe) {

@@ -225,6 +225,7 @@ for (const file of cases) {
       expect(/1\.\s?(\*\*)?发票怎么开|1\. 发票/.test(md), '常见问题列表未生成');
       break;
     case 'case30':
+      expect((md.match(/```/g) || []).length >= 4, '两段缩进配置未包装为代码块');
       expect(has('listen 80'), '缩进配置内容丢失');
       expect(has('proxy_pass'), '嵌套缩进内容丢失');
       expect(has('不规则空行是粘贴最常见的痕迹'), '说明段落丢失');
