@@ -42,3 +42,4 @@ next-env.d.ts
 
 # 黄金测试的临时编译产物
 tests/.parser-build/
+tests/.editor-build/
