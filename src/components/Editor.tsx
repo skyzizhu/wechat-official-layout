@@ -146,6 +146,24 @@ function parseEditorBlocks(value: string): EditorBlock[] {
     }
   }
   flush();
+  // 收敛存量泄漏：文本块中与任一图片块题注相同的孤立斜体行自动删除（历史 bug 遗留损坏自愈）。
+  // 必须在最后一次 flush() 之后执行，否则尾部的文本块还在 buf 里未入 blocks
+  const knownCaps = new Set(
+    blocks.flatMap((b) => (b.kind === 'images' ? b.captions.map((c) => c.trim()).filter(Boolean) : []))
+  );
+  if (knownCaps.size > 0) {
+    for (const b of blocks) {
+      if (b.kind !== 'text') continue;
+      b.lines = b.lines.filter((l) => {
+        const t = l.trim();
+        if (!CAPTION_LINE_RE.test(t)) return true;
+        const content = t.replace(/^\*/, '').replace(/\*$/, '').replace(/^▲\s*/, '').trim();
+        return !knownCaps.has(content);
+      });
+      while (b.lines.length && !b.lines[0].trim()) b.lines.shift();
+      while (b.lines.length && !b.lines[b.lines.length - 1].trim()) b.lines.pop();
+    }
+  }
   return blocks;
 }
 
