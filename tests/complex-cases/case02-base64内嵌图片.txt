@@ -1,0 +1,17 @@
+颜色测试报告
+
+一、纯色采样
+
+我们在三种光照条件下对同一块色卡进行了采样，结论如下：
+
+![正红色采样](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==)
+
+![青色采样](data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==)
+
+二、采样要点
+
+1、色值稳定度：三次测量偏差小于百分之二。
+2、环境光干扰：黄昏样本偏暖。
+3、设备差异：不同屏幕呈现差异明显。
+
+以上是全部采样数据。

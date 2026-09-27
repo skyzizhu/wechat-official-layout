@@ -1,0 +1,36 @@
+工程实践手记
+
+一、类型定义
+
+项目里的核心类型这样声明：
+
+```typescript
+interface ArticleTheme {
+  readonly id: string;
+  readonly name: string;
+  readonly accentColor: string;
+}
+// 主题注册表：按 id 索引
+const registry: Record<string, ArticleTheme> = {};
+```
+
+二、配置与查询
+
+配置文件使用 JSON：
+
+```json
+{
+  "engine": "turbopack",
+  "wechatSpecCompliant": true
+}
+```
+
+统计脚本用 SQL：
+
+```sql
+SELECT theme_name, COUNT(*) AS total
+FROM articles
+GROUP BY theme_name;
+```
+
+行内代码也很常用，比如 `npm run build` 这样的命令。

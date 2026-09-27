@@ -1,0 +1,20 @@
+春天的最后一场雨
+
+一、城市里的避雨角落
+
+老城区的屋檐总是比新城区的更宽一些，这是观察了很多年的结论。路过便利店的玻璃门时，雨水正顺着招牌的边缘连成一条线。
+
+![雨中的街角书店](/images/sample/sample-1.jpg)
+
+*▲ 图 1：躲进书店的午后，时间会慢下来*
+
+二、一张照片的重量
+
+<section data-role="photo-card" style="margin: 20px auto; max-width: 100%; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 8px 10px 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); text-align: center;">
+<img src="/images/sample/sample-2.jpg" alt="窗台上的绿植" style="width: 100%; border-radius: 6px; display: block; margin: 0 auto;" />
+<p style="margin: 8px 0 0 0; font-size: 13px; text-align: center;">▲ 图 2：拍立得衬底卡片，暗黑模式下自带留白护城河</p>
+</section>
+
+三、雨停之后
+
+积水里的倒影最诚实，楼房、行人、电线杆都被翻转了一遍。城市的疲惫被冲刷掉一层，剩下的部分值得被认真看一看。

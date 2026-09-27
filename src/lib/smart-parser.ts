@@ -933,6 +933,9 @@ export function convertPlainTextToMarkdown(
   const arabicNumberedRe = /^\d{1,3}(?:\s*[、,，)）:：]\s*|\s|\s*\.\s*(?!\d))\s*\S+/;
   // 多级编号邻行（1.1 xxx / 1.1、xxx）须带显式分隔符，同样排除 "1.5倍增长" 这类小数开头正文
   const multiLevelNumberedRe = /^\d+(?:\.\d+)+(?:\s*[、,，.．:：)）]|\s)\s*\S/;
+
+  // 句子特征：过长或以句末标点收束的行更像正文段落，不应被编号规则转成小节标题
+  const looksLikeSentence = (t: string) => t.length > 40 || /[。！？]/.test(t);
   const nearestNonEmptyLine = (arr: string[], from: number, step: number): string => {
     let k = from;
     while (k >= 0 && k < arr.length) {
@@ -975,9 +978,9 @@ export function convertPlainTextToMarkdown(
       const nextNearest = nearestNonEmptyLine(blockProcessedLines, entry.index + 1, 1);
       const isDense =
         arabicNumberedRe.test(prevNearest) ||
-        multiLevelNumberedRe.test(prevNearest) ||
+        (multiLevelNumberedRe.test(prevNearest) && !looksLikeSentence(prevNearest)) ||
         arabicNumberedRe.test(nextNearest) ||
-        multiLevelNumberedRe.test(nextNearest);
+        (multiLevelNumberedRe.test(nextNearest) && !looksLikeSentence(nextNearest));
       if (!isDense) {
         arabicSectionIndexes.add(entry.index);
         arabicSectionLevelMap.set(entry.index, arabicSectionLevel);
@@ -986,23 +989,25 @@ export function convertPlainTextToMarkdown(
   }
 
   // 编号邻接判定（按家族）：只有同一编号体系（或其父子体系）的行相邻才算「成组」，
-  // 避免 （3）数字族 与 （一）中文族 互相误触发列表形态
-  const numberedNeighborPatterns: Record<string, RegExp[]> = {
-    // 阿拉伯家族：单级（1、）与多级（1.1）互为父子；多级邻行须带分隔符（避免 "1.5倍增长" 这类小数开头正文误判为编号行）
+  // 避免 （3）数字族 与 （一）中文族 互相误触发列表形态。
+  // 多级编号邻行须带显式分隔符，且像正文句子的小数开头段落（"3.5 亿元的资金投入……"）不算编号行，
+  // 否则会把下方 "2026 年度计划……" 这类普通段落拉进编号路径
+  const numberedNeighborPatterns: Record<string, Array<{ test: (t: string) => boolean }>> = {
+    // 阿拉伯家族：单级（1、）与多级（1.1）互为父子
     arabic: [
-      arabicNumberedRe,
-      multiLevelNumberedRe,
+      { test: (t) => arabicNumberedRe.test(t) },
+      { test: (t) => multiLevelNumberedRe.test(t) && !looksLikeSentence(t) },
     ],
     // 阿拉伯括号家族：（1）/ 1) 与单级阿拉伯混排常见
     digitParen: [
-      arabicNumberedRe,
-      /^[（(]\d{1,3}[）)]/,
-      /^\d{1,3}[)）]\s*\S/,
+      { test: (t) => arabicNumberedRe.test(t) },
+      { test: (t) => /^[（(]\d{1,3}[）)]/.test(t) },
+      { test: (t) => /^\d{1,3}[)）]\s*\S/.test(t) },
     ],
     // 中文家族：一、与（一）互为父子
     cnParen: [
-      cnSectionLineRe,
-      /^[（(][一二三四五六七八九十百千万]+[）)]/,
+      { test: (t) => cnSectionLineRe.test(t) },
+      { test: (t) => /^[（(][一二三四五六七八九十百千万]+[）)]/.test(t) },
     ],
   };
   const isDenseNumberedLine = (lineIdx: number, family: keyof typeof numberedNeighborPatterns) => {
@@ -1014,8 +1019,7 @@ export function convertPlainTextToMarkdown(
     );
   };
 
-  // 句子特征：过长或以句末标点收束的行更像正文段落，不应被编号规则转成小节标题
-  const looksLikeSentence = (t: string) => t.length > 40 || /[。！？]/.test(t);
+  // 句子特征：过长或以句末标点收束的行更像正文段落（定义见上方编号邻接判定之前）
 
   for (let idx = 0; idx < blockProcessedLines.length; idx++) {
     const rawLine = blockProcessedLines[idx];
@@ -1451,6 +1455,12 @@ export function convertPlainTextToMarkdown(
         processedLines.push(trimmed);
         continue;
       }
+      // 空格分隔 + 句子特征（如 "2026 年度计划里，我们设置了三个里程碑。"）→ 普通段落：
+      // 既不当小节标题，也不当列表项（列表化会渲染出 "2026." 的错误编号）
+      if ((sepChar === ' ' || sepChar === '　') && looksLikeSentence(trimmed)) {
+        processedLines.push(trimmed);
+        continue;
+      }
       // 多级编号保护："1.1 架构设计"、"3.14.5" 等由上方 H3/H4/H5 规则处理
       const isMultiLevelNumbering = /^\d+(?:\.\d+)+/.test(trimmed);
       // 参考文献条目（含 URL）不走标题转换，保持编号列表形态
@@ -1696,15 +1706,22 @@ export function processContentByMode(
   // 将文档中未格式化的各级章节、表格、清单、提示、列表与段落全面升级为语义化结构！
   // 仅当用户显式选择 'markdown' 模式时才直通跳过。
   if (mode === 'plain-text' || mode === 'auto') {
-    baseMd = convertPlainTextToMarkdown(
-      sanitizedContent,
-      {
-        ...options,
-        treatFirstLineAsTitle: treatAsTitle,
-      },
-      decisions
-    );
-    isTransformed = baseMd !== content;
+    // 高置信 Markdown 源码直通：已成体系的标准 Markdown 无需再跑整套智能识别，
+    // 省一次全篇解析（性能），也让 isTransformed 语义保持准确
+    if (mode === 'auto' && detected.isMarkdown) {
+      baseMd = sanitizedContent;
+      isTransformed = false;
+    } else {
+      baseMd = convertPlainTextToMarkdown(
+        sanitizedContent,
+        {
+          ...options,
+          treatFirstLineAsTitle: treatAsTitle,
+        },
+        decisions
+      );
+      isTransformed = baseMd !== content;
+    }
   } else {
     baseMd = sanitizedContent;
     isTransformed = false;

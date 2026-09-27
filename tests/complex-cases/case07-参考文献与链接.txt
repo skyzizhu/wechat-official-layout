@@ -1,0 +1,16 @@
+深度阅读指南
+
+一、理论基础
+
+认知负荷理论提醒我们：工作记忆的容量极其有限，呈现信息的方式决定了理解的成本。参考如下研究：
+
+二、参考文献
+
+[1] 认知负荷理论及其教学应用: https://example.com/cognitive-load
+[2] Sweller, J. Cognitive Load During Problem Solving: https://example.com/sweller
+1. 写作工具的架构设计: https://example.com/writing-tools
+2) 排版引擎性能优化实践: https://example.com/perf
+
+三、延伸阅读
+
+官方文档在 https://example.com/docs 可以找到，社区整理的笔记也很值得一读。

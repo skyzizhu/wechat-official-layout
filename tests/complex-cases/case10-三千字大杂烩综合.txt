@@ -1,0 +1,66 @@
+内容排版工具深度评测
+
+导读：本评测横跨图文混排、结构识别、代码呈现与性能表现四大维度，数据均为实测。
+
+一、评测方法
+
+我们准备了十个典型场景，覆盖微信公众号作者日常写作的绝大多数情况。评测设备为一台普通的办公笔记本，浏览器为最新版 Chrome。
+
+1、纯文本识别
+1.1、中文序号体系
+1.2、阿拉伯数字体系
+1.2.1、多级嵌套场景
+2、富文本还原
+
+二、图文混排能力
+
+排版工具的第一要务是让图片恰当地融入文章。测试样张如下：
+
+![样张：城市黄昏](/images/sample/sample-3.jpg)
+
+*▲ 图 1：黄昏时分的城市天际线*
+
+<section data-role="photo-card" style="margin: 20px auto; max-width: 100%; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 8px 10px 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); text-align: center;">
+<img src="/images/sample/sample-4.jpg" alt="工作台一角" style="width: 100%; border-radius: 6px; display: block; margin: 0 auto;" />
+<p style="margin: 8px 0 0 0; font-size: 13px; text-align: center;">▲ 图 2：工作台卡片的留白处理</p>
+</section>
+
+三、数据对比
+
+| 能力维度 | 工具甲 | 工具乙 | 本工具 |
+| :--- | :---: | :---: | ---: |
+| **结构识别** | 60分 | 72分 | 95分 |
+| 主题数量 | 3套 | 8套 | 16套 |
+| 复制保真 | 一般 | 良好 | 优秀 |
+| 上手成本 | 中 | 低 | 极低 |
+
+表格之外，我们还统计了每个工具的崩溃次数：本工具为零。
+
+四、开发者视角
+
+核心配置结构如下：
+
+```json
+{
+  "theme": "wechat",
+  "footnotes": true,
+  "smartParse": true
+}
+```
+
+问答环节：
+
+问：为什么不做账户体系？
+
+答：工具的价值在于即时可用，登录墙只会劝走读者。
+
+极简，是这种工具最高级的形态。
+
+五、总结
+
+综合来看，2026 年度的这轮评测说明：纯文本输入加智能识别的路线是对的。3.6 分的内部评分看似平平，但在十项子维度里它拿到了七项第一。
+
+六、参考文献
+
+[1] 中文移动端排版规范: https://example.com/spec
+[2] 富文本序列化最佳实践: https://example.com/richtext
