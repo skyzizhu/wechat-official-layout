@@ -128,6 +128,7 @@ function parseEditorBlocks(value: string): EditorBlock[] {
         if (mm) images.push({ alt: mm[1], src: mm[2] });
         j++;
       }
+      let capFound = false;
       if (j < lines.length && CAPTION_LINE_RE.test(lines[j].trim())) {
         captions[images.length - 1] = lines[j]
           .trim()
@@ -135,12 +136,13 @@ function parseEditorBlocks(value: string): EditorBlock[] {
           .replace(/\*$/, '')
           .replace(/^▲\s*/, '')
           .trim();
-        i = j;
+        capFound = true;
       }
       for (let k = 0; k < images.length; k++) captions[k] = captions[k] || '';
       layout = Math.min(3, Math.max(1, images.length)) as 1 | 2 | 3;
       blocks.push({ kind: 'images', images, captions, layout });
-      i = j - 1;
+      // 题注行已并入图片块时跳过它；否则回退到最后一张相邻图片行
+      i = capFound ? j : j - 1;
     }
   }
   flush();
@@ -165,7 +167,8 @@ function serializeEditorBlocks(blocks: EditorBlock[]): string {
       const n = b.layout;
       for (let r = 0; r < b.images.length; r += n) {
         const imgs = b.images.slice(r, r + n);
-        rows.push('| ' + imgs.map((img) => `![${img.alt}](${img.src})`).join(' | ') + ' |');
+        while (imgs.length < n) imgs.push({ alt: '', src: '' }); // 补空位保证往返稳定
+        rows.push('| ' + imgs.map((img) => (img.src ? `![${img.alt}](${img.src})` : '')).join(' | ') + ' |');
         rows.push('| ' + imgs.map(() => ':---:').join(' | ') + ' |');
         rows.push('| ' + imgs.map((_, k) => (b.captions[r + k] ? `*▲ ${b.captions[r + k]}*` : '')).join(' | ') + ' |');
       }
