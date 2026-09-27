@@ -32,7 +32,7 @@ function measureTokenLineWidth(text: string): number {
   if (!ctx) return 220;
   ctx.font = '15px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif';
   const w = ctx.measureText(text).width;
-  return Math.ceil(w + text.length * 0.15 + 10);
+  return Math.ceil(w + text.length * 0.15);
 }
 
 interface EditorProps {
@@ -79,11 +79,19 @@ export function Editor({
   const charCount = value.replace(/\s/g, '').length;
   // 行内图片预览：解析正文中的独占图片行（![alt](img:xxx) 或内联 base64），原位显示缩略图
   const imageLines = useMemo(() => {
-    const out: Array<{ line: number; alt: string; src: string; w: number }> = [];
+    const out: Array<{ line: number; alt: string; src: string; w: number; left: number }> = [];
+    const re = /!\[([^\]]*)\]\((img:[a-z0-9-]+|data:image\/[^;]+;base64,[^)\s]+)\)/g;
     value.split('\n').forEach((l, i) => {
-      const m = l.trim().match(/^!\[([^\]]*)\]\((img:[a-z0-9-]+|data:image\/[^;]+;base64,[^)\s]+)\)$/);
-      if (m) {
-        out.push({ line: i, alt: m[1] || '配图', src: m[2].startsWith('img:') ? resolveImageSrc(m[2]) : m[2], w: measureTokenLineWidth(l) });
+      let m: RegExpExecArray | null;
+      re.lastIndex = 0;
+      while ((m = re.exec(l))) {
+        out.push({
+          line: i,
+          alt: m[1] || '配图',
+          src: m[2].startsWith('img:') ? resolveImageSrc(m[2]) : m[2],
+          w: measureTokenLineWidth(m[0]) + 14,
+          left: measureTokenLineWidth(l.slice(0, m.index)),
+        });
       }
     });
     return out;
@@ -827,13 +835,13 @@ export function Editor({
 
       {/* 行内图片预览层：图片行原位显示缩略图，其余内容保持源码形态 */}
       <div ref={overlayRef} className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
-        {imageLines.map(({ line, alt, src: imgSrc, w }) => (
+        {imageLines.map(({ line, alt, src: imgSrc, w, left: leftOffset }) => (
           <div
             key={line + '-' + alt}
             style={{
               position: 'absolute',
               top: editorMetrics.paddingTop + line * editorMetrics.lineHeight,
-              left: editorMetrics.paddingLeft,
+              left: editorMetrics.paddingLeft + leftOffset,
               width: Math.min(Math.max(w, 90), 720),
             }}
             className="pointer-events-auto overflow-hidden"
