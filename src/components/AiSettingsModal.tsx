@@ -17,7 +17,7 @@ export function AiSettingsModal({ isOpen, settings, onClose, onSave }: AiSetting
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={onClose}>
       <div
         className="bg-white rounded-xl shadow-2xl w-[92%] max-w-lg"
         onClick={(e) => e.stopPropagation()}

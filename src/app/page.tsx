@@ -225,6 +225,16 @@ function MainLayout() {
     showToast(toastMsg);
   };
 
+  // ⌘S 手动保存草稿（平时 500ms 自动防抖已覆盖，这里提供即时保存反馈）
+  const handleSaveDraftNow = () => {
+    try {
+      localStorage.setItem('radiant_article_draft', markdown);
+      localStorage.setItem('radiant_theme_id', themeId);
+      setDraftStatus('已手动保存草稿');
+      showToast('💾 草稿已保存');
+    } catch {}
+  };
+
   // 5. 字号微调切换
   const handleFontSizeChange = (size: FontSizeOption) => {
     setFontSize(size);
@@ -450,6 +460,7 @@ function MainLayout() {
               onKeepAllDecisions={handleKeepAllDecisions}
               onExportFeedback={handleExportFeedback}
               onScrollRatio={handleEditorScroll}
+              onSaveDraft={handleSaveDraftNow}
             />
           </div>
         )}
@@ -495,6 +506,7 @@ function MainLayout() {
                   onResolveAllDecisions={handleResolveAllDecisions}
                   onKeepAllDecisions={handleKeepAllDecisions}
                   onScrollRatio={handleEditorScroll}
+                  onSaveDraft={handleSaveDraftNow}
                 />
               ) : (
                 <Preview

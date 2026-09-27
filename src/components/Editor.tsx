@@ -39,6 +39,8 @@ interface EditorProps {
   onKeepAllDecisions?: (ds: ConversionDecision[]) => void;
   /** 编辑器滚动比例（0~1）上报，用于联动右侧预览滚动 */
   onScrollRatio?: (ratio: number) => void;
+  /** ⌘S 手动保存草稿 */
+  onSaveDraft?: () => void;
 }
 
 export function Editor({
@@ -58,6 +60,7 @@ export function Editor({
   onResolveAllDecisions,
   onKeepAllDecisions,
   onScrollRatio,
+  onSaveDraft,
 }: EditorProps) {
   const charCount = value.replace(/\s/g, '').length;
   const [showPresetMenu, setShowPresetMenu] = useState(false);
@@ -183,6 +186,74 @@ export function Editor({
     const el = e.currentTarget;
     const max = el.scrollHeight - el.clientHeight;
     onScrollRatio(max > 0 ? el.scrollTop / max : 0);
+  };
+
+  // 快捷键：选区包裹（加粗 / 斜体），支持再按一次取消
+  const wrapSelection = (mark: string) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const selected = value.slice(start, end);
+    let next: string;
+    let cursor: number;
+    if (selected.startsWith(mark) && selected.endsWith(mark) && selected.length >= mark.length * 2) {
+      const inner = selected.slice(mark.length, selected.length - mark.length);
+      next = value.slice(0, start) + inner + value.slice(end);
+      cursor = start + inner.length;
+    } else if (!selected) {
+      next = value.slice(0, start) + mark + mark + value.slice(end);
+      cursor = start + mark.length;
+    } else {
+      next = value.slice(0, start) + mark + selected + mark + value.slice(end);
+      cursor = start + selected.length + mark.length * 2;
+    }
+    onChange(next);
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(cursor, cursor);
+    });
+  };
+
+  // 快捷键：选中行转标题（⌘1/⌘2/⌘3 → #/##/###，覆盖选区所在的所有行）
+  const applyHeadingLevel = (level: number) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const lineStart = value.lastIndexOf('\n', start - 1) + 1;
+    const restIdx = value.indexOf('\n', end);
+    const lineEnd = restIdx === -1 ? value.length : restIdx;
+    const block = value.slice(lineStart, lineEnd);
+    const prefix = '#'.repeat(level) + ' ';
+    const newBlock = block
+      .split('\n')
+      .map((l) => prefix + l.replace(/^#{1,6}\s*/, ''))
+      .join('\n');
+    onChange(value.slice(0, lineStart) + newBlock + value.slice(lineEnd));
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(lineStart, lineStart + newBlock.length);
+    });
+  };
+
+  // 快捷键总入口：⌘B 加粗 / ⌘I 斜体 / ⌘1~3 标题 / ⌘S 保存草稿
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    const k = e.key.toLowerCase();
+    if (k === 'b') {
+      e.preventDefault();
+      wrapSelection('**');
+    } else if (k === 'i') {
+      e.preventDefault();
+      wrapSelection('*');
+    } else if (k === 's') {
+      e.preventDefault();
+      onSaveDraft?.();
+    } else if (k === '1' || k === '2' || k === '3') {
+      e.preventDefault();
+      applyHeadingLevel(Number(k));
+    }
   };
 
   // 本地文件选取完成
@@ -605,6 +676,7 @@ export function Editor({
 
       {/* 智能检测状态提示浮条 */}
       <div className="px-4 py-1.5 bg-blue-50/40 border-b border-blue-100/70 flex items-center justify-between text-xs text-gray-600 flex-shrink-0">
+        <span className="hidden xl:inline text-[11px] text-gray-400 whitespace-nowrap overflow-hidden text-ellipsis flex-shrink min-w-0" title="选中文字后可使用快捷键与悬浮工具栏">选中文字可转格式 · ⌘B 加粗 · ⌘1/2/3 标题 · ⌘S 保存</span>
         <div className="flex items-center gap-1.5">
           {detection.isMarkdown ? (
             <span className="inline-flex items-center gap-1 font-medium text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full text-[11px]">
@@ -674,10 +746,26 @@ export function Editor({
         onSelect={handleSelect}
         onPaste={handlePaste}
         onScroll={handleTextareaScroll}
+        onKeyDown={handleKeyDown}
         placeholder="在这里输入或粘贴文章内容……纯文本即可，系统会自动识别结构并排版；也可以直接粘贴截图插入图片。"
         className="flex-1 w-full resize-none outline-none px-5 py-5 text-[15px] leading-[1.9] tracking-[0.01em] text-gray-800 bg-white"
         spellCheck={false}
       />
+
+      {/* 空状态引导：无内容时给出起点 */}
+      {!value.trim() && (
+        <div className="absolute inset-x-0 top-28 bottom-10 flex flex-col items-center justify-center gap-1.5 text-center pointer-events-none select-none">
+          <div className="text-4xl mb-1">📝</div>
+          <p className="text-sm text-gray-400">粘贴你的文稿开始排版，或直接拖入 / 截图粘贴图片</p>
+          <p className="text-xs text-gray-300">⌘B 加粗 · ⌘I 斜体 · ⌘1/2/3 标题 · 选中文字可快速转格式</p>
+          <button
+            onClick={() => onRestoreSample('all-round-plain-text')}
+            className="mt-2 pointer-events-auto px-3.5 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
+          >
+            载入范文试一试
+          </button>
+        </div>
+      )}
 
       {isDragging && (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-blue-50/80 text-blue-600 text-sm font-medium pointer-events-none">

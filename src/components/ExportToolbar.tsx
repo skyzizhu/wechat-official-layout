@@ -107,7 +107,7 @@ export function ExportToolbar({
 
           {/* 字号大小微调器 (14 / 15 / 16) */}
           <div className="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200 text-xs flex-shrink-0">
-            <span className="hidden 2xl:inline text-gray-400 px-1 text-[11px] font-medium">字号:</span>
+            <span className="text-gray-400 px-1 text-[11px] font-semibold" title="正文字号">A</span>
             {(['14', '15', '16'] as const).map((size) => (
               <button
                 key={size}
@@ -169,13 +169,13 @@ export function ExportToolbar({
           )}
         </div>
 
-        {/* 右侧：导出操作 */}
+        {/* 右侧：导出操作（复制为主操作，置于最前；AI 与导出为次级） */}
         <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           <button
             onClick={onAiEnhance}
             disabled={aiApplying}
             title="AI 增强识别：将纯文本交给 AI 按排版约定直接转换为 Markdown"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-500 hover:from-violet-700 hover:to-fuchsia-600 text-sm text-white font-medium transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg border border-violet-200 bg-violet-50 hover:bg-violet-100 text-sm text-violet-700 font-medium transition-colors cursor-pointer disabled:opacity-50"
           >
             {aiApplying ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -191,12 +191,13 @@ export function ExportToolbar({
           >
             <Settings2 className="w-4 h-4" />
           </button>
+          <div className="w-px h-6 bg-gray-200 mx-0.5" aria-hidden />
           <button
             onClick={handleCopyRichText}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-sm text-gray-700 font-medium transition-colors border border-gray-200 cursor-pointer shadow-2xs"
+            className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-sm text-white font-semibold transition-colors cursor-pointer shadow-sm"
             title="复制带完整内联样式的富文本，支持原封不动粘贴到微信公众号后台"
           >
-            <Copy className="w-4 h-4 text-gray-600" />
+            <Copy className="w-4 h-4" />
             <span className="hidden sm:inline">复制富文本</span>
             <span className="sm:hidden">复制</span>
           </button>
@@ -204,11 +205,12 @@ export function ExportToolbar({
           <button
             onClick={handleExportImage}
             disabled={exporting}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-sm text-white font-medium transition-colors cursor-pointer shadow-xs disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-sm text-gray-700 font-medium transition-colors border border-gray-200 cursor-pointer shadow-2xs disabled:opacity-50"
             title="导出整篇排版长图为 2x 高清 PNG"
           >
-            <ImageDown className="w-4 h-4" />
-            <span>{exporting ? '导出中...' : '导出长图'}</span>
+            <ImageDown className="w-4 h-4 text-gray-600" />
+            <span className="hidden md:inline">{exporting ? '导出中...' : '导出长图'}</span>
+            <span className="md:hidden">长图</span>
           </button>
         </div>
       </div>
