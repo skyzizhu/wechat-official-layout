@@ -461,18 +461,22 @@ export function addPanguSpacing(text: string): string {
 function isStillCodeReHelper(line: string): boolean {
   const t = line.trim();
   return (
-    /^(?:const|let|var|function|import|export|class|interface|type|enum|def|return|if|else|for|while|switch|case|try|catch|finally|console|print|readonly)\b/.test(t) ||
+    /^(?:const|let|var|function|import|export|class|interface|type|enum|def|return|if|else|for|while|switch|case|try|catch|finally|console|print|readonly|echo)\b/.test(t) ||
+    /^(?:int|float|double|char|bool|boolean|long|short|byte|string|String|val|uint|int32|int64|usize|f32|f64)\s/.test(t) ||
     /^[}\]\);,]/.test(t) ||
     /["'][\w\-]+["']\s*:\s*/.test(t) ||
     /^[a-zA-Z_$][\w$]*\s*:\s*/.test(t) ||
     /^[a-zA-Z_$][\w$]*,\s*$/.test(t) ||
     /^\s*(?:\/\*\*?|\*(?:\s|$)|\*\/)/.test(t) ||
     /^\/\/[^\/]/.test(t) ||
+    /^--\s/.test(t) ||
+    /^#[^#\s]/.test(t) ||
     /^(?:\$|npm|pnpm|yarn|git|docker|curl|pip)\s+/.test(t) ||
     /^(?:SELECT|INSERT|UPDATE|DELETE|CREATE\s+TABLE)\s+/i.test(t) ||
     /^(?:FROM|WHERE|GROUP\s+BY|ORDER\s+BY|LIMIT|JOIN|HAVING)\b/i.test(t) ||
     /^[a-zA-Z0-9_$.]+\(.*\)[;]?$/.test(t) ||
-    /^\s{2,}\S+/.test(line)
+    /^\s{2,}\S+/.test(line) ||
+    /^[a-zA-Z_$][\w$]*\s*(?::=|=)[^=。！？]*$/.test(t)
   );
 }
 
@@ -729,7 +733,8 @@ export function convertPlainTextToMarkdown(
 
     // 2.1 检查是否是纯文本代码块（如连续几行包含代码特征或 JSON 结构）
     const isCodeStart =
-      /^(?:const|let|var|function|import|export|class|def|public|private|protected|static|void|async|interface|type|enum|readonly)\s/.test(trimmed) ||
+      /^(?:const|let|var|function|import|export|class|def|public|private|protected|static|void|async|interface|type|enum|readonly|echo)\s/.test(trimmed) ||
+      /^(?:int|float|double|char|bool|boolean|long|short|byte|string|String|val|uint|int32|int64|usize|f32|f64)\s/.test(trimmed) ||
       /^type\s+[A-Za-z_$][\w$]*\s*[={]/.test(trimmed) ||
       /^\/\*\*/.test(trimmed) ||
       /^(?:if|for|while|switch|try)\s*[\(\{]/.test(trimmed) ||
@@ -737,7 +742,10 @@ export function convertPlainTextToMarkdown(
       /^\/\/\s*\S/.test(trimmed) ||
       /^(?:\{\s*$|\[\s*$)/.test(trimmed) ||
       /^(?:\$|npm|pnpm|yarn|git|docker|curl|pip)\s+/.test(trimmed) ||
-      /^(?:SELECT|INSERT|UPDATE|DELETE|CREATE\s+TABLE)\s+/i.test(trimmed);
+      /^(?:SELECT|INSERT|UPDATE|DELETE|CREATE\s+TABLE)\s+/i.test(trimmed) ||
+      // 裸赋值（Python x = 1 / Go a := 1 / PHP $a = 1; / Kotlin val 已由上方覆盖）；
+      // 值部分含中文句末标点的行更像正文，排除
+      /^[a-zA-Z_$][\w$]*\s*(?::=|=)[^=。！？]*$/.test(trimmed);
 
     if (isCodeStart) {
       const codeLines: string[] = [line];
@@ -758,18 +766,22 @@ export function convertPlainTextToMarkdown(
 
         consecutiveEmpty = 0;
         const isStillCode =
-          /^(?:const|let|var|function|import|export|class|interface|type|enum|def|return|if|else|for|while|switch|case|try|catch|finally|console|print|readonly)\b/.test(nextTrimmed) ||
+          /^(?:const|let|var|function|import|export|class|interface|type|enum|def|return|if|else|for|while|switch|case|try|catch|finally|console|print|readonly|echo)\b/.test(nextTrimmed) ||
+          /^(?:int|float|double|char|bool|boolean|long|short|byte|string|String|val|uint|int32|int64|usize|f32|f64)\s/.test(nextTrimmed) ||
           /^[}\]\);,]/.test(nextTrimmed) ||
           /["'][\w\-]+["']\s*:\s*/.test(nextTrimmed) ||
           /^[a-zA-Z_$][\w$]*\s*:\s*/.test(nextTrimmed) ||
           /^[a-zA-Z_$][\w$]*,\s*$/.test(nextTrimmed) ||
           /^\s*(?:\/\*\*?|\*(?:\s|$)|\*\/)/.test(nextTrimmed) ||
           /^\/\/[^\/]/.test(nextTrimmed) ||
+          /^--\s/.test(nextTrimmed) ||
+          /^#[^#\s]/.test(nextTrimmed) ||
           /^(?:\$|npm|pnpm|yarn|git|docker|curl|pip)\s+/.test(nextTrimmed) ||
           /^(?:SELECT|INSERT|UPDATE|DELETE|CREATE\s+TABLE)\s+/i.test(nextTrimmed) ||
           /^(?:FROM|WHERE|GROUP\s+BY|ORDER\s+BY|LIMIT|JOIN|HAVING)\b/i.test(nextTrimmed) ||
           /^[a-zA-Z0-9_$.]+\(.*\)[;]?$/.test(nextTrimmed) ||
-          /^\s{2,}\S+/.test(nextLine);
+          /^\s{2,}\S+/.test(nextLine) ||
+          /^[a-zA-Z_$][\w$]*\s*(?::=|=)[^=。！？]*$/.test(nextTrimmed);
 
         if (isStillCode) {
           codeLines.push(nextLine);
@@ -780,13 +792,18 @@ export function convertPlainTextToMarkdown(
         // 否则此处是真正的代码块边界
         const nextIsCodeStart =
           /^(?:const|let|var|function|import|export|class|def|public|private|protected|static|void|async|interface|type|enum|readonly)\s/.test(nextTrimmed) ||
+          /^(?:int|float|double|char|bool|boolean|long|short|byte|string|String|val|uint|int32|int64|usize|f32|f64)\s/.test(nextTrimmed) ||
           /^\/\/[^\/]/.test(nextTrimmed) ||
+          /^--\s/.test(nextTrimmed) ||
           /^(?:if|for|while|switch|try)\s*[\(\{]/.test(nextTrimmed) ||
-          /^(?:SELECT|INSERT|UPDATE|DELETE|CREATE\s+TABLE)\s+/i.test(nextTrimmed);
-        if (nextIsCodeStart) {
+          /^(?:SELECT|INSERT|UPDATE|DELETE|CREATE\s+TABLE)\s+/i.test(nextTrimmed) ||
+          /^[a-zA-Z_$][\w$]*\s*(?::=|=)[^=。！？]*$/.test(nextTrimmed);
+        // "# 注释"与 Markdown 标题形态相同，须前瞻守卫：其后仍是非空代码行才归入代码
+        const looksHashComment = /^#\s*\S/.test(nextTrimmed);
+        if (nextIsCodeStart || looksHashComment) {
           let k = j + 1;
           while (k < rawLines.length && !rawLines[k].trim()) k++;
-          if (k < rawLines.length && isStillCodeReHelper(rawLines[k])) {
+          if (k < rawLines.length && (isStillCodeReHelper(rawLines[k]) || (looksHashComment && nextIsCodeStart && k > j + 1))) {
             codeLines.push(nextLine);
             j++;
             continue;
