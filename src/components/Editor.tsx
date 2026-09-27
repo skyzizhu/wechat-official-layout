@@ -16,6 +16,7 @@ import {
 import { detectContentFormat, convertPlainTextToMarkdown } from '@/lib/smart-parser';
 
 import { compressAndEncodeImage } from '@/lib/image-utils';
+import { putImageDataUrl, collectDocImages } from '@/lib/image-store';
 import type { ConversionDecision } from '@/lib/smart-parser';
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 
@@ -63,6 +64,8 @@ export function Editor({
   onSaveDraft,
 }: EditorProps) {
   const charCount = value.replace(/\s/g, '').length;
+  // 当前文档引用的图片令牌列表（编辑器底部缩略图栏）
+  const docImages = useMemo(() => collectDocImages(value), [value]);
   const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -134,13 +137,15 @@ export function Editor({
     });
   };
 
-  // 插入图片：压缩后以 Markdown 图片语法写入光标处（预览负责渲染）
+  // 插入图片：压缩后存入图片库，正文只写短令牌（避免 base64 淹没编辑框）；
+  // 存储已满时退回内联 base64，保证图片零丢失
   const insertImageMarkdown = async (file: File) => {
     try {
       setIsUploading(true);
       const { dataUrl, fileName } = await compressAndEncodeImage(file);
       const cleanAlt = fileName.replace(/\.[^/.]+$/, '') || '配图';
-      insertAtCaret(`\n![${cleanAlt}](${dataUrl})\n`);
+      const { token, persisted } = putImageDataUrl(dataUrl);
+      insertAtCaret(`\n![${cleanAlt}](${persisted ? token : dataUrl})\n`);
     } catch (err) {
       console.error('Image insertion failed', err);
     } finally {
@@ -751,6 +756,32 @@ export function Editor({
         className="flex-1 w-full resize-none outline-none px-5 py-5 text-[15px] leading-[1.9] tracking-[0.01em] text-gray-800 bg-white"
         spellCheck={false}
       />
+
+      {/* 本文图片缩略图栏：正文中的 img: 令牌在这里以图片形式呈现 */}
+      {docImages.length > 0 && (
+        <div className="flex items-center gap-2 px-4 py-2 border-t border-gray-100 bg-gray-50/60 overflow-x-auto flex-shrink-0">
+          <span className="text-[11px] text-gray-400 flex-shrink-0">本文图片 {docImages.length}</span>
+          {docImages.map((img) =>
+            img.dataUrl ? (
+              <img
+                key={img.token}
+                src={img.dataUrl}
+                alt={img.alt}
+                title={img.alt}
+                className="h-14 w-20 object-cover rounded-md border border-gray-200 cursor-pointer flex-shrink-0"
+              />
+            ) : (
+              <div
+                key={img.token}
+                title={img.alt + '（图片数据缺失）'}
+                className="h-14 w-20 rounded-md border border-dashed border-gray-300 flex items-center justify-center text-[10px] text-gray-400 flex-shrink-0"
+              >
+                已失效
+              </div>
+            )
+          )}
+        </div>
+      )}
 
       {/* 空状态引导：无内容时给出起点 */}
       {!value.trim() && (

@@ -19,6 +19,7 @@ import { processContentByMode, ConversionDecision } from '@/lib/smart-parser';
 import { enhanceWithAi, loadAiSettings, saveAiSettings, AiSettings } from '@/lib/ai-enhance';
 import { AiSettingsModal } from '@/components/AiSettingsModal';
 import { convertLinksToFootnotes } from '@/lib/link-footnotes';
+import { extractAndTokenizeDataUrls } from '@/lib/image-store';
 import { PenLine, Eye } from 'lucide-react';
 
 /** 桌面端（lg 断点）判定：桌面与移动端各自只挂载所需的编辑器/预览，杜绝隐藏面板的重复渲染 */
@@ -108,6 +109,12 @@ function MainLayout() {
 
           // 强力修复因历史正则导致缺失右括号的图片语法: ![alt](/images/sample/sample-X.jpg -> ![alt](/images/sample/sample-X.jpg)
           updated = updated.replace(/(!\[[^\]]*\]\(\/images\/sample\/sample-\d+\.jpg)(?!\))/g, '$1)');
+
+          // 内联 base64 图片迁移为图片库令牌：编辑框不再被巨型源码淹没（幂等，已有令牌的草稿不受影响）
+          const tokenized = extractAndTokenizeDataUrls(updated);
+          if (tokenized.count > 0) {
+            updated = tokenized.markdown;
+          }
 
           // 若草稿是系统范文但仍有外链遗留，直接对齐最新的 SAMPLE_MARKDOWN
           if (updated.includes('排版之美') && updated.includes('unsplash.com')) {

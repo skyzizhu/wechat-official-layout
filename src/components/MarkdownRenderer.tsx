@@ -4,6 +4,7 @@ import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import type { ThemePreset } from '@/themes/types';
+import { resolveImageSrc } from '@/lib/image-store';
 import { getListLevelStyles } from '@/themes/list-levels';
 import type { Components } from 'react-markdown';
 import React, { CSSProperties } from 'react';
@@ -98,7 +99,7 @@ function getCellAlignStyle(incomingStyle: any, node: any): CSSProperties {
  * 与 blob:（本地预览对象地址），其余协议仍交由默认过滤处理
  */
 function imageUrlTransform(url: string): string {
-  if (/^(?:data:image\/|blob:)/i.test(url)) {
+  if (/^(?:data:image\/|blob:|img:)/i.test(url)) {
     return url;
   }
   return defaultUrlTransform(url);
@@ -741,9 +742,31 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
       const isInsideCell = Boolean(node?.properties?.dataInsideCell);
       const hasCaption = Boolean(node?.properties?.dataHasCaption);
       const userStyle = incomingStyle && typeof incomingStyle === 'object' ? incomingStyle : null;
+      // 图片令牌（img:xxx）解析为真实 dataURL；令牌失效时渲染占位框而非碎图
+      const resolvedSrc = resolveImageSrc(src);
+      if (!resolvedSrc) {
+        return (
+          <span
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '100%',
+              minHeight: '120px',
+              border: '1.5px dashed #cbd5e1',
+              borderRadius: '8px',
+              color: '#94a3b8',
+              fontSize: '13px',
+              boxSizing: 'border-box',
+            }}
+          >
+            图片已失效（{alt || '配图'}）
+          </span>
+        );
+      }
       return (
         <img
-          src={src ?? ''}
+          src={resolvedSrc}
           alt={alt ?? '配图'}
           data-w="1080"
           data-ratio="auto"
