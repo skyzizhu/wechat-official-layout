@@ -239,7 +239,7 @@ export function Editor({
         break;
       case 'text':
         for (let k = s; k <= e; k++) {
-          lines[k] = (lines[k] || '').replace(/^(?:#{1,6}\s*|>\s*|-\s*|\*+|```)/, '').trim();
+          lines[k] = (lines[k] || '').trim();
         }
         break;
     }
@@ -260,115 +260,6 @@ export function Editor({
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
     >
-      {/* 第二阶段：低置信度识别决策 —— 悬浮确认窗（默认收起为数量徽标，点击展开列表） */}
-      {lowConfidenceDecisions && lowConfidenceDecisions.length > 0 && (
-        <div className="absolute bottom-3 right-3 z-40">
-          {decisionPanelOpen ? (
-            <div className="w-[480px] max-w-[92vw] flex flex-col bg-white/95 backdrop-blur-xl border border-gray-200/80 rounded-2xl shadow-2xl shadow-gray-900/10 overflow-hidden">
-              {/* 头部：渐变题头 + 批量操作 */}
-              <div className="px-4 pt-3.5 pb-3 bg-gradient-to-r from-amber-50/80 to-orange-50/60 border-b border-gray-100">
-                <div className="flex items-center justify-between mb-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-[11px] font-bold">
-                      ⚠
-                    </span>
-                    <span className="font-semibold text-gray-800 text-sm">
-                      {lowConfidenceDecisions.length} 处识别需要确认
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => setDecisionPanelOpen(false)}
-                    className="text-gray-400 hover:text-gray-600 cursor-pointer text-sm leading-none"
-                  >
-                    ×
-                  </button>
-                </div>
-                <p className="text-[11px] text-gray-400 leading-snug">
-                  以下内容由智能引擎识别，可逐条确认，或使用下方批量操作
-                </p>
-                <div className="flex items-center gap-2 mt-2.5">
-                  {lowConfidenceDecisions.some((d) => d.type === '金句') && onResolveAllDecisions && (
-                    <button
-                      onClick={() => onResolveAllDecisions(lowConfidenceDecisions)}
-                      className="flex-1 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors cursor-pointer"
-                    >
-                      ✓ 全部转为金句
-                    </button>
-                  )}
-                  {onKeepAllDecisions && (
-                    <button
-                      onClick={() => onKeepAllDecisions(lowConfidenceDecisions)}
-                      className="flex-1 px-3 py-1.5 rounded-lg bg-gray-100 text-gray-600 text-xs font-medium hover:bg-gray-200 transition-colors cursor-pointer"
-                    >
-                      全部保留原文
-                    </button>
-                  )}
-                  {onExportFeedback && (
-                    <button
-                      onClick={onExportFeedback}
-                      className="px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs transition-colors cursor-pointer"
-                      title="导出本地反馈数据（JSON）"
-                    >
-                      导出
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* 列表：卡片式条目 */}
-              <div className="overflow-y-auto max-h-[340px] px-3 py-2.5 space-y-2">
-                {lowConfidenceDecisions.map((d) => {
-                  const key = `${d.type}:${d.snippet}`;
-                  return (
-                    <div
-                      key={key}
-                      className="flex items-start justify-between gap-3 px-3 py-2.5 rounded-lg bg-gray-50/80 border border-gray-100"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="text-[10px] text-gray-400 mb-0.5">
-                          {d.type} · 置信度 {Math.round(d.confidence * 100)}%
-                        </div>
-                        <div className="text-gray-700 text-xs truncate" title={d.snippet}>
-                          「{d.snippet}」…
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
-                        {onResolveDecision && (
-                          <button
-                            onClick={() => onResolveDecision(d)}
-                            className="px-2 py-1 rounded-md bg-blue-50 text-blue-700 text-[11px] font-medium hover:bg-blue-100 transition-colors cursor-pointer whitespace-nowrap"
-                          >
-                            {d.type === '金句' ? '转为金句' : d.type === 'HTML代码块' ? '转为代码块' : '采纳'}
-                          </button>
-                        )}
-                        {onKeepDecision && (
-                          <button
-                            onClick={() => onKeepDecision(d)}
-                            className="px-2 py-1 rounded-md text-gray-500 text-[11px] hover:bg-gray-200/70 transition-colors cursor-pointer whitespace-nowrap"
-                          >
-                            原文
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="px-4 py-2 bg-gray-50/80 border-t border-gray-100 text-[11px] text-gray-400">
-                也可以在左侧选中任意几行，使用浮动工具栏直接指定格式
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => setDecisionPanelOpen(true)}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-amber-500/95 backdrop-blur text-white text-xs font-medium rounded-full shadow-lg shadow-amber-500/30 hover:bg-amber-600 cursor-pointer transition-all"
-              title="点击展开识别确认列表"
-            >
-              ⚠ {lowConfidenceDecisions.length} 处识别需要确认
-            </button>
-          )}
-
       {/* 隐藏的本地图片选取 input */}
       <input
         type="file"
