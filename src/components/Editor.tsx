@@ -131,15 +131,29 @@ function parseEditorBlocks(value: string): EditorBlock[] {
       let sepIdx = -1;
       let cols = 2;
       let j = i;
-      while (j < lines.length && lines[j].trim().startsWith('|')) {
-        const cells = lines[j].trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
-        const isSep = cells.length > 0 && cells.every((c) => GALLERY_SEP_CELL_RE.test(c.replace(/\s/g, '')) || c === '');
-        if (isSep && sepIdx === -1) {
-          sepIdx = rows.length;
-          cols = Math.max(1, cells.filter((c) => c !== '').length || cells.length);
+      // 收集连续管道行；老版本散落的画廊行（分隔行/空题注行被空行拆开）跨单个空行续收
+      const isPipeRow = (idx: number) => lines[idx].trim().startsWith('|');
+      const isJunkPipeRow = (idx: number) => {
+        const cells = lines[idx].trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+        return cells.every((c) => GALLERY_SEP_CELL_RE.test(c) || c === '');
+      };
+      while (j < lines.length) {
+        if (isPipeRow(j)) {
+          const cells = lines[j].trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+          const isSep = cells.length > 0 && cells.every((c) => GALLERY_SEP_CELL_RE.test(c.replace(/\s/g, '')) || c === '');
+          if (isSep && sepIdx === -1) {
+            sepIdx = rows.length;
+            cols = Math.max(1, cells.filter((c) => c !== '').length || cells.length);
+          }
+          rows.push(cells);
+          j++;
+          continue;
         }
-        rows.push(cells);
-        j++;
+        if (!lines[j].trim() && j + 1 < lines.length && isPipeRow(j + 1) && isJunkPipeRow(j + 1)) {
+          j++; // 跳过单个空行，下一轮收集散落行
+          continue;
+        }
+        break;
       }
       rows.forEach((r) =>
         r.forEach((c) => {
@@ -180,9 +194,29 @@ function parseEditorBlocks(value: string): EditorBlock[] {
       }
       for (let k = 0; k < images.length; k++) captions[k] = captions[k] || '';
       layout = Math.min(3, Math.max(1, images.length)) as 1 | 2 | 3;
+      // 老版本散落的画廊残行自愈：图片行后（隔一空行）的分隔行/空题注行并入图片块并恢复列数
+      let absorbEnd = capFound ? j : j - 1;
+      let k2 = absorbEnd + 1;
+      if (k2 < lines.length && !lines[k2].trim() && k2 + 1 < lines.length && lines[k2 + 1].trim().startsWith('|')) {
+        const cellsOf = (idx: number) =>
+          lines[idx].trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+        const junk = (idx: number) => {
+          const cs = cellsOf(idx);
+          return cs.length > 0 && cs.every((c) => GALLERY_SEP_CELL_RE.test(c) || c === '');
+        };
+        if (junk(k2 + 1)) {
+          const sepCells = cellsOf(k2 + 1);
+          const n = sepCells.filter((c) => c !== '').length;
+          if (n >= 2 && images.length === 1) layout = Math.min(3, n) as 1 | 2 | 3;
+          let cur = k2 + 1;
+          while (cur + 1 < lines.length && !lines[cur + 1].trim() && cur + 2 < lines.length && lines[cur + 2].trim().startsWith('|') && junk(cur + 2)) {
+            cur += 2;
+          }
+          absorbEnd = cur;
+        }
+      }
       blocks.push({ kind: 'images', images, captions, layout });
-      // 题注行已并入图片块时跳过它；否则回退到最后一张相邻图片行
-      i = capFound ? j : j - 1;
+      i = absorbEnd;
     }
   }
   flush();
