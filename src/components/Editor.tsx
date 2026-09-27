@@ -16,11 +16,24 @@ import {
 import { detectContentFormat, convertPlainTextToMarkdown } from '@/lib/smart-parser';
 
 import { compressAndEncodeImage } from '@/lib/image-utils';
-import { putImageDataUrl, collectDocImages } from '@/lib/image-store';
+import { putImageDataUrl, resolveImageSrc } from '@/lib/image-store';
 import type { ConversionDecision } from '@/lib/smart-parser';
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 
 export type ContentMode = 'auto' | 'plain-text' | 'markdown';
+
+/** 测量图片令牌行在编辑框字体下的渲染宽度（覆盖层药丸需精确盖住整行源码） */
+function measureTokenLineWidth(text: string): number {
+  if (typeof document === 'undefined') return 220;
+  const canvas =
+    (measureTokenLineWidth as unknown as { _canvas?: HTMLCanvasElement })._canvas ||
+    ((measureTokenLineWidth as unknown as { _canvas?: HTMLCanvasElement })._canvas = document.createElement('canvas'));
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return 220;
+  ctx.font = '15px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif';
+  const w = ctx.measureText(text).width;
+  return Math.ceil(w + text.length * 0.15 + 10);
+}
 
 interface EditorProps {
   value: string;
@@ -64,8 +77,26 @@ export function Editor({
   onSaveDraft,
 }: EditorProps) {
   const charCount = value.replace(/\s/g, '').length;
-  // 当前文档引用的图片令牌列表（编辑器底部缩略图栏）
-  const docImages = useMemo(() => collectDocImages(value), [value]);
+  // 行内图片预览：解析正文中的独占图片行（![alt](img:xxx) 或内联 base64），原位显示缩略图
+  const imageLines = useMemo(() => {
+    const out: Array<{ line: number; alt: string; src: string; w: number }> = [];
+    value.split('\n').forEach((l, i) => {
+      const m = l.trim().match(/^!\[([^\]]*)\]\((img:[a-z0-9-]+|data:image\/[^;]+;base64,[^)\s]+)\)$/);
+      if (m) {
+        out.push({ line: i, alt: m[1] || '配图', src: m[2].startsWith('img:') ? resolveImageSrc(m[2]) : m[2], w: measureTokenLineWidth(l) });
+      }
+    });
+    return out;
+  }, [value]);
+  // 编辑框行度量：覆盖层定位用（字号 15px × 行高 1.9，内边距 py-5/px-5）
+  const [editorMetrics, setEditorMetrics] = useState({ paddingTop: 20, paddingLeft: 20, lineHeight: 28.5 });
+  const overlayRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const ta = textareaRef.current;
+    const ov = overlayRef.current;
+    if (ta && ov) ov.style.transform = 'translateY(' + -ta.scrollTop + 'px)';
+  }, [value, editorMetrics]);
+
   const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -185,8 +216,16 @@ export function Editor({
     }
   };
 
+  // 图片覆盖层跟随编辑框滚动（直接改 transform，避免重渲染）
+  const syncOverlayScroll = () => {
+    const ta = textareaRef.current;
+    const ov = overlayRef.current;
+    if (ta && ov) ov.style.transform = 'translateY(' + -ta.scrollTop + 'px)';
+  };
+
   // 编辑器滚动 → 按比例联动右侧预览（单向同步，无回环）
   const handleTextareaScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
+    syncOverlayScroll();
     if (!onScrollRatio) return;
     const el = e.currentTarget;
     const max = el.scrollHeight - el.clientHeight;
@@ -260,6 +299,34 @@ export function Editor({
       applyHeadingLevel(Number(k));
     }
   };
+
+  // 点击行内缩略图 → 选中该图片行（可直接改 alt 或删除）
+  const selectLine = (line: number) => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const lines = value.split('\n');
+    let start = 0;
+    for (let i = 0; i < line; i++) start += lines[i].length + 1;
+    ta.focus();
+    ta.setSelectionRange(start, start + lines[line].length);
+  };
+
+  // 编辑框行高/内边距测量（窗口缩放时重测）
+  useEffect(() => {
+    const measure = () => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      const cs = getComputedStyle(ta);
+      setEditorMetrics({
+        paddingTop: parseFloat(cs.paddingTop) || 20,
+        paddingLeft: parseFloat(cs.paddingLeft) || 20,
+        lineHeight: parseFloat(cs.lineHeight) || 28.5,
+      });
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
 
   // 本地文件选取完成
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -744,6 +811,7 @@ export function Editor({
       )}
 
       {/* 输入区：纯文本 / Markdown 源码（左边永远是源码，渲染效果只在右边预览） */}
+      <div className="relative flex-1 flex flex-col min-h-0">
       <textarea
         ref={textareaRef}
         value={value}
@@ -757,31 +825,37 @@ export function Editor({
         spellCheck={false}
       />
 
-      {/* 本文图片缩略图栏：正文中的 img: 令牌在这里以图片形式呈现 */}
-      {docImages.length > 0 && (
-        <div className="flex items-center gap-2 px-4 py-2 border-t border-gray-100 bg-gray-50/60 overflow-x-auto flex-shrink-0">
-          <span className="text-[11px] text-gray-400 flex-shrink-0">本文图片 {docImages.length}</span>
-          {docImages.map((img) =>
-            img.dataUrl ? (
-              <img
-                key={img.token}
-                src={img.dataUrl}
-                alt={img.alt}
-                title={img.alt}
-                className="h-14 w-20 object-cover rounded-md border border-gray-200 cursor-pointer flex-shrink-0"
-              />
-            ) : (
+      {/* 行内图片预览层：图片行原位显示缩略图，其余内容保持源码形态 */}
+      <div ref={overlayRef} className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
+        {imageLines.map(({ line, alt, src: imgSrc, w }) => (
+          <div
+            key={line + '-' + alt}
+            style={{
+              position: 'absolute',
+              top: editorMetrics.paddingTop + line * editorMetrics.lineHeight,
+              left: editorMetrics.paddingLeft,
+              width: Math.min(Math.max(w, 90), 720),
+            }}
+            className="pointer-events-auto overflow-hidden"
+          >
+            {imgSrc ? (
               <div
-                key={img.token}
-                title={img.alt + '（图片数据缺失）'}
-                className="h-14 w-20 rounded-md border border-dashed border-gray-300 flex items-center justify-center text-[10px] text-gray-400 flex-shrink-0"
+                title="点击选中此图片行（可直接编辑或删除）"
+                onClick={() => selectLine(line)}
+                className="h-7 w-full inline-flex items-center gap-1.5 bg-white px-1.5 rounded-sm border border-gray-200 cursor-pointer overflow-hidden"
               >
-                已失效
+                <img src={imgSrc} alt={alt} className="h-full w-auto max-w-[60%] rounded-sm" />
+                <span className="text-[10px] text-gray-400 whitespace-nowrap">{alt}</span>
               </div>
-            )
-          )}
-        </div>
-      )}
+            ) : (
+              <span className="h-7 inline-flex items-center px-2 rounded border border-dashed border-gray-300 text-[11px] text-gray-400 bg-white cursor-pointer" onClick={() => selectLine(line)}>
+                图片已失效（{alt}）
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      </div>
 
       {/* 空状态引导：无内容时给出起点 */}
       {!value.trim() && (
