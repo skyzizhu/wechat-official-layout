@@ -294,6 +294,53 @@ function MainLayout() {
     logFeedback(d, '保留');
   };
 
+  // 批量：全部按建议处理（金句 → 转为金句；HTML 块 → 围栏为代码卡；其余 → 维持识别形态）
+  const handleResolveAllDecisions = (ds: ConversionDecision[]) => {
+    if (!ds.length) return;
+    ds.forEach((d) => logFeedback(d, d.type === '金句' ? '转为金句' : d.type === 'HTML代码块' ? '转为代码块' : '保留识别'));
+
+    const golden = ds.filter((d) => d.type === '金句');
+    if (golden.length) {
+      setMarkdown((prev) => {
+        const lines = prev.split('\n');
+        for (const d of golden) {
+          const idx = lines.findIndex((l) => l.trim() === d.snippet || l.trim().includes(d.snippet));
+          if (idx >= 0) lines[idx] = `<p data-role="golden-line">${lines[idx].trim()}</p>`;
+        }
+        return lines.join('\n');
+      });
+    }
+
+    const htmlBlocks = ds.filter((d) => d.type === 'HTML代码块');
+    if (htmlBlocks.length) {
+      setMarkdown((prev) => {
+        const lines = prev.split('\n');
+        for (const d of htmlBlocks) {
+          const startIdx = lines.findIndex((l) => l.trim().startsWith('<') && l.includes(d.snippet.slice(0, 10)));
+          if (startIdx < 0) continue;
+          let endIdx = startIdx;
+          while (endIdx + 1 < lines.length && lines[endIdx + 1].trim() !== '') endIdx++;
+          const block = lines.slice(startIdx, endIdx + 1);
+          lines.splice(startIdx, endIdx - startIdx + 1, '```html', ...block, '```');
+        }
+        return lines.join('\n');
+      });
+    }
+
+    setDraftStatus(`已批量采纳 ${ds.length} 处识别建议`);
+  };
+
+  // 批量：全部保留原文（维持识别形态，仅清除提示）
+  const handleKeepAllDecisions = (ds: ConversionDecision[]) => {
+    if (!ds.length) return;
+    setDismissedKeys((prev) => {
+      const keys = ds.map((d) => `${d.type}:${d.snippet}`);
+      return Array.from(new Set([...prev, ...keys]));
+    });
+    ds.forEach((d) => logFeedback(d, '保留'));
+    setDraftStatus('已保留全部识别内容');
+  };
+
   const handleExportFeedback = () => {
     try {
       const log = localStorage.getItem('radiant_feedback_log') || '[]';
@@ -359,6 +406,8 @@ function MainLayout() {
             lowConfidenceDecisions={lowConfidenceDecisions}
             onResolveDecision={handleResolveDecision}
             onKeepDecision={handleKeepDecision}
+            onResolveAllDecisions={handleResolveAllDecisions}
+            onKeepAllDecisions={handleKeepAllDecisions}
             onExportFeedback={handleExportFeedback}
           />
         </div>
@@ -399,6 +448,8 @@ function MainLayout() {
                 onResolveDecision={handleResolveDecision}
                 onKeepDecision={handleKeepDecision}
                 onExportFeedback={handleExportFeedback}
+                onResolveAllDecisions={handleResolveAllDecisions}
+                onKeepAllDecisions={handleKeepAllDecisions}
               />
             ) : (
               <Preview
