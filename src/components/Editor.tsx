@@ -256,20 +256,34 @@ function ImageBlockCard(props: {
   return (
     <div className="relative group rounded-xl border border-gray-200 bg-gray-50/50 p-3">
       <div className="absolute right-2 top-2 z-10 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 rounded-lg border border-gray-200 px-1 py-0.5 shadow-sm">
-        {([1, 2, 3] as const).map((n) =>
-          canLayout[n] ? (
+        {([1, 2, 3] as const).map((n) => {
+          const enabled = canLayout[n];
+          const title =
+            n === 1
+              ? '单图（各占一行）'
+              : enabled
+              ? n === 2
+                ? '两列画廊'
+                : '三列画廊'
+              : '需与此图片块相邻（中间无文字）的图片凑满 ' + n + ' 张';
+          return (
             <button
               key={n}
-              onClick={() => onLayout(n)}
-              title={n === 1 ? '单图（各占一行）' : n === 2 ? '两列画廊' : '三列画廊'}
-              className={`px-1.5 py-0.5 rounded text-[11px] font-medium cursor-pointer transition-colors ${
-                block.layout === n ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-100'
+              onClick={() => enabled && onLayout(n)}
+              disabled={!enabled}
+              title={title}
+              className={`px-1.5 py-0.5 rounded text-[11px] font-medium transition-colors ${
+                block.layout === n
+                  ? 'bg-blue-600 text-white'
+                  : enabled
+                  ? 'text-gray-500 hover:bg-gray-100 cursor-pointer'
+                  : 'text-gray-300 cursor-not-allowed'
               }`}
             >
               {n}列
             </button>
-          ) : null
-        )}
+          );
+        })}
         <button
           onClick={onRemove}
           title="删除此图片块"
