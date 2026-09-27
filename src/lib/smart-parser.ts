@@ -457,6 +457,25 @@ export function addPanguSpacing(text: string): string {
     .replace(/([a-zA-Z0-9$#%`])([\u4e00-\u9fa5])/g, '$1 $2');
 }
 
+/** 代码续行特征（2.1 跨空行合并用）：与 isStillCode 保持一致的行内判断 */
+function isStillCodeReHelper(line: string): boolean {
+  const t = line.trim();
+  return (
+    /^(?:const|let|var|function|import|export|class|interface|type|enum|def|return|if|else|for|while|switch|case|try|catch|finally|console|print|readonly)\b/.test(t) ||
+    /^[}\]\);,]/.test(t) ||
+    /["'][\w\-]+["']\s*:\s*/.test(t) ||
+    /^[a-zA-Z_$][\w$]*\s*:\s*/.test(t) ||
+    /^[a-zA-Z_$][\w$]*,\s*$/.test(t) ||
+    /^\s*(?:\/\*\*?|\*(?:\s|$)|\*\/)/.test(t) ||
+    /^\/\/[^\/]/.test(t) ||
+    /^(?:\$|npm|pnpm|yarn|git|docker|curl|pip)\s+/.test(t) ||
+    /^(?:SELECT|INSERT|UPDATE|DELETE|CREATE\s+TABLE)\s+/i.test(t) ||
+    /^(?:FROM|WHERE|GROUP\s+BY|ORDER\s+BY|LIMIT|JOIN|HAVING)\b/i.test(t) ||
+    /^[a-zA-Z0-9_$.]+\(.*\)[;]?$/.test(t) ||
+    /^\s{2,}\S+/.test(line)
+  );
+}
+
 /**
  * 判断是否为图片类型的 URL。
  * 支持 http/https 外链、本地静态路径 (/images/...) 及 base64 图像
@@ -745,7 +764,9 @@ export function convertPlainTextToMarkdown(
           /^[a-zA-Z_$][\w$]*\s*:\s*/.test(nextTrimmed) ||
           /^[a-zA-Z_$][\w$]*,\s*$/.test(nextTrimmed) ||
           /^\s*(?:\/\*\*?|\*(?:\s|$)|\*\/)/.test(nextTrimmed) ||
+          /^\/\/[^\/]/.test(nextTrimmed) ||
           /^(?:\$|npm|pnpm|yarn|git|docker|curl|pip)\s+/.test(nextTrimmed) ||
+          /^(?:SELECT|INSERT|UPDATE|DELETE|CREATE\s+TABLE)\s+/i.test(nextTrimmed) ||
           /^(?:FROM|WHERE|GROUP\s+BY|ORDER\s+BY|LIMIT|JOIN|HAVING)\b/i.test(nextTrimmed) ||
           /^[a-zA-Z0-9_$.]+\(.*\)[;]?$/.test(nextTrimmed) ||
           /^\s{2,}\S+/.test(nextLine);
@@ -753,9 +774,25 @@ export function convertPlainTextToMarkdown(
         if (isStillCode) {
           codeLines.push(nextLine);
           j++;
-        } else {
-          break;
+          continue;
         }
+        // 空行后的非代码行：若它像代码起始且更后面还有代码特征行，视为跨空行的同段代码继续收集；
+        // 否则此处是真正的代码块边界
+        const nextIsCodeStart =
+          /^(?:const|let|var|function|import|export|class|def|public|private|protected|static|void|async|interface|type|enum|readonly)\s/.test(nextTrimmed) ||
+          /^\/\/[^\/]/.test(nextTrimmed) ||
+          /^(?:if|for|while|switch|try)\s*[\(\{]/.test(nextTrimmed) ||
+          /^(?:SELECT|INSERT|UPDATE|DELETE|CREATE\s+TABLE)\s+/i.test(nextTrimmed);
+        if (nextIsCodeStart) {
+          let k = j + 1;
+          while (k < rawLines.length && !rawLines[k].trim()) k++;
+          if (k < rawLines.length && isStillCodeReHelper(rawLines[k])) {
+            codeLines.push(nextLine);
+            j++;
+            continue;
+          }
+        }
+        break;
       }
 
       // 如果代码行数量 >= 2，或者单行包含了完整的 JSON/Shell 指令，封装为标准代码块
