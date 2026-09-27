@@ -369,7 +369,7 @@ export function detectContentFormat(text: string): FormatDetectionResult {
   let taskCount = taskLists ? taskLists.length : 0;
   let calloutCount = blockquotes ? blockquotes.length : 0;
   let imageCount = (text.match(/!\[[^\]]*\]\([^)]+\)/g) || []).length;
-  let codeCount = codeBlocks ? codeBlocks.length : 0;
+  const codeCount = codeBlocks ? codeBlocks.length : 0;
 
   // 纯文本章节与列表智能匹配（覆盖中文序号 一、 一， 一, 一. 一  以及阿拉伯数字 1、 1， 1. 1  01  第1 等全部变体）
   const textLines = text.split('\n');
@@ -929,7 +929,10 @@ export function convertPlainTextToMarkdown(
   // 阿拉伯数字编号行的智能消歧辅助：
   // 编号行在相邻位置（含仅隔一个空行）成组出现 → 有序列表；
   // 孤立出现（前后都是正文/标题/空行隔断）→ 小节标题 (H2)
-  const arabicNumberedRe = /^\d{1,3}(?:\s*[、,，.．)）:：]\s*|\s)\s*\S+/  // 1~3 位：四位数字（如年份）不参与编号消歧;
+  // "." 分隔符后紧跟数字视为小数（1.5倍）而非编号，不参与编号消歧；1~3 位编号（年份不触发连号）
+  const arabicNumberedRe = /^\d{1,3}(?:\s*[、,，)）:：]\s*|\s|\s*\.\s*(?!\d))\s*\S+/;
+  // 多级编号邻行（1.1 xxx / 1.1、xxx）须带显式分隔符，同样排除 "1.5倍增长" 这类小数开头正文
+  const multiLevelNumberedRe = /^\d+(?:\.\d+)+(?:\s*[、,，.．:：)）]|\s)\s*\S/;
   const nearestNonEmptyLine = (arr: string[], from: number, step: number): string => {
     let k = from;
     while (k >= 0 && k < arr.length) {
@@ -970,13 +973,49 @@ export function convertPlainTextToMarkdown(
     for (const entry of arabicEntries) {
       const prevNearest = nearestNonEmptyLine(blockProcessedLines, entry.index - 1, -1);
       const nextNearest = nearestNonEmptyLine(blockProcessedLines, entry.index + 1, 1);
-      const isDense = arabicNumberedRe.test(prevNearest) || arabicNumberedRe.test(nextNearest);
+      const isDense =
+        arabicNumberedRe.test(prevNearest) ||
+        multiLevelNumberedRe.test(prevNearest) ||
+        arabicNumberedRe.test(nextNearest) ||
+        multiLevelNumberedRe.test(nextNearest);
       if (!isDense) {
         arabicSectionIndexes.add(entry.index);
         arabicSectionLevelMap.set(entry.index, arabicSectionLevel);
       }
     }
   }
+
+  // 编号邻接判定（按家族）：只有同一编号体系（或其父子体系）的行相邻才算「成组」，
+  // 避免 （3）数字族 与 （一）中文族 互相误触发列表形态
+  const numberedNeighborPatterns: Record<string, RegExp[]> = {
+    // 阿拉伯家族：单级（1、）与多级（1.1）互为父子；多级邻行须带分隔符（避免 "1.5倍增长" 这类小数开头正文误判为编号行）
+    arabic: [
+      arabicNumberedRe,
+      multiLevelNumberedRe,
+    ],
+    // 阿拉伯括号家族：（1）/ 1) 与单级阿拉伯混排常见
+    digitParen: [
+      arabicNumberedRe,
+      /^[（(]\d{1,3}[）)]/,
+      /^\d{1,3}[)）]\s*\S/,
+    ],
+    // 中文家族：一、与（一）互为父子
+    cnParen: [
+      cnSectionLineRe,
+      /^[（(][一二三四五六七八九十百千万]+[）)]/,
+    ],
+  };
+  const isDenseNumberedLine = (lineIdx: number, family: keyof typeof numberedNeighborPatterns) => {
+    const patterns = numberedNeighborPatterns[family];
+    const hasNumberedNeighbor = (t: string) => patterns.some((p) => p.test(t));
+    return (
+      hasNumberedNeighbor(nearestNonEmptyLine(blockProcessedLines, lineIdx - 1, -1)) ||
+      hasNumberedNeighbor(nearestNonEmptyLine(blockProcessedLines, lineIdx + 1, 1))
+    );
+  };
+
+  // 句子特征：过长或以句末标点收束的行更像正文段落，不应被编号规则转成小节标题
+  const looksLikeSentence = (t: string) => t.length > 40 || /[。！？]/.test(t);
 
   for (let idx = 0; idx < blockProcessedLines.length; idx++) {
     const rawLine = blockProcessedLines[idx];
@@ -1104,14 +1143,61 @@ export function convertPlainTextToMarkdown(
       continue;
     }
 
-    // 3.4 识别二级小节 (H3)
-    // 如 "1.1 架构设计", "（一）基本假设", "(一) 需求分析", "A. 数据清洗"
-    const isH3Pattern =
-      /^\d+\.\d+[\s、.．]+\S+/.test(trimmed) ||
-      /^[（(][一二三四五六七八九十]+[）)][\s、.．]*\S+/.test(trimmed);
-    const letterNumMatch = trimmed.match(/^([A-Z])[.、．]\s*(\S.*)$/);
+    // 3.4 多级编号行（1.1 / 1.1.1 / 1.1.1.1，兼容「、,，.．:：)）」或空格分隔；三级及以上允许无分隔直连）
+    // 密集成组（前后最近非空行也是编号行）→ 父编号下的嵌套列表项（保留原始编号标签），而非标题；
+    // 孤立出现 → 小节标题（两级 → H3、三级 → H4、四级及以上 → H5）
+    const mlMatch = trimmed.match(/^(\d+(?:\.\d+)+)(.*)$/);
+    let isMultiLevelLine = false;
+    let mlLabel = '';
+    let mlContent = '';
+    let mlDots = 0;
+    if (mlMatch) {
+      mlDots = (mlMatch[1].match(/\./g) || []).length;
+      const rest = mlMatch[2];
+      const sepMatch = rest.match(/^[、,，.．:：)）]|\s+/);
+      if (sepMatch && rest.slice(sepMatch[0].length).trim()) {
+        isMultiLevelLine = true;
+        mlLabel = sepMatch[0].trim() ? `${mlMatch[1]}${sepMatch[0].trim()}` : mlMatch[1];
+        mlContent = rest.slice(sepMatch[0].length).trim();
+      } else if (!sepMatch && mlDots >= 2 && rest.trim() && !/^\d/.test(rest.trim())) {
+        // 无分隔直连（如 1.1.1缓存机制）仅限三级及以上，避免把 "1.5倍增长" 这类小数开头正文误收
+        isMultiLevelLine = true;
+        mlLabel = mlMatch[1];
+        mlContent = rest.trim();
+      }
+    }
 
-    if (isH3Pattern) {
+    if (isMultiLevelLine) {
+      if (isDenseNumberedLine(idx, 'arabic')) {
+        // 嵌套深度：1.1 → 一层缩进；1.1.1 → 两层；以此类推（与有序列表 3 空格缩进约定一致）
+        const indent = '   '.repeat(Math.min(mlDots, 3));
+        processedLines.push(`${indent}- **${mlLabel}** ${emphasizeItemHeader(mlContent)}`);
+        continue;
+      }
+      // 孤立但像正文句子（过长或带句末标点）→ 保持普通段落，不强转标题
+      // （如 "3.5 亿元的资金投入，这是一个普通段落……" 不是小节标题）
+      if (looksLikeSentence(trimmed)) {
+        processedLines.push(trimmed);
+        continue;
+      }
+      const headingLevel = Math.min(mlDots + 2, 5); // 1个点(1.1)→H3、2个点(1.1.1)→H4、3个点及以上→H5
+      processedLines.push('');
+      processedLines.push(`${'#'.repeat(headingLevel)} ${trimmed}`);
+      processedLines.push('');
+      continue;
+    }
+
+    // 中文括号序号（一）消歧：成组（前后最近非空行也是编号行）→ 列表项；孤立 → H3
+    const cnParenMatch = trimmed.match(/^([（(][一二三四五六七八九十百千万]+[）)])\s*(\S.*)$/);
+    if (cnParenMatch) {
+      if (isDenseNumberedLine(idx, 'cnParen')) {
+        processedLines.push(`- **${cnParenMatch[1]}** ${emphasizeItemHeader(cnParenMatch[2])}`);
+        continue;
+      }
+      if (looksLikeSentence(trimmed)) {
+        processedLines.push(trimmed);
+        continue;
+      }
       processedLines.push('');
       processedLines.push(`### ${trimmed}`);
       processedLines.push('');
@@ -1119,6 +1205,7 @@ export function convertPlainTextToMarkdown(
     }
 
     // 字母编号消歧：A. B. C. 成组（前后最近非空行也是字母编号行）→ 有序列表；孤立 → H3
+    const letterNumMatch = trimmed.match(/^([A-Z])[.、．]\s*(\S.*)$/);
     const letterNumRe = /^[A-Z][.、．]\s*\S+/;
     if (letterNumMatch) {
       const prevNearestLetter = nearestNonEmptyLine(blockProcessedLines, idx - 1, -1);
@@ -1128,31 +1215,36 @@ export function convertPlainTextToMarkdown(
         processedLines.push(`- **${letterNumMatch[1]}.** ${emphasizeItemHeader(letterNumMatch[2])}`);
         continue;
       }
+      if (looksLikeSentence(trimmed)) {
+        processedLines.push(trimmed);
+        continue;
+      }
       processedLines.push('');
       processedLines.push(`### ${trimmed}`);
       processedLines.push('');
       continue;
     }
 
-    // 3.5 识别三级小节 (H4) 与四级小节 (H5)
-    // 如 "1.1.1 缓存机制", "（1）细节规范", "(1) 细节规范", "1) 补充说明"
-    if (/^\d+\.\d+\.\d+\.\d+[\s、.．]*\S+/.test(trimmed)) {
-      processedLines.push('');
-      processedLines.push(`##### ${trimmed}`);
-      processedLines.push('');
-      continue;
-    }
-    if (/^\d+\.\d+\.\d+[\s、.．]*\S+/.test(trimmed)) {
-      processedLines.push('');
-      processedLines.push(`#### ${trimmed}`);
-      processedLines.push('');
-      continue;
-    }
+    // 3.5 括号序号（（1）/ (1) / 1)）消歧：
+    // 成组（前后最近非空行也是编号行）→ 列表项；孤立 → 四级小节 (H4)
+    // 含 URL 的行是参考文献条目，放行给下方 3.19 专门处理
+    // （数字多级 1.1.1 / 1.1.1.1 已由上方 3.4 多级编号规则处理）
     if (
-      /^[（(]\d+[）)][\s、.．]*\S+/.test(trimmed) ||
-      /^\d+[)）][\s、.．]*\S+/.test(trimmed)
+      (/^[（(]\d+[）)][\s、.．]*\S+/.test(trimmed) ||
+        /^\d+[)）][\s、.．]*\S+/.test(trimmed)) &&
+      !/https?:\/\//i.test(trimmed)
     ) {
-      // 避免误判单行简短选项（如 "(1) 选项A" 当处于紧凑段落时作为列表）
+      if (isDenseNumberedLine(idx, 'digitParen')) {
+        const parenMatch = trimmed.match(/^([（(]\d+[）)]|\d+[)）])[\s、.．]*\s*(\S.*)$/);
+        if (parenMatch) {
+          processedLines.push(`- **${parenMatch[1]}** ${emphasizeItemHeader(parenMatch[2])}`);
+          continue;
+        }
+      }
+      if (looksLikeSentence(trimmed)) {
+        processedLines.push(trimmed);
+        continue;
+      }
       processedLines.push('');
       processedLines.push(`#### ${trimmed}`);
       processedLines.push('');
@@ -1353,6 +1445,12 @@ export function convertPlainTextToMarkdown(
     if (numMatch) {
       const num = numMatch[1];
       const content = numMatch[2];
+      const sepChar = trimmed.slice(num.length, num.length + 1);
+      // 小数/版本号保护："1.5倍增长"、"2.0版本" 的 "." 后紧跟数字，是小数不是编号分隔符
+      if (sepChar === '.' && /^\d/.test(content)) {
+        processedLines.push(trimmed);
+        continue;
+      }
       // 多级编号保护："1.1 架构设计"、"3.14.5" 等由上方 H3/H4/H5 规则处理
       const isMultiLevelNumbering = /^\d+(?:\.\d+)+/.test(trimmed);
       // 参考文献条目（含 URL）不走标题转换，保持编号列表形态

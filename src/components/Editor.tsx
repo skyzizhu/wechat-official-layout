@@ -34,8 +34,8 @@ interface EditorProps {
   onResolveDecision?: (d: ConversionDecision) => void;
   onKeepDecision?: (d: ConversionDecision) => void;
   onExportFeedback?: () => void;
-  onResolveAllDecisions?: () => void;
-  onKeepAllDecisions?: () => void;
+  onResolveAllDecisions?: (ds: ConversionDecision[]) => void;
+  onKeepAllDecisions?: (ds: ConversionDecision[]) => void;
 }
 
 export function Editor({
