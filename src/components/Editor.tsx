@@ -18,25 +18,9 @@ import { detectContentFormat, convertPlainTextToMarkdown } from '@/lib/smart-par
 import { compressAndEncodeImage } from '@/lib/image-utils';
 import { putImageDataUrl, resolveImageSrc } from '@/lib/image-store';
 import type { ConversionDecision } from '@/lib/smart-parser';
-import React, { useMemo, useState, useRef, useEffect } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useLayoutEffect } from 'react';
 
 export type ContentMode = 'auto' | 'plain-text' | 'markdown';
-
-/** 粘贴图片后，图片展示区占用的行数（令牌行 + 预留空行，由覆盖层渲染为真实图片） */
-const IMAGE_SPACER_LINES = 5;
-
-/** 测量图片令牌行在编辑框字体下的渲染宽度（覆盖层药丸需精确盖住整行源码） */
-function measureTokenLineWidth(text: string): number {
-  if (typeof document === 'undefined') return 220;
-  const canvas =
-    (measureTokenLineWidth as unknown as { _canvas?: HTMLCanvasElement })._canvas ||
-    ((measureTokenLineWidth as unknown as { _canvas?: HTMLCanvasElement })._canvas = document.createElement('canvas'));
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return 220;
-  ctx.font = '15px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif';
-  const w = ctx.measureText(text).width;
-  return Math.ceil(w + text.length * 0.15);
-}
 
 interface EditorProps {
   value: string;
@@ -60,89 +44,284 @@ interface EditorProps {
   onSaveDraft?: () => void;
 }
 
-export function Editor({
-  value,
-  onChange,
-  mode,
-  onModeChange,
-  onClear,
-  onRestoreSample,
-  draftStatus,
-  firstLineAsTitle = false,
-  onToggleFirstLineAsTitle,
-  lowConfidenceDecisions,
-  onResolveDecision,
-  onKeepDecision,
-  onExportFeedback,
-  onResolveAllDecisions,
-  onKeepAllDecisions,
-  onScrollRatio,
-  onSaveDraft,
-}: EditorProps) {
-  const charCount = value.replace(/\s/g, '').length;
-  // 行内图片预览：解析正文中的独占图片行（![alt](img:xxx) 或内联 base64），原位显示缩略图
-  const imageLines = useMemo(() => {
-    const out: Array<{ line: number; alt: string; src: string; w: number; left: number; blanks: number }> = [];
-    const re = /!\[([^\]]*)\]\((img:[a-z0-9-]+|data:image\/[^;]+;base64,[^)\s]+)\)/g;
-    const lines = value.split('\n');
-    lines.forEach((l, i) => {
-      let m: RegExpExecArray | null;
-      re.lastIndex = 0;
-      while ((m = re.exec(l))) {
-        // 统计令牌行后的连续空行（展示空间）；空行不足时退化为小药丸，避免遮盖正文
-        let blanks = 0;
-        for (let k = i + 1; k < lines.length && !lines[k].trim(); k++) blanks++;
-        out.push({
-          line: i,
-          alt: m[1] || '配图',
-          src: m[2].startsWith('img:') ? resolveImageSrc(m[2]) : m[2],
-          w: measureTokenLineWidth(m[0]) + 14,
-          left: measureTokenLineWidth(l.slice(0, m.index)),
-          blanks,
+interface ImageItem {
+  alt: string;
+  src: string;
+}
+
+type EditorBlock =
+  | { kind: 'text'; lines: string[] }
+  | { kind: 'images'; images: ImageItem[]; captions: string[]; layout: 1 | 2 | 3 };
+
+const IMAGE_LINE_RE = /^!\[([^\]]*)\]\(([^)]+)\)$/;
+const GALLERY_SEP_CELL_RE = /^:?-{3,}:?$/;
+const CAPTION_LINE_RE = /^\*▲?\s*[^*]+\*$/;
+
+/**
+ * 把编辑器文本解析为「文本块 + 图片块」序列：
+ * - 独占一行的图片 → 图片块；连续多行图片自动成组（布局默认按张数 1/2/3 列）
+ * - 画廊表格（| ![a](x) | ![b](y) |）→ 解析出图片与题注
+ * - 图片后紧跟的斜体行（*▲ xxx*）→ 该图片的题注
+ * - 其余行（含空行）→ 文本块，原样保留
+ */
+function parseEditorBlocks(value: string): EditorBlock[] {
+  const lines = value.split('\n');
+  const blocks: EditorBlock[] = [];
+  let buf: string[] = [];
+  const flush = () => {
+    while (buf.length && !buf[0].trim()) buf.shift();
+    while (buf.length && !buf[buf.length - 1].trim()) buf.pop();
+    if (buf.length) blocks.push({ kind: 'text', lines: buf });
+    buf = [];
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim();
+    const isStandaloneImage = IMAGE_LINE_RE.test(t);
+    const isGalleryRow = t.startsWith('|') && t.includes('![');
+    if (!isStandaloneImage && !isGalleryRow) {
+      buf.push(lines[i]);
+      continue;
+    }
+    flush();
+    const images: ImageItem[] = [];
+    const captions: string[] = [];
+    let layout: 1 | 2 | 3 = 1;
+    if (isGalleryRow) {
+      const rows: string[][] = [];
+      let sepIdx = -1;
+      let cols = 2;
+      let j = i;
+      while (j < lines.length && lines[j].trim().startsWith('|')) {
+        const cells = lines[j].trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
+        const isSep = cells.length > 0 && cells.every((c) => GALLERY_SEP_CELL_RE.test(c.replace(/\s/g, '')) || c === '');
+        if (isSep && sepIdx === -1) {
+          sepIdx = rows.length;
+          cols = Math.max(1, cells.filter((c) => c !== '').length || cells.length);
+        }
+        rows.push(cells);
+        j++;
+      }
+      rows.forEach((r) =>
+        r.forEach((c) => {
+          const m = c.match(/!\[([^\]]*)\]\(([^)]+)\)/);
+          if (m) images.push({ alt: m[1], src: m[2] });
+        })
+      );
+      if (sepIdx >= 0 && rows[sepIdx + 1]) {
+        rows[sepIdx + 1].forEach((c, k) => {
+          if (k >= images.length) return;
+          const cap = c.replace(/^\*/, '').replace(/\*$/, '').replace(/^▲\s*/, '').trim();
+          captions[k] = cap;
         });
       }
-    });
-    return out;
-  }, [value]);
-  // 编辑框行度量：覆盖层定位用（字号 15px × 行高 1.9，内边距 py-5/px-5）
-  const [editorMetrics, setEditorMetrics] = useState({ paddingTop: 20, paddingLeft: 20, lineHeight: 28.5 });
-  const overlayRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const ta = textareaRef.current;
-    const ov = overlayRef.current;
-    if (ta && ov) ov.style.transform = 'translateY(' + -ta.scrollTop + 'px)';
-  }, [value, editorMetrics]);
+      for (let k = 0; k < images.length; k++) captions[k] = captions[k] || '';
+      layout = Math.min(3, Math.max(1, cols)) as 1 | 2 | 3;
+      blocks.push({ kind: 'images', images, captions, layout });
+      i = j - 1;
+    } else {
+      const m = t.match(IMAGE_LINE_RE);
+      if (m) images.push({ alt: m[1], src: m[2] });
+      // 连续相邻的图片行并入同组（两三张即画廊）
+      let j = i + 1;
+      while (j < lines.length && IMAGE_LINE_RE.test(lines[j].trim())) {
+        const mm = lines[j].trim().match(IMAGE_LINE_RE);
+        if (mm) images.push({ alt: mm[1], src: mm[2] });
+        j++;
+      }
+      if (j < lines.length && CAPTION_LINE_RE.test(lines[j].trim())) {
+        captions[images.length - 1] = lines[j]
+          .trim()
+          .replace(/^\*/, '')
+          .replace(/\*$/, '')
+          .replace(/^▲\s*/, '')
+          .trim();
+        i = j;
+      }
+      for (let k = 0; k < images.length; k++) captions[k] = captions[k] || '';
+      layout = Math.min(3, Math.max(1, images.length)) as 1 | 2 | 3;
+      blocks.push({ kind: 'images', images, captions, layout });
+      i = j - 1;
+    }
+  }
+  flush();
+  return blocks;
+}
 
+/** 图片块写回 Markdown：单图逐行 + 斜体题注；两列/三列输出画廊表格 */
+function serializeEditorBlocks(blocks: EditorBlock[]): string {
+  const parts: string[] = [];
+  for (const b of blocks) {
+    if (b.kind === 'text') {
+      parts.push(b.lines.join('\n'));
+      continue;
+    }
+    if (b.layout === 1) {
+      b.images.forEach((img, k) => {
+        parts.push(`![${img.alt}](${img.src})`);
+        if (b.captions[k]) parts.push(`*▲ ${b.captions[k]}*`);
+      });
+    } else {
+      const n = b.layout;
+      for (let r = 0; r < b.images.length; r += n) {
+        const imgs = b.images.slice(r, r + n);
+        parts.push('| ' + imgs.map((img) => `![${img.alt}](${img.src})`).join(' | ') + ' |');
+        parts.push('| ' + imgs.map(() => ':---:').join(' | ') + ' |');
+        parts.push(
+          '| ' + imgs.map((_, k) => (b.captions[r + k] ? `*▲ ${b.captions[r + k]}*` : '')).join(' | ') + ' |'
+        );
+      }
+    }
+  }
+  return parts.join('\n\n');
+}
+
+/** 自适应高度文本域：文本块编辑器 */
+function AutoTextarea(props: {
+  value: string;
+  onChange: (v: string) => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  onSelect?: (e: React.SyntheticEvent<HTMLTextAreaElement>) => void;
+  onPaste?: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void;
+  onBlur?: () => void;
+  placeholder?: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el) {
+      el.style.height = 'auto';
+      el.style.height = el.scrollHeight + 'px';
+    }
+  }, [props.value]);
+  return (
+    <textarea
+      ref={ref}
+      value={props.value}
+      onChange={(e) => props.onChange(e.target.value)}
+      onKeyDown={props.onKeyDown}
+      onSelect={props.onSelect}
+      onPaste={props.onPaste}
+      onBlur={props.onBlur}
+      placeholder={props.placeholder}
+      spellCheck={false}
+      rows={1}
+      className="w-full resize-none outline-none text-[15px] leading-[1.9] tracking-[0.01em] text-gray-800 bg-transparent overflow-hidden min-h-[28px] placeholder:text-gray-300"
+    />
+  );
+}
+
+/** 图片块卡片：真实图片按布局网格展示，悬停出现布局切换与删除，图下可编辑题注 */
+function ImageBlockCard(props: {
+  block: Extract<EditorBlock, { kind: 'images' }>;
+  onLayout: (l: 1 | 2 | 3) => void;
+  onCaption: (k: number, cap: string) => void;
+  onRemove: () => void;
+}) {
+  const { block, onLayout, onCaption, onRemove } = props;
+  const cols = block.layout;
+  return (
+    <div className="relative group rounded-xl border border-gray-200 bg-gray-50/50 p-3">
+      <div className="absolute right-2 top-2 z-10 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 rounded-lg border border-gray-200 px-1 py-0.5 shadow-sm">
+        {([1, 2, 3] as const).map((n) => (
+          <button
+            key={n}
+            onClick={() => onLayout(n)}
+            title={n === 1 ? '单图（各占一行）' : n === 2 ? '两列画廊' : '三列画廊'}
+            className={`px-1.5 py-0.5 rounded text-[11px] font-medium cursor-pointer transition-colors ${
+              block.layout === n ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-100'
+            }`}
+          >
+            {n}列
+          </button>
+        ))}
+        <button
+          onClick={onRemove}
+          title="删除此图片块"
+          className="px-1.5 py-0.5 rounded text-[11px] text-red-500 hover:bg-red-50 cursor-pointer font-medium"
+        >
+          删除
+        </button>
+      </div>
+      <div className={`grid gap-2 ${cols === 1 ? 'grid-cols-1' : cols === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+        {block.images.map((img, k) => {
+          const resolved = resolveImageSrc(img.src) || img.src;
+          return (
+            <div key={k} className="flex flex-col gap-1.5 min-w-0">
+              <div className="rounded-lg border border-gray-200 bg-white overflow-hidden flex items-center justify-center">
+                {resolved ? (
+                  <img src={resolved} alt={img.alt} className="w-full max-h-[320px] object-contain" />
+                ) : (
+                  <div className="w-full h-28 flex items-center justify-center text-[12px] text-gray-400 border-dashed">
+                    图片已失效
+                  </div>
+                )}
+              </div>
+              <input
+                value={block.captions[k] || ''}
+                onChange={(e) => onCaption(k, e.target.value)}
+                placeholder="题注（如：图 1 · 说明文字）"
+                className="w-full text-[12px] text-gray-500 bg-transparent border-b border-dashed border-gray-200 focus:border-blue-400 outline-none px-1 py-0.5 text-center"
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function Editor({
+    value,
+    onChange,
+    mode,
+    onModeChange,
+    onClear,
+    onRestoreSample,
+    draftStatus,
+    firstLineAsTitle,
+    onToggleFirstLineAsTitle,
+    lowConfidenceDecisions,
+    onResolveDecision,
+    onKeepDecision,
+    onExportFeedback,
+    onResolveAllDecisions,
+    onKeepAllDecisions,
+    onScrollRatio,
+    onSaveDraft,
+  }: EditorProps) {
+  const charCount = value.replace(/\s/g, '').length;
   const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  // 第二阶段：选中行意图转换工具栏 { 起始行, 结束行（含） }
-  const [intentBar, setIntentBar] = useState<{ s: number; e: number } | null>(null);
-  // 低置信度决策悬浮确认窗：默认收起为数量徽标，点击展开
-  const [decisionPanelOpen, setDecisionPanelOpen] = useState(false);
-
+  // 选中行意图转换工具栏：{ 文本块索引, 块内起始行, 块内结束行 }
+  const [intentBar, setIntentBar] = useState<{ blockIdx: number; s: number; e: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // 分块：文本块（源码编辑）与图片块（可视化编辑）交替
+  const blocks = useMemo(() => parseEditorBlocks(value), [value]);
 
   // 实时分析文本格式
   const detection = useMemo(() => detectContentFormat(value), [value]);
 
-  // 选中区域 → 行范围（0 起始，含端点）
-  const selectionLines = (): { s: number; e: number } | null => {
-    const ta = textareaRef.current;
-    if (!ta) return null;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    if (start === end) return null;
-    const s = value.slice(0, start).split('\n').length - 1;
-    const selected = value.slice(start, end);
-    const e = s + selected.split('\n').length - 1;
-    return { s, e };
+  const updateBlocks = (next: EditorBlock[]) => onChange(serializeEditorBlocks(next));
+  const updateTextBlock = (idx: number, text: string) => {
+    updateBlocks(
+      blocks.map((b, k) => (k === idx && b.kind === 'text' ? { kind: 'text' as const, lines: text.split('\n') } : b))
+    );
   };
-
-  const handleSelect = () => setIntentBar(selectionLines());
-  const handleTextareaBlur = () => setTimeout(() => setIntentBar(null), 200);
+  const updateImageBlock = (
+    idx: number,
+    patch: { images?: ImageItem[]; captions?: string[]; layout?: 1 | 2 | 3 }
+  ) => {
+    updateBlocks(
+      blocks.map((b, k) => (k === idx && b.kind === 'images' ? { ...b, ...patch } : b))
+    );
+  };
+  const removeImageBlock = (idx: number) => {
+    updateBlocks(blocks.filter((_, k) => k !== idx));
+  };
 
   // 点击外部自动关闭范文下拉菜单
   useEffect(() => {
@@ -162,38 +341,23 @@ export function Editor({
   // 一键将当前普通文本转为标准 Markdown 填回编辑器
   const handleConvertToMarkdown = () => {
     if (!value.trim()) return;
-    const converted = convertPlainTextToMarkdown(value, {
-      treatFirstLineAsTitle: firstLineAsTitle,
-    });
-    onChange(converted);
+    onChange(convertPlainTextToMarkdown(value, { treatFirstLineAsTitle: firstLineAsTitle }));
   };
 
-  // 在光标处插入文本（粘贴图片/插入图片共用）
-  const insertAtCaret = (text: string) => {
-    const ta = textareaRef.current;
-    const start = ta?.selectionStart ?? value.length;
-    const end = ta?.selectionEnd ?? start;
-    const next = value.slice(0, start) + text + value.slice(end);
-    onChange(next);
-    // 等重渲染后把光标放到插入文本末尾
-    requestAnimationFrame(() => {
-      if (ta) {
-        ta.focus();
-        ta.selectionStart = ta.selectionEnd = start + text.length;
-      }
-    });
-  };
-
-  // 插入图片：压缩后存入图片库，正文只写短令牌（避免 base64 淹没编辑框）；
-  // 存储已满时退回内联 base64，保证图片零丢失
+  // 插入图片（工具栏/拖放/文件选择）：图片入库并在文末追加图片块
   const insertImageMarkdown = async (file: File) => {
     try {
       setIsUploading(true);
       const { dataUrl, fileName } = await compressAndEncodeImage(file);
       const cleanAlt = fileName.replace(/\.[^/.]+$/, '') || '配图';
       const { token, persisted } = putImageDataUrl(dataUrl);
-      // 预留空行作为编辑框内的图片展示区（覆盖层在此渲染真实图片；预览/复制自动忽略连续空行）
-      insertAtCaret(`\n![${cleanAlt}](${persisted ? token : dataUrl})\n` + (persisted ? '\n'.repeat(IMAGE_SPACER_LINES) : ''));
+      const imageBlock: EditorBlock = {
+        kind: 'images',
+        images: [{ alt: cleanAlt, src: persisted ? token : dataUrl }],
+        captions: [''],
+        layout: 1,
+      };
+      onChange(serializeEditorBlocks([...blocks, imageBlock]));
     } catch (err) {
       console.error('Image insertion failed', err);
     } finally {
@@ -201,17 +365,34 @@ export function Editor({
     }
   };
 
-  // 粘贴：图片文件 → 转为 Markdown 图片语法；文本粘贴走浏览器原生行为
-  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const clipboardData = e.clipboardData;
-    if (!clipboardData) return;
-    const files = Array.from(clipboardData.files || []);
-    const items = Array.from(clipboardData.items || []);
-    const itemImg = items.find((item) => item.type.startsWith('image/'));
+  // 粘贴：图片文件 → 存入库并在光标处插入图片块；文本粘贴走浏览器原生行为
+  const makePasteHandler = (blockIdx: number) => async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const cd = e.clipboardData;
+    if (!cd) return;
+    const files = Array.from(cd.files || []);
+    const items = Array.from(cd.items || []);
+    const itemImg = items.find((it) => it.type.startsWith('image/'));
     const imgFile = files.find((f) => f.type.startsWith('image/')) || (itemImg ? itemImg.getAsFile() : null);
-    if (!imgFile) return; // 普通文本粘贴放行原生行为
+    if (!imgFile) return;
     e.preventDefault();
-    await insertImageMarkdown(imgFile);
+    setIsUploading(true);
+    try {
+      const { dataUrl, fileName } = await compressAndEncodeImage(imgFile);
+      const cleanAlt = fileName.replace(/\.[^/.]+$/, '') || '配图';
+      const { token, persisted } = putImageDataUrl(dataUrl);
+      const src = persisted ? token : dataUrl;
+      const ta = e.currentTarget;
+      const start = ta.selectionStart ?? 0;
+      const end = ta.selectionEnd ?? start;
+      const b = blocks[blockIdx];
+      const text = b && b.kind === 'text' ? b.lines.join('\n') : '';
+      const next = text.slice(0, start) + '\n\n![' + cleanAlt + '](' + src + ')\n\n' + text.slice(end);
+      updateTextBlock(blockIdx, next);
+    } catch (err) {
+      console.error('Image paste failed', err);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   // 拖放图片支持
@@ -220,161 +401,130 @@ export function Editor({
     setIsDragging(false);
     const files = Array.from(e.dataTransfer.files || []);
     const imgFile = files.find((f) => f.type.startsWith('image/'));
-    if (imgFile) {
-      insertImageMarkdown(imgFile);
-    }
+    if (imgFile) insertImageMarkdown(imgFile);
   };
 
-  // 触发本地文件选择
+  // 触发本地文件选取
   const triggerImagePicker = () => {
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
       fileInputRef.current.click();
     }
   };
-
-  // 图片覆盖层跟随编辑框滚动（直接改 transform，避免重渲染）
-  const syncOverlayScroll = () => {
-    const ta = textareaRef.current;
-    const ov = overlayRef.current;
-    if (ta && ov) ov.style.transform = 'translateY(' + -ta.scrollTop + 'px)';
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('image/')) insertImageMarkdown(file);
   };
 
-  // 编辑器滚动 → 按比例联动右侧预览（单向同步，无回环）
-  const handleTextareaScroll = (e: React.UIEvent<HTMLTextAreaElement>) => {
-    syncOverlayScroll();
-    if (!onScrollRatio) return;
-    const el = e.currentTarget;
+  // 编辑区滚动 → 按比例联动右侧预览
+  const handleContentScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
     const max = el.scrollHeight - el.clientHeight;
-    onScrollRatio(max > 0 ? el.scrollTop / max : 0);
+    onScrollRatio?.(max > 0 ? el.scrollTop / max : 0);
   };
 
-  // 快捷键：选区包裹（加粗 / 斜体），支持再按一次取消
-  const wrapSelection = (mark: string) => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const selected = value.slice(start, end);
-    let next: string;
-    let cursor: number;
-    if (selected.startsWith(mark) && selected.endsWith(mark) && selected.length >= mark.length * 2) {
-      const inner = selected.slice(mark.length, selected.length - mark.length);
-      next = value.slice(0, start) + inner + value.slice(end);
-      cursor = start + inner.length;
-    } else if (!selected) {
-      next = value.slice(0, start) + mark + mark + value.slice(end);
-      cursor = start + mark.length;
-    } else {
-      next = value.slice(0, start) + mark + selected + mark + value.slice(end);
-      cursor = start + selected.length + mark.length * 2;
-    }
-    onChange(next);
-    requestAnimationFrame(() => {
-      ta.focus();
-      ta.setSelectionRange(cursor, cursor);
-    });
-  };
-
-  // 快捷键：选中行转标题（⌘1/⌘2/⌘3 → #/##/###，覆盖选区所在的所有行）
-  const applyHeadingLevel = (level: number) => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    const start = ta.selectionStart;
-    const end = ta.selectionEnd;
-    const lineStart = value.lastIndexOf('\n', start - 1) + 1;
-    const restIdx = value.indexOf('\n', end);
-    const lineEnd = restIdx === -1 ? value.length : restIdx;
-    const block = value.slice(lineStart, lineEnd);
-    const prefix = '#'.repeat(level) + ' ';
-    const newBlock = block
-      .split('\n')
-      .map((l) => prefix + l.replace(/^#{1,6}\s*/, ''))
-      .join('\n');
-    onChange(value.slice(0, lineStart) + newBlock + value.slice(lineEnd));
-    requestAnimationFrame(() => {
-      ta.focus();
-      ta.setSelectionRange(lineStart, lineStart + newBlock.length);
-    });
-  };
-
-  // 快捷键总入口：⌘B 加粗 / ⌘I 斜体 / ⌘1~3 标题 / ⌘S 保存草稿
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  // 快捷键（文本块内）：⌘B 加粗 / ⌘I 斜体 / ⌘1~3 标题 / ⌘S 保存草稿
+  const makeKeyDownHandler = (blockIdx: number, text: string) => (
+    e: React.KeyboardEvent<HTMLTextAreaElement>
+  ) => {
     if (!(e.metaKey || e.ctrlKey)) return;
     const k = e.key.toLowerCase();
-    if (k === 'b') {
+    const ta = e.currentTarget;
+    const apply = (next: string, c1: number, c2: number) => {
+      updateTextBlock(blockIdx, next);
+      requestAnimationFrame(() => {
+        ta.focus();
+        ta.setSelectionRange(c1, c2);
+      });
+    };
+    if (k === 'b' || k === 'i') {
       e.preventDefault();
-      wrapSelection('**');
-    } else if (k === 'i') {
-      e.preventDefault();
-      wrapSelection('*');
+      const mark = k === 'b' ? '**' : '*';
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      const selected = text.slice(start, end);
+      let next: string;
+      let c1: number;
+      let c2: number;
+      if (selected.startsWith(mark) && selected.endsWith(mark) && selected.length >= mark.length * 2) {
+        const inner = selected.slice(mark.length, selected.length - mark.length);
+        next = text.slice(0, start) + inner + text.slice(end);
+        c1 = start;
+        c2 = start + inner.length;
+      } else if (!selected) {
+        next = text.slice(0, start) + mark + mark + text.slice(end);
+        c1 = start + mark.length;
+        c2 = c1;
+      } else {
+        next = text.slice(0, start) + mark + selected + mark + text.slice(end);
+        c1 = start + mark.length;
+        c2 = c1 + selected.length;
+      }
+      apply(next, c1, c2);
     } else if (k === 's') {
       e.preventDefault();
       onSaveDraft?.();
     } else if (k === '1' || k === '2' || k === '3') {
       e.preventDefault();
-      applyHeadingLevel(Number(k));
+      const level = Number(k);
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      const lineStart = text.lastIndexOf('\n', start - 1) + 1;
+      const nl = text.indexOf('\n', end);
+      const lineEnd = nl === -1 ? text.length : nl;
+      const prefix = '#'.repeat(level) + ' ';
+      const newBlock = text
+        .slice(lineStart, lineEnd)
+        .split('\n')
+        .map((l) => prefix + l.replace(/^#{1,6}\s*/, ''))
+        .join('\n');
+      apply(text.slice(0, lineStart) + newBlock + text.slice(lineEnd), lineStart, lineStart + newBlock.length);
     }
   };
 
-  // 点击行内缩略图 → 选中该图片行（可直接改 alt 或删除）
-  const selectLine = (line: number) => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    const lines = value.split('\n');
-    let start = 0;
-    for (let i = 0; i < line; i++) start += lines[i].length + 1;
-    ta.focus();
-    ta.setSelectionRange(start, start + lines[line].length);
-  };
-
-  // 编辑框行高/内边距测量（窗口缩放时重测）
-  useEffect(() => {
-    const measure = () => {
-      const ta = textareaRef.current;
-      if (!ta) return;
-      const cs = getComputedStyle(ta);
-      setEditorMetrics({
-        paddingTop: parseFloat(cs.paddingTop) || 20,
-        paddingLeft: parseFloat(cs.paddingLeft) || 20,
-        lineHeight: parseFloat(cs.lineHeight) || 28.5,
-      });
-    };
-    measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, []);
-
-  // 本地文件选取完成
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && file.type.startsWith('image/')) {
-      insertImageMarkdown(file);
+  // 选中文本块内容 → 显示意图转换工具栏（块内行号）
+  const makeSelectHandler = (blockIdx: number, text: string) => (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+    const ta = e.currentTarget;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    if (start === end) {
+      setIntentBar((prev) => (prev && prev.blockIdx === blockIdx ? null : prev));
+      return;
     }
+    const s = text.slice(0, start).split('\n').length - 1;
+    const selected = text.slice(start, end);
+    const eLine = s + selected.split('\n').length - 1;
+    setIntentBar({ blockIdx, s, e: eLine });
   };
 
-  // 选中行意图转换（行级操作：直接改写源码行）
+  // 意图转换（块内行级操作：直接改写源码行）
   const applyIntentTransform = (kind: string) => {
     if (!intentBar) return;
-    const { s, e } = intentBar;
-    const lines = value.split('\n');
+    const { blockIdx, s, e } = intentBar;
+    const b = blocks[blockIdx];
+    if (!b || b.kind !== 'text') {
+      setIntentBar(null);
+      return;
+    }
+    const lines = [...b.lines];
     switch (kind) {
       case 'h2':
         for (let k = s; k <= e; k++) {
           const t = (lines[k] || '').trim();
-          if (t) lines[k] = `## ${t.replace(/^#+\s*/, '')}`;
+          if (t) lines[k] = '## ' + t.replace(/^#+\s*/, '');
         }
         break;
       case 'h3':
         for (let k = s; k <= e; k++) {
           const t = (lines[k] || '').trim();
-          if (t) lines[k] = `### ${t.replace(/^#+\s*/, '')}`;
+          if (t) lines[k] = '### ' + t.replace(/^#+\s*/, '');
         }
         break;
       case 'list':
         for (let k = s; k <= e; k++) {
           const t = (lines[k] || '').trim();
-          if (t) lines[k] = `- ${t.replace(/^[-•●·✦\s]+/, '')}`;
+          if (t) lines[k] = '- ' + t.replace(/^[-•●·✦\s]+/, '');
         }
         break;
       case 'table': {
@@ -383,11 +533,11 @@ export function Editor({
           const t = (lines[k] || '').trim();
           if (!t) continue;
           const cells = t.split(/\s*(?:\t|[｜|]\s*|\s{2,}|[,，])\s*/).filter(Boolean);
-          rows.push(`| ${cells.join(' | ')} |`);
+          rows.push('| ' + cells.join(' | ') + ' |');
         }
         if (rows.length >= 2) {
           const colCount = rows[0].split('|').length - 2;
-          rows.splice(1, 0, `| ${Array(Math.max(colCount, 1)).fill(':---').join(' | ')} |`);
+          rows.splice(1, 0, '| ' + Array(Math.max(colCount, 1)).fill(':---').join(' | ') + ' |');
         }
         lines.splice(s, e - s + 1, ...rows);
         break;
@@ -395,7 +545,7 @@ export function Editor({
       case 'quote':
         for (let k = s; k <= e; k++) {
           const t = (lines[k] || '').trim();
-          if (t) lines[k] = `> ${t}`;
+          if (t) lines[k] = '> ' + t;
         }
         break;
       case 'code': {
@@ -406,7 +556,7 @@ export function Editor({
       case 'caption':
         for (let k = s; k <= e; k++) {
           const t = (lines[k] || '').trim().replace(/^[*_]+|[*_]+$/g, '');
-          if (t) lines[k] = `*${t.startsWith('▲') ? t : `▲ ${t}`}*`;
+          if (t) lines[k] = '*' + (t.startsWith('▲') ? t : '▲ ' + t) + '*';
         }
         break;
       case 'text':
@@ -415,16 +565,13 @@ export function Editor({
         }
         break;
     }
-    const next = lines.join('\n');
-    onChange(next);
+    updateTextBlock(blockIdx, lines.join('\n'));
     setIntentBar(null);
   };
 
   return (
     <div
-      className={`flex flex-col h-full bg-white relative ${
-        isDragging ? 'ring-2 ring-blue-500 bg-blue-50/20' : ''
-      }`}
+      className={`flex flex-col h-full bg-white relative ${isDragging ? 'ring-2 ring-blue-500 bg-blue-50/20' : ''}`}
       onDragOver={(e) => {
         e.preventDefault();
         setIsDragging(true);
@@ -432,6 +579,8 @@ export function Editor({
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
     >
+      {/* 隐藏的本地图片选取 input */}
+
       {/* 隐藏的本地图片选取 input */}
       <input
         type="file"
@@ -795,10 +944,9 @@ export function Editor({
         </div>
       </div>
 
-      {/* 输入区：纯文本 / Markdown 源码（左边永远是源码，渲染效果只在右边预览） */}
-      {/* 选中行意图转换工具栏（源码行级操作） */}
+      {/* 选中行意图转换工具栏（文本块内行级操作） */}
       {intentBar && (
-        <div className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 bg-gray-900/90 backdrop-blur text-white text-xs flex-wrap rounded-lg mx-3 mt-2">
+        <div className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 bg-gray-900/90 backdrop-blur text-white text-xs flex-wrap rounded-lg mx-3 mt-2 z-10">
           <span className="text-gray-400 mr-1">选中 {intentBar.e - intentBar.s + 1} 行：</span>
           {[
             { kind: 'h2', label: 'H2' },
@@ -827,75 +975,50 @@ export function Editor({
         </div>
       )}
 
-      {/* 输入区：纯文本 / Markdown 源码（左边永远是源码，渲染效果只在右边预览） */}
-      <div className="relative flex-1 flex flex-col min-h-0">
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onSelect={handleSelect}
-        onPaste={handlePaste}
-        onScroll={handleTextareaScroll}
-        onKeyDown={handleKeyDown}
-        placeholder="在这里输入或粘贴文章内容……纯文本即可，系统会自动识别结构并排版；也可以直接粘贴截图插入图片。"
-        className="flex-1 w-full resize-none outline-none px-5 py-5 text-[15px] leading-[1.9] tracking-[0.01em] text-gray-800 bg-white"
-        spellCheck={false}
-      />
-
-      {/* 行内图片预览层：图片行原位显示缩略图，其余内容保持源码形态 */}
-      <div ref={overlayRef} className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
-        {imageLines.map(({ line, alt, src: imgSrc, w, left: leftOffset, blanks }) => {
-          const hasRoom = blanks >= IMAGE_SPACER_LINES;
-          return (
-          <div
-            key={line + '-' + alt}
-            style={
-              hasRoom
-                ? {
-                    position: 'absolute',
-                    top: editorMetrics.paddingTop + line * editorMetrics.lineHeight,
-                    left: editorMetrics.paddingLeft,
-                    height: (1 + IMAGE_SPACER_LINES) * editorMetrics.lineHeight,
-                    width: 'min(85%, 560px)',
-                  }
-                : {
-                    position: 'absolute',
-                    top: editorMetrics.paddingTop + line * editorMetrics.lineHeight,
-                    left: editorMetrics.paddingLeft + leftOffset,
-                    width: Math.min(Math.max(w, 90), 720),
-                  }
-            }
-            className="pointer-events-auto overflow-hidden"
-          >
-            {imgSrc ? (
-              hasRoom ? (
-                <div
-                  title="点击选中此图片行（可直接编辑或删除）"
-                  onClick={() => selectLine(line)}
-                  className="h-full w-full flex items-center justify-center bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer"
-                >
-                  <img src={imgSrc} alt={alt} className="max-h-full max-w-full object-contain" />
-                </div>
-              ) : (
-                <div
-                  title="点击选中此图片行（可直接编辑或删除）"
-                  onClick={() => selectLine(line)}
-                  className="h-7 w-full inline-flex items-center gap-1.5 bg-white px-1.5 rounded-sm border border-gray-200 cursor-pointer overflow-hidden"
-                >
-                  <img src={imgSrc} alt={alt} className="h-full w-auto max-w-[60%] rounded-sm" />
-                  <span className="text-[10px] text-gray-400 whitespace-nowrap">{alt}</span>
-                </div>
-              )
+      {/* 分块编辑区：文本块（源码）+ 图片块（可视化），滚动时联动右侧预览 */}
+      <div
+        ref={scrollRef}
+        className="relative flex-1 min-h-0 overflow-y-auto custom-scrollbar"
+        onScroll={handleContentScroll}
+      >
+        <div className="px-4 py-4 space-y-3">
+          {value.trim() === '' && (
+            <p className="text-sm text-gray-300 text-center py-8">
+              在这里输入或粘贴文章内容……纯文本即可，系统会自动识别结构并排版；也可以直接粘贴截图插入图片。
+            </p>
+          )}
+          {blocks.map((b, idx) =>
+            b.kind === 'text' ? (
+              <AutoTextarea
+                key={idx}
+                value={b.lines.join('\n')}
+                onChange={(text) => updateTextBlock(idx, text)}
+                onKeyDown={makeKeyDownHandler(idx, b.lines.join('\n'))}
+                onSelect={makeSelectHandler(idx, b.lines.join('\n'))}
+                onPaste={makePasteHandler(idx)}
+                onBlur={() => setTimeout(() => setIntentBar((prev) => (prev && prev.blockIdx === idx ? null : prev)), 200)}
+              />
             ) : (
-              <span className="h-7 inline-flex items-center px-2 rounded border border-dashed border-gray-300 text-[11px] text-gray-400 bg-white cursor-pointer" onClick={() => selectLine(line)}>
-                图片已失效（{alt}）
-              </span>
-            )}
-          </div>
-          );
-        })}
+              <ImageBlockCard
+                key={idx}
+                block={b}
+                onLayout={(l) => updateImageBlock(idx, { layout: l })}
+                onCaption={(k, cap) =>
+                  updateImageBlock(idx, { captions: b.captions.map((c, kk) => (kk === k ? cap : c)) })
+                }
+                onRemove={() => removeImageBlock(idx)}
+              />
+            )
+          )}
+          {isUploading && (
+            <div className="flex items-center gap-2 text-xs text-blue-600 py-2">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              正在处理图片…
+            </div>
+          )}
+        </div>
       </div>
-      </div>
+
 
       {/* 空状态引导：无内容时给出起点 */}
       {!value.trim() && (
