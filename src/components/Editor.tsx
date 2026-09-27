@@ -51,7 +51,7 @@ interface ImageItem {
 
 type EditorBlock =
   | { kind: 'text'; lines: string[] }
-  | { kind: 'images'; images: ImageItem[]; captions: string[]; layout: 1 | 2 | 3 };
+  | { kind: 'images'; images: ImageItem[]; captions: string[]; layout: 1 | 2 | 3; polaroid?: boolean };
 
 const IMAGE_LINE_RE = /^!\[([^\]]*)\]\(([^)]+)\)$/;
 const GALLERY_SEP_CELL_RE = /^:?-{3,}:?$/;
@@ -78,6 +78,46 @@ function parseEditorBlocks(value: string): EditorBlock[] {
     const t = lines[i].trim();
     const isStandaloneImage = IMAGE_LINE_RE.test(t);
     const isGalleryRow = t.startsWith('|') && t.includes('![');
+    // photo-card 拍立得 HTML 块 → 可视化图片块（不再以源码形式示人）
+    if (/^<section\b/i.test(t) && /data-role=["']photo-card["']/i.test(t)) {
+      flush();
+      let html = '';
+      let j = i;
+      while (j < lines.length) {
+        html += (html ? '\n' : '') + lines[j];
+        const closed = /<\/section>/i.test(lines[j]);
+        j++;
+        if (closed) break;
+      }
+      const images: ImageItem[] = [];
+      for (const im of html.matchAll(/<img\b[^>]*>/gi)) {
+        const tag = im[0];
+        const srcM = tag.match(/src=["']([^"']+)["']/i);
+        const altM = tag.match(/alt=["']([^"']*)["']/i);
+        if (srcM) images.push({ alt: (altM?.[1] || '').trim(), src: srcM[1] });
+      }
+      let caption = '';
+      const pM = html.match(/<p\b[^>]*>([\s\S]*?)<\/p>/i);
+      if (pM) caption = pM[1].replace(/<[^>]+>/g, '').replace(/^▲\s*/, '').trim();
+      if (images.length === 0) {
+        // 非 photo 图片的 section：保持文本原样
+        buf.push(...html.split('\n'));
+        i = j - 1;
+        continue;
+      }
+      if (images.length === 1) {
+        blocks.push({ kind: 'images', images, captions: [caption], layout: 1, polaroid: true });
+      } else {
+        blocks.push({
+          kind: 'images',
+          images,
+          captions: images.map(() => ''),
+          layout: Math.min(3, Math.max(1, images.length)) as 1 | 2 | 3,
+        });
+      }
+      i = j - 1;
+      continue;
+    }
     if (!isStandaloneImage && !isGalleryRow) {
       buf.push(lines[i]);
       continue;
@@ -176,6 +216,21 @@ function serializeEditorBlocks(blocks: EditorBlock[]): string {
       continue;
     }
     const rows: string[] = [];
+    if (b.polaroid && b.images.length === 1) {
+      // 拍立得衬底卡片（Dark Mode 安全型）：输出 photo-card section
+      const img = b.images[0];
+      const cap = (b.captions[0] || '').trim();
+      rows.push(
+        '<section data-role="photo-card" style="margin: 20px auto; max-width: 100%; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 8px 10px 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.06); text-align: center;">'
+      );
+      rows.push(`<img src="${img.src}" alt="${img.alt}" style="width: 100%; border-radius: 6px; display: block; margin: 0 auto;" />`);
+      if (cap) {
+        rows.push(`<p style="margin: 8px 0 0 0; font-size: 13px; font-weight: 500; text-align: center;">▲ ${cap}</p>`);
+      }
+      rows.push('</section>');
+      parts.push(rows.join('\n'));
+      continue;
+    }
     if (b.layout === 1) {
       b.images.forEach((img, k) => {
         rows.push(`![${img.alt}](${img.src})`);
@@ -238,8 +293,9 @@ function ImageBlockCard(props: {
   onLayout: (l: 1 | 2 | 3) => void;
   onCaption: (k: number, cap: string) => void;
   onRemove: () => void;
+  onPolaroid: (v: boolean) => void;
 }) {
-  const { block, canLayout, onLayout, onCaption, onRemove } = props;
+  const { block, canLayout, onLayout, onCaption, onRemove, onPolaroid } = props;
   const cols = block.layout;
   // 题注本地草稿态：输入时只改本地，失焦/回车才提交一次（避免每次击键都全篇序列化往返）。
   // 外部 captions 变化（引用比较）时在渲染期同步草稿，不经过 effect
@@ -284,6 +340,17 @@ function ImageBlockCard(props: {
             </button>
           );
         })}
+        {block.images.length === 1 && block.layout === 1 && (
+          <button
+            onClick={() => onPolaroid(!block.polaroid)}
+            title="拍立得衬底卡片（Dark Mode 安全型）：白底留白护城河，暗色主题下图片更耐看"
+            className={`px-1.5 py-0.5 rounded text-[11px] font-medium cursor-pointer transition-colors ${
+              block.polaroid ? 'bg-slate-700 text-white' : 'text-gray-500 hover:bg-gray-100'
+            }`}
+          >
+            {block.polaroid ? '安全型开' : '安全型'}
+          </button>
+        )}
         <button
           onClick={onRemove}
           title="删除此图片块"
@@ -297,9 +364,18 @@ function ImageBlockCard(props: {
           const resolved = resolveImageSrc(img.src) || img.src;
           return (
             <div key={k} className="flex flex-col gap-1.5 min-w-0">
-              <div className="rounded-lg border border-gray-200 bg-white overflow-hidden flex items-center justify-center">
+              <div
+                className={
+                  'rounded-lg border border-gray-200 bg-white overflow-hidden flex items-center justify-center ' +
+                  (block.polaroid ? 'p-3 pb-4 shadow-md' : '')
+                }
+              >
                 {resolved ? (
-                  <img src={resolved} alt={img.alt} className="w-full max-h-[320px] object-contain" />
+                  <img
+                    src={resolved}
+                    alt={img.alt}
+                    className={block.polaroid ? 'w-full rounded-sm' : 'w-full max-h-[320px] object-contain'}
+                  />
                 ) : (
                   <div className="w-full h-28 flex items-center justify-center text-[12px] text-gray-400 border-dashed">
                     图片已失效
@@ -372,7 +448,7 @@ export function Editor({
   };
   const updateImageBlock = (
     idx: number,
-    patch: { images?: ImageItem[]; captions?: string[]; layout?: 1 | 2 | 3 }
+    patch: { images?: ImageItem[]; captions?: string[]; layout?: 1 | 2 | 3; polaroid?: boolean }
   ) => {
     updateBlocks(
       blocks.map((b, k) => (k === idx && b.kind === 'images' ? { ...b, ...patch } : b))
@@ -418,7 +494,7 @@ export function Editor({
             return;
           }
           b.images.forEach((img, kk) =>
-            next.push({ kind: 'images', images: [img], captions: [b.captions[kk] || ''], layout: 1 })
+            next.push({ kind: 'images', images: [img], captions: [b.captions[kk] || ''], layout: 1, polaroid: false })
           );
         });
         updateBlocks(next);
@@ -446,7 +522,7 @@ export function Editor({
       // 相邻图片凑不满该列数：维持现状，避免出现空列
       return;
     }
-    const merged: EditorBlock = { kind: 'images', images: groupImages, captions: groupCaptions, layout };
+    const merged: EditorBlock = { kind: 'images', images: groupImages, captions: groupCaptions, layout, polaroid: false };
     updateBlocks([...blocks.slice(0, start), merged, ...blocks.slice(end + 1)]);
   };
 
@@ -1138,6 +1214,7 @@ export function Editor({
                   3: mergeableImageCount(idx) >= 3,
                 }}
                 onLayout={(l) => setImageLayout(idx, l)}
+                onPolaroid={(v) => updateImageBlock(idx, { polaroid: v })}
                 onCaption={(k, cap) =>
                   updateImageBlock(idx, { captions: b.captions.map((c, kk) => (kk === k ? cap : c)) })
                 }
