@@ -433,17 +433,33 @@ export function Editor({
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // 分块：文本块（源码编辑）与图片块（可视化编辑）交替。
-  // 空文档时兜底一个空文本块，保证用户始终有可输入的位置
-  const rawBlocks = useMemo(() => parseEditorBlocks(value), [value]);
+  // 编辑态以 blocksState 为准（保留文本块行尾换行等编辑意图），
+  // 仅当外部 value 变化（载入范文/清空/AI/粘贴全文）时才重新解析——
+  // 否则「文本末尾按回车」产生的行尾空行会被 parse 的尾部剥除吞掉
+  const [blocksState, setBlocksState] = useState<EditorBlock[]>(() => parseEditorBlocks(value));
+  const [lastSerialized, setLastSerialized] = useState(value);
+  if (value !== lastSerialized) {
+    setLastSerialized(value);
+    setBlocksState(parseEditorBlocks(value));
+  }
+  const rawBlocks = blocksState;
   const blocks = rawBlocks.length > 0 ? rawBlocks : [{ kind: 'text' as const, lines: [''] }];
 
   // 实时分析文本格式
   const detection = useMemo(() => detectContentFormat(value), [value]);
 
-  const updateBlocks = (next: EditorBlock[]) => onChange(serializeEditorBlocks(next));
+  const commitBlocks = (next: EditorBlock[], reparse?: boolean) => {
+    const md = serializeEditorBlocks(next);
+    // 文本编辑（reparse=false）保留逐字状态（含行尾换行）；图片结构变更后重析归一化（拆出图片块）
+    setBlocksState(reparse ? parseEditorBlocks(md) : next);
+    setLastSerialized(md);
+    onChange(md);
+  };
+  const updateBlocks = (next: EditorBlock[]) => commitBlocks(next, true);
   const updateTextBlock = (idx: number, text: string) => {
-    updateBlocks(
-      blocks.map((b, k) => (k === idx && b.kind === 'text' ? { kind: 'text' as const, lines: text.split('\n') } : b))
+    commitBlocks(
+      blocks.map((b, k) => (k === idx && b.kind === 'text' ? { kind: 'text' as const, lines: text.split('\n') } : b)),
+      false
     );
   };
   const updateImageBlock = (
@@ -593,7 +609,11 @@ export function Editor({
       const b = blocks[blockIdx];
       const text = b && b.kind === 'text' ? b.lines.join('\n') : '';
       const next = text.slice(0, start) + '\n\n![' + cleanAlt + '](' + src + ')\n\n' + text.slice(end);
-      updateTextBlock(blockIdx, next);
+      // 粘贴引入了图片行，需要重解析拆出独立图片块
+      commitBlocks(
+        blocks.map((b, k) => (k === blockIdx && b.kind === 'text' ? { kind: 'text' as const, lines: next.split('\n') } : b)),
+        true
+      );
     } catch (err) {
       console.error('Image paste failed', err);
     } finally {
