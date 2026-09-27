@@ -213,27 +213,39 @@ function AutoTextarea(props: {
 /** 图片块卡片：真实图片按布局网格展示，悬停出现布局切换与删除，图下可编辑题注 */
 function ImageBlockCard(props: {
   block: Extract<EditorBlock, { kind: 'images' }>;
+  canLayout: Record<1 | 2 | 3, boolean>;
   onLayout: (l: 1 | 2 | 3) => void;
   onCaption: (k: number, cap: string) => void;
   onRemove: () => void;
 }) {
-  const { block, onLayout, onCaption, onRemove } = props;
+  const { block, canLayout, onLayout, onCaption, onRemove } = props;
   const cols = block.layout;
+  // 题注本地草稿态：输入时只改本地，失焦/回车才提交一次（避免每次击键都全篇序列化往返）
+  const [draftCaps, setDraftCaps] = useState<string[]>(block.captions);
+  useEffect(() => {
+    setDraftCaps(block.captions);
+  }, [block.captions]);
+  const commitCaption = (k: number) => {
+    const v = (draftCaps[k] || '').trim();
+    if (v !== (block.captions[k] || '')) onCaption(k, v);
+  };
   return (
     <div className="relative group rounded-xl border border-gray-200 bg-gray-50/50 p-3">
       <div className="absolute right-2 top-2 z-10 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 rounded-lg border border-gray-200 px-1 py-0.5 shadow-sm">
-        {([1, 2, 3] as const).map((n) => (
-          <button
-            key={n}
-            onClick={() => onLayout(n)}
-            title={n === 1 ? '单图（各占一行）' : n === 2 ? '两列画廊' : '三列画廊'}
-            className={`px-1.5 py-0.5 rounded text-[11px] font-medium cursor-pointer transition-colors ${
-              block.layout === n ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-100'
-            }`}
-          >
-            {n}列
-          </button>
-        ))}
+        {([1, 2, 3] as const).map((n) =>
+          canLayout[n] ? (
+            <button
+              key={n}
+              onClick={() => onLayout(n)}
+              title={n === 1 ? '单图（各占一行）' : n === 2 ? '两列画廊' : '三列画廊'}
+              className={`px-1.5 py-0.5 rounded text-[11px] font-medium cursor-pointer transition-colors ${
+                block.layout === n ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-100'
+              }`}
+            >
+              {n}列
+            </button>
+          ) : null
+        )}
         <button
           onClick={onRemove}
           title="删除此图片块"
@@ -257,8 +269,15 @@ function ImageBlockCard(props: {
                 )}
               </div>
               <input
-                value={block.captions[k] || ''}
-                onChange={(e) => onCaption(k, e.target.value)}
+                value={draftCaps[k] || ''}
+                onChange={(e) => setDraftCaps((prev) => prev.map((c, kk) => (kk === k ? e.target.value : c)))}
+                onBlur={() => commitCaption(k)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    (e.target as HTMLInputElement).blur();
+                  }
+                }}
                 placeholder="题注（如：图 1 · 说明文字）"
                 className="w-full text-[12px] text-gray-500 bg-transparent border-b border-dashed border-gray-200 focus:border-blue-400 outline-none px-1 py-0.5 text-center"
               />
@@ -323,6 +342,27 @@ export function Editor({
   };
   const removeImageBlock = (idx: number) => {
     updateBlocks(blocks.filter((_, k) => k !== idx));
+  };
+
+  // 可合并张数：自身 + 相邻（中间无文本块）图片块的图片总数，决定布局按钮是否可用
+  const mergeableImageCount = (idx: number) => {
+    let count = 0;
+    let s = idx;
+    let e = idx;
+    const isImageBlock = (k: number) => blocks[k] && blocks[k].kind === 'images';
+    while (s - 1 >= 0 && isImageBlock(s - 1)) {
+      s--;
+      const b = blocks[s];
+      if (b.kind === 'images') count += b.images.length;
+    }
+    const self = blocks[idx];
+    if (self && self.kind === 'images') count += self.images.length;
+    while (e + 1 < blocks.length && isImageBlock(e + 1)) {
+      e++;
+      const b = blocks[e];
+      if (b.kind === 'images') count += b.images.length;
+    }
+    return count;
   };
 
   // 布局切换：2/3 列时把相邻（中间无文本块）的图片块合并进来，凑成真正的多列画廊；
@@ -1054,6 +1094,11 @@ export function Editor({
               <ImageBlockCard
                 key={idx}
                 block={b}
+                canLayout={{
+                  1: true,
+                  2: mergeableImageCount(idx) >= 2,
+                  3: mergeableImageCount(idx) >= 3,
+                }}
                 onLayout={(l) => setImageLayout(idx, l)}
                 onCaption={(k, cap) =>
                   updateImageBlock(idx, { captions: b.captions.map((c, kk) => (kk === k ? cap : c)) })
