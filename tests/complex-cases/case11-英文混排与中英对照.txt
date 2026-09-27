@@ -1,0 +1,13 @@
+Designing Calm Interfaces
+
+A good interface whispers, it never shouts. 用户研究反复证明：视觉噪音每降低一档，阅读完成率显著上升。
+
+Part One: The Problem
+
+Most dashboards fail for the same reason. 它们试图同时说太多的话，结果一句话都没说清楚。
+
+1、Reduce: 每屏只保留一个主任务
+2、Rewrite: 把按钮文案从系统语言改成人话
+3、Repeat: 用真实用户验证，而不是开会争论
+
+Design is not decoration. 排版是把信息组织成读者能走完的路径。

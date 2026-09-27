@@ -1,0 +1,18 @@
+配置片段摘录
+
+server {
+    listen 80;
+    server_name example.com;
+    root /var/www/html;
+}
+
+
+上面的缩进片段没有用代码围栏包裹，属于风险输入。
+
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:3000;
+    }
+
+
+不规则空行是粘贴最常见的痕迹，排版引擎需要容忍它们。

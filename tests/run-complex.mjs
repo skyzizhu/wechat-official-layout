@@ -117,6 +117,118 @@ for (const file of cases) {
       expect(has('example.com/spec'), '综合长文参考文献丢失');
       expect(hasNot('### 3.6') && hasNot('1. 6分'), '小数 3.6 分被误判');
       break;
+    case 'case11':
+      expect(has('A good interface whispers'), '英文段落丢失');
+      expect(/1\.\s?(\*\*)?Reduce/.test(md), '中英混排编号列表未生成');
+      expect(has('**Part One**') && has('The Problem'), '英文小节标题丢失');
+      break;
+    case 'case12':
+      expect(has('a * b 表示乘法'), '字面星号被转义/吞掉');
+      expect(has('variable_name'), '下划线被误转斜体');
+      expect(has('# 注释'), '行内井号丢失');
+      expect(has('`console.log()`'), '行内代码丢失');
+      break;
+    case 'case13':
+      expect((md.match(/^>/gm) || []).length >= 5, '引用行数量不足');
+      expect(has('先定基调'), '引用内清单内容丢失');
+      expect(has('阅读完成率提升了三成'), '多段引用内容丢失');
+      break;
+    case 'case14':
+      expect((md.match(/^(?:---|\*\*\*|___)$/gm) || []).length >= 2, '分割线数量不足');
+      expect(has('流量红利见顶'), '分割线前段落丢失');
+      expect(has('反馈周期从月缩短到周'), '分割线后段落丢失');
+      break;
+    case 'case15':
+      expect(has('１、全角数字序号'), '全角序号内容丢失');
+      expect(has('（一）') && has('这一段讲全角括号'), '全角括号序号内容丢失');
+      expect(has('这一段讲全角逗号'), '全角括号第二行内容丢失');
+      expect(hasNot('### １、'), '全角序号被误判为标题');
+      break;
+    case 'case16':
+      expect(has('这次调查持续了四十天'), '长段落内容丢失');
+      expect(has('方法永远服务于人'), '长段落结尾丢失');
+      expect(hasNot('## '), '无结构长文不应产生小节标题');
+      break;
+    case 'case17':
+      expect(has('**产品经理**'), '台词说话人未加粗强调');
+      expect(has('布鲁克斯定律'), '台词内容丢失');
+      expect(has('（全场沉默了三秒）'), '舞台提示丢失');
+      break;
+    case 'case18':
+      expect(has('必带物品'), '星标分组丢失');
+      expect(has('护照与身份证复印件'), '圆点条目内容丢失');
+      expect(has('- [x] 出发前最后确认'), '对勾条目未转为任务清单');
+      expect(has('- [ ] 不要带超过两个箱子'), '叉号条目未转为未完成任务');
+      break;
+    case 'case19':
+      expect((md.match(/^\|/gm) || []).length >= 5, '速查表行数不足');
+      expect(has('[官网]'), '表格内链接丢失');
+      expect(has('9.9 元/月') || has('9.9元/月'), '小数价格内容丢失');
+      expect(hasNot('1. 9.9') && hasNot('### 9.9'), '小数价格被误判');
+      break;
+    case 'case20':
+      expect(has('```yaml'), 'yaml 代码块丢失');
+      expect(has('# 这不是标题'), '代码内注释丢失');
+      expect(has('### 这更不是标题'), '代码内伪标题未保持字面');
+      expect(has('1. 这不是列表项'), '代码内伪列表未保持字面');
+      break;
+    case 'case21':
+      expect(has('[x] 数据库迁移脚本'), '已完成任务丢失');
+      expect(has('[ ] 灰度方案评审'), '未完成任务丢失');
+      expect(has('三天观察期'), '任务清单后段落丢失');
+      break;
+    case 'case22':
+      expect(has('存在争议[^1]'), '脚注引用语法丢失');
+      expect(has('[^1]: 见 Sweller'), '脚注定义丢失');
+      expect(has('<sup>[注]</sup>'), '角标标签丢失');
+      expect(has('| Cognitive Load |'), '译名表格丢失');
+      break;
+    case 'case23':
+      expect(has('![工作台](/images/sample/sample-5.jpg'), '带标题图片丢失');
+      expect(has('[Markdown 指南](https://example.com/guide'), '行内链接丢失');
+      expect(has('spec]: https://example.com/spec'), '引用式链接定义丢失');
+      break;
+    case 'case24':
+      expect(/#{1,3} 第一章 绪论/.test(md), '第一章未转为标题');
+      expect(/#{1,4} 第二节 研究方法/.test(md), '第二节未转为标题');
+      expect(has('1. 数据安全法') || has('1、数据安全法'), '章内编号列表丢失');
+      expect(has('已有研究集中在三个方向'), '第二章内容丢失');
+      break;
+    case 'case25':
+      expect(has('那时没有伞，也不觉得狼狈。'), '诗体短行内容丢失');
+      expect(hasNot('### 那时没有伞'), '诗体短行被误判为标题');
+      expect(hasNot('### 一路踩着水洼'), '诗句被误判为标题');
+      expect(has('笑声比雨声还大'), '诗句内容丢失');
+      break;
+    case 'case26':
+      expect(has('E = mc^2'), '质能方程丢失');
+      expect(has('π ≈ 3.14159'), '圆周率行丢失');
+      expect(has('1 千卡') || has('１千卡'), '单位换算行丢失');
+      expect(hasNot('1. 千卡'), '单位换算行被拆成列表');
+      expect(hasNot('### π'), '常数行被误判为标题');
+      break;
+    case 'case27':
+      expect(has('<mark>高亮标记</mark>'), 'mark 标签丢失');
+      expect(has('H<sub>2</sub>O'), '下标标签丢失');
+      expect(has('x<sup>2</sup>'), '上标标签丢失');
+      break;
+    case 'case28':
+      expect(/#{1,3} .*二十、腌制类/.test(md) || has('## 二十、'), '超十中文序号未转为标题');
+      expect(has('九是序号不是数量'), '正文说明丢失');
+      expect(has('桂花酒酿圆子收尾'), '十二节内容丢失');
+      break;
+    case 'case29':
+      expect(has('138-1234-5678'), '热线号码丢失');
+      expect(has('186 8765 4321'), '备用号码丢失');
+      expect(has('邮编 100102'), '地址数字丢失');
+      expect(hasNot('1. 138'), '号码行被误判为编号');
+      expect(/1\.\s?(\*\*)?发票怎么开|1\. 发票/.test(md), '常见问题列表未生成');
+      break;
+    case 'case30':
+      expect(has('listen 80'), '缩进配置内容丢失');
+      expect(has('proxy_pass'), '嵌套缩进内容丢失');
+      expect(has('不规则空行是粘贴最常见的痕迹'), '说明段落丢失');
+      break;
   }
 
   if (fails.length === 0) passCount++;

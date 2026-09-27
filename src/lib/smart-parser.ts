@@ -475,6 +475,11 @@ export function isImageUrl(url: string): boolean {
  * 智能转换正文中的裸 URL 为 Markdown 链接，以便文末脚注引擎识别
  */
 export function formatBareUrls(text: string): string {
+  // 链接引用定义（[id]: url "title"）整行保持原样：
+  // 若给定义里的 URL 再包一层 Markdown 链接，会破坏 [id] 引用语法本身
+  if (/^\s*\[[^\]]+\]:\s*\S+/.test(text)) {
+    return text;
+  }
   const bareUrlRegex = /(?<![(\[="'])(https?:\/\/[a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=%]+)(?![)\]"'])/g;
 
   return text.replace(bareUrlRegex, (url) => {
@@ -1385,8 +1390,8 @@ export function convertPlainTextToMarkdown(
       }
     }
 
-    // 3.13 识别任务复选清单 (Task Lists: [ ] / [x] / □ / ✓ / ☑)
-    const uncheckedTask = trimmed.match(/^[\t ]*(?:\[\s*\]|□|○|待办[：:])\s*(.+)$/);
+    // 3.13 识别任务复选清单 (Task Lists: [ ] / [x] / □ / ✓ / ✗ / ☑)
+    const uncheckedTask = trimmed.match(/^[\t ]*(?:\[\s*\]|□|○|✗|✘|待办[：:])\s*(.+)$/);
     if (uncheckedTask) {
       const taskContent = emphasizeItemHeader(uncheckedTask[1].trim());
       processedLines.push(`- [ ] ${taskContent}`);

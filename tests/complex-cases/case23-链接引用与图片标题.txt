@@ -1,0 +1,15 @@
+写作素材索引
+
+一、参考链接
+
+典型语法见 [Markdown 指南](https://example.com/guide "官方教程")，还有引用式写法 [规范][spec]。
+
+[spec]: https://example.com/spec "规范文档"
+
+二、带标题的图片
+
+![工作台](/images/sample/sample-5.jpg "清晨的工作台")
+
+三、说明
+
+链接和图片的标题属性大多时候用不上，但理解语法有助于排查粘贴事故。
