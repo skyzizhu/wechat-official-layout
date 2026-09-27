@@ -4,6 +4,7 @@ import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import type { ThemePreset } from '@/themes/types';
+import { getListLevelStyles } from '@/themes/list-levels';
 import type { Components } from 'react-markdown';
 import React, { CSSProperties } from 'react';
 
@@ -17,6 +18,23 @@ interface MarkdownRendererProps {
  * 卡片为白色衬底，题注需使用主题强调色（而非正文黑/主题正文色），保证卡片上清晰可读且跟随主题
  */
 const PhotoCardColorContext = React.createContext<string | null>(null);
+
+/**
+ * 列表层级上下文：与标题层级呼应的视觉权重递减
+ * depth 0 = 列表外；1 = 顶层列表（二级视觉：徽章编号/圆点 + 半加重）；≥2 = 嵌套列表（三级及更深，统一轻量样式）
+ */
+interface ListRenderContextValue {
+  depth: number;
+  ordered: boolean;
+  isTaskList: boolean;
+}
+const ListDepthContext = React.createContext<ListRenderContextValue>({
+  depth: 0,
+  ordered: false,
+  isTaskList: false,
+});
+/** 顶层有序列表项编号（0 表示当前项不在顶层有序列表内） */
+const OlItemIndexContext = React.createContext(0);
 
 /**
  * 递归提取 AST 节点中的纯文本
@@ -472,36 +490,67 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
       );
     },
 
-    ul: ({ children, node, className }: any) => {
+    ul: function UlRenderer({ children, node, className }: any) {
       const isTaskList = className === 'contains-task-list' || node?.properties?.className?.includes('contains-task-list');
+      const { depth } = React.useContext(ListDepthContext);
+      const listStyles = getListLevelStyles(theme);
+      // 任务列表（复选框）自带视觉语义，不做徽章化，保持专属轻量样式
+      if (isTaskList) {
+        return (
+          <ListDepthContext.Provider value={{ depth: depth + 1, ordered: false, isTaskList: true }}>
+            <ul style={listStyles.taskListUl}>{children}</ul>
+          </ListDepthContext.Provider>
+        );
+      }
+      if (depth === 0) {
+        // 顶层无序列表（二级视觉）：主题色圆点标记，关闭原生符号
+        return (
+          <ListDepthContext.Provider value={{ depth: 1, ordered: false, isTaskList: false }}>
+            <ul style={listStyles.depth1Ul}>{children}</ul>
+          </ListDepthContext.Provider>
+        );
+      }
+      // 三级及更深：全部统一的轻量样式
       return (
-        <ul
-          style={{
-            listStyleType: (elements.ul?.listStyleType as string) || 'disc',
-            paddingLeft: (elements.ul?.paddingLeft as string) || '24px',
-            margin: (elements.ul?.margin as string) || '16px 0',
-            ...elements.ul,
-            ...(isTaskList ? { listStyleType: 'none', paddingLeft: '8px' } : {})
-          }}
-        >
-          {children}
-        </ul>
+        <ListDepthContext.Provider value={{ depth: depth + 1, ordered: false, isTaskList: false }}>
+          <ul style={listStyles.nestedUl}>{children}</ul>
+        </ListDepthContext.Provider>
       );
     },
-    ol: ({ children, start }: any) => (
-      <ol
-        start={start}
-        style={{
-          listStyleType: (elements.ol?.listStyleType as string) || 'decimal',
-          paddingLeft: (elements.ol?.paddingLeft as string) || '24px',
-          margin: (elements.ol?.margin as string) || '16px 0',
-          ...elements.ol,
-        }}
-      >
-        {children}
-      </ol>
-    ),
-    li: ({ children }) => {
+    ol: function OlRenderer({ children, start }: any) {
+      const { depth } = React.useContext(ListDepthContext);
+      const listStyles = getListLevelStyles(theme);
+      if (depth === 0) {
+        // 顶层有序列表（二级视觉）：编号由徽章 span 承担（真实 DOM 节点，序列化复制时自动保留）
+        const startNum = Number(start) || 1;
+        // 仅取元素子节点参与编号（toArray 会保留项间空白文本节点，直接按位置编号会错位；
+        // ol 的元素子节点只会是 li——其 type 是渲染组件函数而非字符串标签，不能用 c.type === 'li' 判断）
+        const items = React.Children.toArray(children).filter((c) => React.isValidElement(c));
+        return (
+          <ListDepthContext.Provider value={{ depth: 1, ordered: true, isTaskList: false }}>
+            <ol style={listStyles.depth1Ol}>
+              {items.map((child, i) => (
+                <OlItemIndexContext.Provider key={i} value={startNum + i}>
+                  {child}
+                </OlItemIndexContext.Provider>
+              ))}
+            </ol>
+          </ListDepthContext.Provider>
+        );
+      }
+      // 三级及更深：朴素数字，全部统一
+      return (
+        <ListDepthContext.Provider value={{ depth: depth + 1, ordered: true, isTaskList: false }}>
+          <ol start={start} style={listStyles.nestedOl}>
+            {children}
+          </ol>
+        </ListDepthContext.Provider>
+      );
+    },
+    li: function LiRenderer({ children }) {
+      const listInfo = React.useContext(ListDepthContext);
+      const olIndex = React.useContext(OlItemIndexContext);
+      const listStyles = getListLevelStyles(theme);
       const childArray = React.Children.toArray(children);
       const processedChildren: React.ReactNode[] = [];
 
@@ -537,6 +586,36 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
         processedChildren.push(curr);
       }
 
+      const liClassName = "[&>p:last-child]:mb-0";
+
+      // 顶层有序列表项（二级视觉）：主题色徽章编号
+      if (listInfo.depth === 1 && listInfo.ordered && olIndex > 0) {
+        return (
+          <li style={{ ...listStyles.depth1Li, listStyleType: 'none' }} className={liClassName}>
+            <span style={listStyles.badge}>{olIndex}</span>
+            {processedChildren}
+          </li>
+        );
+      }
+      // 顶层无序列表项（二级视觉）：主题色圆点
+      if (listInfo.depth === 1 && !listInfo.isTaskList) {
+        return (
+          <li style={{ ...listStyles.depth1Li, listStyleType: 'none' }} className={liClassName}>
+            <span style={listStyles.dot} />
+            {processedChildren}
+          </li>
+        );
+      }
+      // 三级及更深的嵌套列表项：统一轻量样式
+      if (listInfo.depth >= 2) {
+        return (
+          <li style={listStyles.nestedLi} className={liClassName}>
+            {processedChildren}
+          </li>
+        );
+      }
+
+      // 兜底（列表外孤立 li / 任务列表）：保持主题默认
       return (
         <li
           style={{
@@ -544,7 +623,7 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
             marginBottom: '8px',
             ...elements.li,
           }}
-          className="[&>p:last-child]:mb-0"
+          className={liClassName}
         >
           {processedChildren}
         </li>
@@ -557,8 +636,15 @@ export function MarkdownRenderer({ content, theme }: MarkdownRendererProps) {
       </a>
     ),
 
-    strong: ({ children }) => {
-      const style = markHighlight ? { ...elements.strong, ...markHighlight } : elements.strong;
+    strong: function StrongRenderer({ children }) {
+      const { depth } = React.useContext(ListDepthContext);
+      // 三级及更深列表内的加粗：仅保留字重，不带荧光高亮（视觉权重不得高于二级列表）
+      const style =
+        depth >= 2
+          ? { ...getListLevelStyles(theme).nestedStrong }
+          : markHighlight
+            ? { ...elements.strong, ...markHighlight }
+            : elements.strong;
       return <strong style={{ ...style, display: 'inline', wordBreak: 'break-word' }}>{children}</strong>;
     },
 

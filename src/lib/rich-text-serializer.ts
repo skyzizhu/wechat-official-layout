@@ -780,81 +780,117 @@ export function serializeToWeChatRichText(
     );
   });
 
-  // (9) 处理列表 ul / ol / li
-  const listMargin = '16px 0';
-  clone.querySelectorAll('ul').forEach((ul) => {
-    const listStyle = (themeElements?.ul?.listStyleType as string) || 'disc';
-    const paddingLeft = (themeElements?.ul?.paddingLeft as string) || '24px';
-    ul.setAttribute(
-      'style',
-      `margin: ${listMargin}; padding-left: ${paddingLeft}; list-style-type: ${listStyle}; box-sizing: border-box; max-width: 100%;`
-    );
-  });
+  // (9) 处理列表 ul / ol / li（深度感知，与预览渲染约定一致，见 src/themes/list-levels.ts）：
+  //   顶层列表（二级视觉）→ 编号徽章/圆点 + 半加重深色文字；编号与圆点是预览 DOM 中的真实 span，克隆后自动保留
+  //   嵌套列表（三级及更深）→ 全部统一的轻量样式（朴素数字/空心圆点、正文字色）
+  const listDepthOf = (el: Element): number => {
+    let depth = 0;
+    let cur = el.parentElement;
+    while (cur) {
+      if (cur.tagName === 'UL' || cur.tagName === 'OL') depth++;
+      cur = cur.parentElement;
+    }
+    return depth;
+  };
 
-  clone.querySelectorAll('ol').forEach((ol) => {
-    const paddingLeft = (themeElements?.ol?.paddingLeft as string) || '24px';
-    ol.setAttribute(
-      'style',
-      `margin: ${listMargin}; padding-left: ${paddingLeft}; list-style-type: decimal; box-sizing: border-box; max-width: 100%;`
-    );
-  });
+  const processListElement = (listEl: HTMLElement, depth: number) => {
+    const isOl = listEl.tagName === 'OL';
+    const isTaskList =
+      !isOl && !!listEl.querySelector('[data-role="task-checkbox"], input[type="checkbox"]');
 
-  clone.querySelectorAll('li').forEach((li) => {
-    // 关键优化 1：若 li 内部有 <p> 或 <section> 块级标签，解构并平铺为行内子节点，杜绝非法块嵌套破坏 ProseMirror 列表结构
-    const blockChildren = Array.from(li.querySelectorAll('p, section'));
-    blockChildren.forEach((blk) => {
-      while (blk.firstChild) {
-        blk.parentElement?.insertBefore(blk.firstChild, blk);
-      }
-      blk.remove();
-    });
+    if (depth === 1 && isTaskList) {
+      // 任务列表（复选框自带视觉语义）：不做徽章化
+      listEl.setAttribute(
+        'style',
+        'list-style-type: none; padding-left: 8px; margin: 16px 0; box-sizing: border-box; max-width: 100%;'
+      );
+    } else if (depth === 1) {
+      // 二级视觉：原生编号/符号关闭，由徽章/圆点 span 承担
+      listEl.setAttribute(
+        'style',
+        'list-style-type: none; padding-left: 4px; margin: 16px 0 20px; box-sizing: border-box; max-width: 100%;'
+      );
+    } else {
+      // 三级及更深：统一轻量容器
+      const nestedListStyle = isOl ? 'decimal' : 'circle';
+      listEl.setAttribute(
+        'style',
+        `margin: 6px 0 10px; padding-left: 20px; list-style-type: ${nestedListStyle}; box-sizing: border-box; max-width: 100%;`
+      );
+    }
 
-    // 关键优化 2：原子绑定 (Atomic Grouping) —— 将 <li> 中加粗标题 <strong> 与紧随其后的冒号（及标点）
-    // 永久封装在同一个带有 white-space: nowrap 的行内容器中，并在中文排版下将冒号规范化为全角冒号，
-    // 清除冒号后残留的空格，彻底杜绝微信编辑器在标题与冒号之间产生任何换行机会。
-    const strongs = Array.from(li.querySelectorAll('strong'));
-    strongs.forEach((strong) => {
-      const parent = strong.parentElement;
-      if (!parent) return;
-
-      const next = strong.nextSibling;
-      let matchedPunct: string | null = null;
-
-      if (next && next.nodeType === 3 && next.nodeValue) {
-        const punctMatch = next.nodeValue.match(/^[\s\u00A0]*([:：\-—–]+)[\s\u00A0]*/);
-        if (punctMatch) {
-          let pChar = punctMatch[1];
-          if (pChar === ':' || pChar === '：') {
-            pChar = '：'; // 规范化为中文全角标准冒号
-          } else if (pChar === '-') {
-            pChar = ' — ';
+    const isDepth1Plain = depth === 1 && !isTaskList;
+    Array.from(listEl.children)
+      .filter((c): c is HTMLElement => c.tagName === 'LI')
+      .forEach((li) => {
+        // 关键优化 1：若 li 内部有 <p> 或 <section> 块级标签，解构并平铺为行内子节点，杜绝非法块嵌套破坏 ProseMirror 列表结构
+        const blockChildren = Array.from(li.querySelectorAll('p, section'));
+        blockChildren.forEach((blk) => {
+          while (blk.firstChild) {
+            blk.parentElement?.insertBefore(blk.firstChild, blk);
           }
-          matchedPunct = pChar;
-          // 清除后继文本节点开头的标点和所有空格
-          next.nodeValue = next.nodeValue.slice(punctMatch[0].length);
-        }
-      }
+          blk.remove();
+        });
 
-      // 创建防折行原子行内容器
-      const nowrapSpan = document.createElement('span');
-      nowrapSpan.setAttribute('style', 'display: inline; white-space: nowrap;');
+        // 关键优化 2：原子绑定 (Atomic Grouping) —— 将 <li> 中加粗标题 <strong> 与紧随其后的冒号（及标点）
+        // 永久封装在同一个带有 white-space: nowrap 的行内容器中，并在中文排版下将冒号规范化为全角冒号，
+        // 清除冒号后残留的空格，彻底杜绝微信编辑器在标题与冒号之间产生任何换行机会。
+        const strongs = Array.from(li.querySelectorAll('strong'));
+        strongs.forEach((strong) => {
+          const parent = strong.parentElement;
+          if (!parent) return;
 
-      parent.insertBefore(nowrapSpan, strong);
-      nowrapSpan.appendChild(strong);
+          const next = strong.nextSibling;
+          let matchedPunct: string | null = null;
 
-      if (matchedPunct) {
-        const punctSpan = document.createElement('span');
-        punctSpan.setAttribute('style', `font-weight: 700; color: ${strongColor};`);
-        punctSpan.textContent = matchedPunct;
-        nowrapSpan.appendChild(punctSpan);
-      }
-    });
+          if (next && next.nodeType === 3 && next.nodeValue) {
+            const punctMatch = next.nodeValue.match(/^[\s\u00A0]*([:：\-—–]+)[\s\u00A0]*/);
+            if (punctMatch) {
+              let pChar = punctMatch[1];
+              if (pChar === ':' || pChar === '：') {
+                pChar = '：'; // 规范化为中文全角标准冒号
+              } else if (pChar === '-') {
+                pChar = ' — ';
+              }
+              matchedPunct = pChar;
+              // 清除后继文本节点开头的标点和所有空格
+              next.nodeValue = next.nodeValue.slice(punctMatch[0].length);
+            }
+          }
 
-    li.setAttribute(
-      'style',
-      `margin-bottom: 8px; font-size: ${pFontSize}; line-height: 1.75; color: ${pColor}; word-break: break-word; box-sizing: border-box;`
-    );
-  });
+          // 创建防折行原子行内容器
+          const nowrapSpan = document.createElement('span');
+          nowrapSpan.setAttribute('style', 'display: inline; white-space: nowrap;');
+
+          parent.insertBefore(nowrapSpan, strong);
+          nowrapSpan.appendChild(strong);
+
+          if (matchedPunct) {
+            const punctSpan = document.createElement('span');
+            punctSpan.setAttribute('style', `font-weight: 700; color: ${strongColor};`);
+            punctSpan.textContent = matchedPunct;
+            nowrapSpan.appendChild(punctSpan);
+          }
+        });
+
+        // 层级化列表项：二级半加重深色，三级及更深正文字色常规字重
+        li.setAttribute(
+          'style',
+          isDepth1Plain
+            ? `margin-bottom: 10px; font-size: ${pFontSize}; line-height: 1.75; color: ${strongColor}; font-weight: 500; word-break: break-word; box-sizing: border-box;`
+            : `margin-bottom: 6px; font-size: ${pFontSize}; line-height: 1.75; color: ${pColor}; font-weight: 400; word-break: break-word; box-sizing: border-box;`
+        );
+
+        // 递归处理嵌套列表（三级及更深）
+        Array.from(li.children)
+          .filter((c): c is HTMLElement => c.tagName === 'UL' || c.tagName === 'OL')
+          .forEach((childList) => processListElement(childList, depth + 1));
+      });
+  };
+
+  Array.from(clone.querySelectorAll('ol, ul'))
+    .filter((el) => listDepthOf(el) === 0)
+    .forEach((el) => processListElement(el as HTMLElement, 1));
 
   // (10) 处理行内强调与高亮 strong（规范 4.1.2 & 4.6: 若有渐变背景添加 data-ignore-dm="text-bg-gradient"）
   const markHighlight = theme?.markHighlight;
@@ -873,16 +909,25 @@ export function serializeToWeChatRichText(
   const markStyle = markStyleParts.length > 0 ? `${markStyleParts.join('; ')};` : '';
 
   clone.querySelectorAll('strong').forEach((strong) => {
-    if (hasGradientBg) {
+    // 三级及更深列表内的加粗：仅保留字重，不带荧光高亮（视觉权重不得高于二级列表）
+    let ancestorListDepth = 0;
+    let cur: HTMLElement | null = strong.parentElement;
+    while (cur) {
+      if (cur.tagName === 'UL' || cur.tagName === 'OL') ancestorListDepth++;
+      cur = cur.parentElement;
+    }
+    const inNestedList = ancestorListDepth >= 2;
+
+    if (hasGradientBg && !inNestedList) {
       strong.setAttribute('data-ignore-dm', 'text-bg-gradient');
     }
     // 强制声明 display: inline; 杜绝 inline-block / block，避免微信粘贴异常折行
     const isAtomicGroup = strong.parentElement?.tagName === 'SPAN' && strong.parentElement.getAttribute('style')?.includes('white-space: nowrap');
     const whiteSpaceStyle = isAtomicGroup ? 'white-space: nowrap;' : 'word-break: break-word;';
-    strong.setAttribute(
-      'style',
-      `font-weight: 700; color: ${strongColor}; ${markStyle} display: inline; ${whiteSpaceStyle}`
-    );
+    const strongStyle = inNestedList
+      ? `font-weight: 600; color: ${strongColor}; display: inline; ${whiteSpaceStyle}`
+      : `font-weight: 700; color: ${strongColor}; ${markStyle} display: inline; ${whiteSpaceStyle}`;
+    strong.setAttribute('style', strongStyle);
   });
 
   // (11) 处理行内代码 code
