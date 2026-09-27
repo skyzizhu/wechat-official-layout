@@ -22,6 +22,9 @@ import React, { useMemo, useState, useRef, useEffect } from 'react';
 
 export type ContentMode = 'auto' | 'plain-text' | 'markdown';
 
+/** 粘贴图片后，图片展示区占用的行数（令牌行 + 预留空行，由覆盖层渲染为真实图片） */
+const IMAGE_SPACER_LINES = 5;
+
 /** 测量图片令牌行在编辑框字体下的渲染宽度（覆盖层药丸需精确盖住整行源码） */
 function measureTokenLineWidth(text: string): number {
   if (typeof document === 'undefined') return 220;
@@ -79,18 +82,23 @@ export function Editor({
   const charCount = value.replace(/\s/g, '').length;
   // 行内图片预览：解析正文中的独占图片行（![alt](img:xxx) 或内联 base64），原位显示缩略图
   const imageLines = useMemo(() => {
-    const out: Array<{ line: number; alt: string; src: string; w: number; left: number }> = [];
+    const out: Array<{ line: number; alt: string; src: string; w: number; left: number; blanks: number }> = [];
     const re = /!\[([^\]]*)\]\((img:[a-z0-9-]+|data:image\/[^;]+;base64,[^)\s]+)\)/g;
-    value.split('\n').forEach((l, i) => {
+    const lines = value.split('\n');
+    lines.forEach((l, i) => {
       let m: RegExpExecArray | null;
       re.lastIndex = 0;
       while ((m = re.exec(l))) {
+        // 统计令牌行后的连续空行（展示空间）；空行不足时退化为小药丸，避免遮盖正文
+        let blanks = 0;
+        for (let k = i + 1; k < lines.length && !lines[k].trim(); k++) blanks++;
         out.push({
           line: i,
           alt: m[1] || '配图',
           src: m[2].startsWith('img:') ? resolveImageSrc(m[2]) : m[2],
           w: measureTokenLineWidth(m[0]) + 14,
           left: measureTokenLineWidth(l.slice(0, m.index)),
+          blanks,
         });
       }
     });
@@ -184,7 +192,8 @@ export function Editor({
       const { dataUrl, fileName } = await compressAndEncodeImage(file);
       const cleanAlt = fileName.replace(/\.[^/.]+$/, '') || '配图';
       const { token, persisted } = putImageDataUrl(dataUrl);
-      insertAtCaret(`\n![${cleanAlt}](${persisted ? token : dataUrl})\n`);
+      // 预留空行作为编辑框内的图片展示区（覆盖层在此渲染真实图片；预览/复制自动忽略连续空行）
+      insertAtCaret(`\n![${cleanAlt}](${persisted ? token : dataUrl})\n` + (persisted ? '\n'.repeat(IMAGE_SPACER_LINES) : ''));
     } catch (err) {
       console.error('Image insertion failed', err);
     } finally {
@@ -835,33 +844,56 @@ export function Editor({
 
       {/* 行内图片预览层：图片行原位显示缩略图，其余内容保持源码形态 */}
       <div ref={overlayRef} className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden>
-        {imageLines.map(({ line, alt, src: imgSrc, w, left: leftOffset }) => (
+        {imageLines.map(({ line, alt, src: imgSrc, w, left: leftOffset, blanks }) => {
+          const hasRoom = blanks >= IMAGE_SPACER_LINES;
+          return (
           <div
             key={line + '-' + alt}
-            style={{
-              position: 'absolute',
-              top: editorMetrics.paddingTop + line * editorMetrics.lineHeight,
-              left: editorMetrics.paddingLeft + leftOffset,
-              width: Math.min(Math.max(w, 90), 720),
-            }}
+            style={
+              hasRoom
+                ? {
+                    position: 'absolute',
+                    top: editorMetrics.paddingTop + line * editorMetrics.lineHeight,
+                    left: editorMetrics.paddingLeft,
+                    height: (1 + IMAGE_SPACER_LINES) * editorMetrics.lineHeight,
+                    width: 'min(85%, 560px)',
+                  }
+                : {
+                    position: 'absolute',
+                    top: editorMetrics.paddingTop + line * editorMetrics.lineHeight,
+                    left: editorMetrics.paddingLeft + leftOffset,
+                    width: Math.min(Math.max(w, 90), 720),
+                  }
+            }
             className="pointer-events-auto overflow-hidden"
           >
             {imgSrc ? (
-              <div
-                title="点击选中此图片行（可直接编辑或删除）"
-                onClick={() => selectLine(line)}
-                className="h-7 w-full inline-flex items-center gap-1.5 bg-white px-1.5 rounded-sm border border-gray-200 cursor-pointer overflow-hidden"
-              >
-                <img src={imgSrc} alt={alt} className="h-full w-auto max-w-[60%] rounded-sm" />
-                <span className="text-[10px] text-gray-400 whitespace-nowrap">{alt}</span>
-              </div>
+              hasRoom ? (
+                <div
+                  title="点击选中此图片行（可直接编辑或删除）"
+                  onClick={() => selectLine(line)}
+                  className="h-full w-full flex items-center justify-center bg-white rounded-lg border border-gray-200 shadow-sm cursor-pointer"
+                >
+                  <img src={imgSrc} alt={alt} className="max-h-full max-w-full object-contain" />
+                </div>
+              ) : (
+                <div
+                  title="点击选中此图片行（可直接编辑或删除）"
+                  onClick={() => selectLine(line)}
+                  className="h-7 w-full inline-flex items-center gap-1.5 bg-white px-1.5 rounded-sm border border-gray-200 cursor-pointer overflow-hidden"
+                >
+                  <img src={imgSrc} alt={alt} className="h-full w-auto max-w-[60%] rounded-sm" />
+                  <span className="text-[10px] text-gray-400 whitespace-nowrap">{alt}</span>
+                </div>
+              )
             ) : (
               <span className="h-7 inline-flex items-center px-2 rounded border border-dashed border-gray-300 text-[11px] text-gray-400 bg-white cursor-pointer" onClick={() => selectLine(line)}>
                 图片已失效（{alt}）
               </span>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
       </div>
 
