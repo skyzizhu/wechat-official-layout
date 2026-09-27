@@ -913,10 +913,27 @@ export function convertPlainTextToMarkdown(
         }
         blankRun = 0;
         if (nextTrimmed.includes('|') || nextTrimmed.includes('｜')) {
-          // 跨空行后列数不同的管道行是新表格（如数据表后紧跟图片画廊），不合并；
-          // 同列数的松散表格（行间夹单个空行）仍归并
-          if (crossedBlank && colCountOf(nextTrimmed) !== expectedCols) break;
-          if (colCountOf(nextTrimmed) > expectedCols) expectedCols = colCountOf(nextTrimmed);
+          if (crossedBlank) {
+            // 跨空行后的管道行是新表格的判据（满足其一即断开，不合并）：
+            // 1) 列数与当前表格不同（如 3 列数据表后跟 2 列画廊）
+            // 2) 该行的下一行是分隔行——新表格必然以「内容行 + 分隔行」开头，
+            //    而松散表格的续行后面跟的是普通内容行（3 列数据表 + 3 列画廊靠此判据区分）
+            const nextCols = colCountOf(nextTrimmed);
+            // 前瞻必须跳过空行找下一个非空行（松散表格行间都有空行）；
+            // 该行是分隔行 → 候选行是新表格的内容行开头，断开；
+            // 后面没有更多非空行（文档结尾）→ 视为继续合并
+            let afterRaw = '';
+            for (let k2 = jTable + 1; k2 < rawLines.length; k2++) {
+              if (rawLines[k2].trim()) {
+                afterRaw = rawLines[k2].trim();
+                break;
+              }
+            }
+            const afterCells = afterRaw.replace(/^\|/, '').replace(/\|$/, '').split('|').map((c) => c.trim());
+            const afterIsSep = afterRaw !== '' && afterCells.every((c) => /^:?-{3,}:?$/.test(c.replace(/\s/g, '')) || c === '');
+            if (nextCols !== expectedCols || afterIsSep) break;
+            if (nextCols > expectedCols) expectedCols = nextCols;
+          }
           crossedBlank = false;
           tableLines.push(rawLines[jTable]);
           jTable++;
