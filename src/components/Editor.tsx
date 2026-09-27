@@ -155,22 +155,22 @@ function serializeEditorBlocks(blocks: EditorBlock[]): string {
       parts.push(b.lines.join('\n'));
       continue;
     }
+    const rows: string[] = [];
     if (b.layout === 1) {
       b.images.forEach((img, k) => {
-        parts.push(`![${img.alt}](${img.src})`);
-        if (b.captions[k]) parts.push(`*▲ ${b.captions[k]}*`);
+        rows.push(`![${img.alt}](${img.src})`);
+        if (b.captions[k]) rows.push(`*▲ ${b.captions[k]}*`);
       });
     } else {
       const n = b.layout;
       for (let r = 0; r < b.images.length; r += n) {
         const imgs = b.images.slice(r, r + n);
-        parts.push('| ' + imgs.map((img) => `![${img.alt}](${img.src})`).join(' | ') + ' |');
-        parts.push('| ' + imgs.map(() => ':---:').join(' | ') + ' |');
-        parts.push(
-          '| ' + imgs.map((_, k) => (b.captions[r + k] ? `*▲ ${b.captions[r + k]}*` : '')).join(' | ') + ' |'
-        );
+        rows.push('| ' + imgs.map((img) => `![${img.alt}](${img.src})`).join(' | ') + ' |');
+        rows.push('| ' + imgs.map(() => ':---:').join(' | ') + ' |');
+        rows.push('| ' + imgs.map((_, k) => (b.captions[r + k] ? `*▲ ${b.captions[r + k]}*` : '')).join(' | ') + ' |');
       }
     }
+    parts.push(rows.join('\n'));
   }
   return parts.join('\n\n');
 }
@@ -299,8 +299,10 @@ export function Editor({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // 分块：文本块（源码编辑）与图片块（可视化编辑）交替
-  const blocks = useMemo(() => parseEditorBlocks(value), [value]);
+  // 分块：文本块（源码编辑）与图片块（可视化编辑）交替。
+  // 空文档时兜底一个空文本块，保证用户始终有可输入的位置
+  const rawBlocks = useMemo(() => parseEditorBlocks(value), [value]);
+  const blocks = rawBlocks.length > 0 ? rawBlocks : [{ kind: 'text' as const, lines: [''] }];
 
   // 实时分析文本格式
   const detection = useMemo(() => detectContentFormat(value), [value]);
@@ -321,6 +323,53 @@ export function Editor({
   };
   const removeImageBlock = (idx: number) => {
     updateBlocks(blocks.filter((_, k) => k !== idx));
+  };
+
+  // 布局切换：2/3 列时把相邻（中间无文本块）的图片块合并进来，凑成真正的多列画廊；
+  // 相邻图片张数不足列数时不强行补空位，保持原状
+  const setImageLayout = (idx: number, layout: 1 | 2 | 3) => {
+    const target = blocks[idx];
+    if (!target || target.kind !== 'images') return;
+    if (layout === 1) {
+      if (target.images.length > 1) {
+        // 拆回单图：每张独立一个图片块
+        const next: EditorBlock[] = [];
+        blocks.forEach((b, k) => {
+          if (k !== idx || b.kind !== 'images') {
+            next.push(b);
+            return;
+          }
+          b.images.forEach((img, kk) =>
+            next.push({ kind: 'images', images: [img], captions: [b.captions[kk] || ''], layout: 1 })
+          );
+        });
+        updateBlocks(next);
+        return;
+      }
+      updateImageBlock(idx, { layout: 1 });
+      return;
+    }
+    let start = idx;
+    let end = idx;
+    const isImageBlock = (k: number) => blocks[k] && blocks[k].kind === 'images';
+    while (start - 1 >= 0 && isImageBlock(start - 1)) start--;
+    while (end + 1 < blocks.length && isImageBlock(end + 1)) end++;
+    const groupImages: ImageItem[] = [];
+    const groupCaptions: string[] = [];
+    for (let k = start; k <= end; k++) {
+      const b = blocks[k];
+      if (b.kind !== 'images') continue;
+      b.images.forEach((im, kk) => {
+        groupImages.push(im);
+        groupCaptions.push(b.captions[kk] || '');
+      });
+    }
+    if (groupImages.length < layout) {
+      // 相邻图片凑不满该列数：维持现状，避免出现空列
+      return;
+    }
+    const merged: EditorBlock = { kind: 'images', images: groupImages, captions: groupCaptions, layout };
+    updateBlocks([...blocks.slice(0, start), merged, ...blocks.slice(end + 1)]);
   };
 
   // 点击外部自动关闭范文下拉菜单
@@ -1005,7 +1054,7 @@ export function Editor({
               <ImageBlockCard
                 key={idx}
                 block={b}
-                onLayout={(l) => updateImageBlock(idx, { layout: l })}
+                onLayout={(l) => setImageLayout(idx, l)}
                 onCaption={(k, cap) =>
                   updateImageBlock(idx, { captions: b.captions.map((c, kk) => (kk === k ? cap : c)) })
                 }
