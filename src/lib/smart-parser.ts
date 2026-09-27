@@ -896,18 +896,28 @@ export function convertPlainTextToMarkdown(
     const hasPipe = (trimmed.includes('|') || trimmed.includes('｜')) && trimmed.length >= 3;
     if (hasPipe) {
       const tableLines: string[] = [line];
+      // 列数统计：去掉首尾管道后按管道切分（| a | b | → 2 列，|  |  | → 2 列）
+      const colCountOf = (s: string) => s.trim().replace(/^[｜|]/, '').replace(/[｜|]$/, '').split(/[｜|]/).length;
+      let expectedCols = colCountOf(line);
       let jTable = i + 1;
       let blankRun = 0;
+      let crossedBlank = false;
       while (jTable < rawLines.length) {
         const nextTrimmed = rawLines[jTable].trim();
         if (!nextTrimmed) {
           blankRun++;
           if (blankRun >= 2) break;
+          crossedBlank = true;
           jTable++;
           continue;
         }
         blankRun = 0;
         if (nextTrimmed.includes('|') || nextTrimmed.includes('｜')) {
+          // 跨空行后列数不同的管道行是新表格（如数据表后紧跟图片画廊），不合并；
+          // 同列数的松散表格（行间夹单个空行）仍归并
+          if (crossedBlank && colCountOf(nextTrimmed) !== expectedCols) break;
+          if (colCountOf(nextTrimmed) > expectedCols) expectedCols = colCountOf(nextTrimmed);
+          crossedBlank = false;
           tableLines.push(rawLines[jTable]);
           jTable++;
         } else {
