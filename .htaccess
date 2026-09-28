@@ -1,0 +1,30 @@
+# ============================================================
+# 文排 · Apache 配置（置于站点根目录，自动生效）
+#
+# 要求：站点目录 AllowOverride All（CentOS 默认 httpd.conf 通常为 None，
+# 需在 <Directory "/var/www/html"> 段中修改后 systemctl reload httpd）
+# 依赖模块：mod_headers、mod_deflate（CentOS httpd 默认自带）
+# ============================================================
+
+# ---- HTML 与预取数据禁止缓存：发版后浏览器立即拿到引用新 JS/CSS 的页面 ----
+<FilesMatch "\.(html|txt)$">
+    Header set Cache-Control "no-cache, must-revalidate"
+</FilesMatch>
+
+# ---- Next.js 带哈希的静态资源：一年期永久缓存（内容变则文件名变，永不错缓存） ----
+<FilesMatch "\.(?:js|css)$">
+    Header set Cache-Control "public, max-age=31536000, immutable"
+</FilesMatch>
+
+# ---- 图片与字体：30 天缓存 ----
+<FilesMatch "\.(?:ico|png|jpg|jpeg|gif|svg|webp|woff|woff2|ttf|eot)$">
+    Header set Cache-Control "public, max-age=2592000"
+</FilesMatch>
+
+# ---- Gzip 压缩 ----
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/plain text/css text/xml application/json application/javascript image/svg+xml
+</IfModule>
+
+# ---- 404 页面 ----
+ErrorDocument 404 /404.html
