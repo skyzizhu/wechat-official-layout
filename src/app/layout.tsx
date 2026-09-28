@@ -1,6 +1,22 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { Noto_Sans_SC, JetBrains_Mono } from "next/font/google";
 import { SITE_URL } from "@/lib/site";
 import "./globals.css";
+
+// 字体构建期自托管（next/font）：运行时零外部请求——
+// Google Fonts 在中国大陆被墙，外链会阻塞渲染并拖慢百度蜘蛛抓取
+const notoSansSC = Noto_Sans_SC({
+  weight: ["300", "400", "500", "700"],
+  subsets: [],
+  display: "swap",
+  variable: "--font-noto-sans",
+});
+const jetbrainsMono = JetBrains_Mono({
+  weight: ["400", "500"],
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-jetbrains-mono",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -38,13 +54,23 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "文排 — 微信公众号文章排版工具",
     description: "纯文本智能识别，16 款主题一键美化，本地处理零上传。",
-    images: ["/og-image.png"],
+    images: [{ url: "/og-image.png", alt: "文排 · 微信公众号文章排版工具" }],
   },
   robots: {
     index: true,
     follow: true,
     googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1 },
   },
+  // 无障碍与 X/Twitter 分享的图片替代文本（og:image:alt / twitter:image:alt）
+  other: {
+    "applicable-device": "pc,mobile",
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#4f46e5",
 };
 
 // 结构化数据：帮助 Google 理解这是一个 WebApplication，可触发富结果展示
@@ -70,22 +96,16 @@ const jsonLd = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="zh-CN" className="h-full antialiased" suppressHydrationWarning>
+    <html lang="zh-CN" className={`h-full antialiased ${notoSansSC.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <head>
         <meta name="referrer" content="no-referrer" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
-          rel="stylesheet"
-          crossOrigin="anonymous"
-        />
+        <meta name="baidu-site-verification" content="TODO-上线后在百度搜索资源平台获取并替换" />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
-      <body className="min-h-full flex flex-col" suppressHydrationWarning>
+      <body className={`min-h-full flex flex-col ${notoSansSC.className}`} suppressHydrationWarning>
         {children}
       </body>
     </html>

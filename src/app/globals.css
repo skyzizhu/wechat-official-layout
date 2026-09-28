@@ -30,7 +30,7 @@ body {
   background: linear-gradient(180deg, #fbfbfc 0%, #f4f5f7 100%);
   background-attachment: fixed;
   color: var(--color-foreground);
-  font-family: "Noto Sans SC", system-ui, sans-serif;
+  font-family: var(--font-noto-sans), "Noto Sans SC", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;

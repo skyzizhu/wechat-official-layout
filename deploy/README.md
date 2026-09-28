@@ -128,3 +128,22 @@ systemctl reload httpd
 2. **提交搜索引擎**：Google Search Console 添加资源并验证，提交 `https://你的域名/sitemap.xml`
 3. **确认服务器**：`robots.txt` 与 `sitemap.xml` 可直接访问
 4. **验证结构化数据**：Google Rich Results Test 测试首页，确认 WebApplication 无告警
+
+### 百度 SEO 专项
+
+- 蜘蛛抓取：本站为**预渲染静态 HTML**，百度蜘蛛无需执行 JS 即可抓取全部正文（百度对 JS 渲染页面不友好，这是本架构的天然优势）
+- robots.txt 已显式放行 Baiduspider / 360Spider / Sogou / YisouSpider
+- 字体已**构建期自托管**（next/font），运行时零 Google 外链请求——Google Fonts 在中国大陆被墙，外链会阻塞渲染并拖慢抓取
+- 页面含 `applicable-device: pc,mobile`（百度移动适配信号）与响应式布局
+
+### 上线后百度收录三步
+
+1. 注册 [百度搜索资源平台](https://ziyuan.baidu.com) → 添加站点并验证（文件验证：把验证文件放 `public/` 后重新构建）
+2. 替换 `src/app/layout.tsx` 中的 `baidu-site-verification` 占位为平台给的 token
+3. 主动推送加速收录（普通收录 → API 提交，接口地址里带你的 token）：
+
+```bash
+curl -H "Content-Type:text/plain" --data-binary "https://你的域名/" "http://data.zz.baidu.com/urls?site=你的域名&token=你的token"
+```
+
+> 注：自动推送（JS 代码）已逐步被百度弱化，推荐 API 主动推送 + sitemap 双通道。百度对 keywords meta 权重很低，重点在正文质量与移动体验。
