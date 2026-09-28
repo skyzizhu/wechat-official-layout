@@ -547,7 +547,7 @@ function MainLayout() {
         <button
           onClick={() => setActiveTab('edit')}
           className={`flex-1 py-3 flex items-center justify-center gap-1.5 text-sm cursor-pointer transition-colors ${
-            activeTab === 'edit' ? 'text-blue-600 font-medium' : 'text-gray-400'
+            activeTab === 'edit' ? 'text-indigo-600 font-medium' : 'text-gray-400'
           }`}
         >
           <PenLine className="w-4 h-4" />
@@ -556,7 +556,7 @@ function MainLayout() {
         <button
           onClick={() => setActiveTab('preview')}
           className={`flex-1 py-3 flex items-center justify-center gap-1.5 text-sm cursor-pointer transition-colors ${
-            activeTab === 'preview' ? 'text-blue-600 font-medium' : 'text-gray-400'
+            activeTab === 'preview' ? 'text-indigo-600 font-medium' : 'text-gray-400'
           }`}
         >
           <Eye className="w-4 h-4" />

@@ -81,12 +81,12 @@ export function ExportToolbar({
         <div className="flex items-center gap-1 sm:gap-1.5 xl:gap-2 overflow-x-auto no-scrollbar py-1 min-w-0">
           <button
             onClick={onOpenThemeSelector}
-            className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 text-xs sm:text-sm font-semibold transition-all cursor-pointer border border-blue-200 shadow-2xs flex-shrink-0"
+            className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs sm:text-sm font-semibold transition-all cursor-pointer border border-indigo-200 shadow-2xs flex-shrink-0"
             title="点击切换 16 款个性排版风格"
           >
-            <Palette className="w-4 h-4 text-blue-600" />
+            <Palette className="w-4 h-4 text-indigo-600" />
             <span>{theme.name}</span>
-            <ChevronDown className="w-3.5 h-3.5 text-blue-500" />
+            <ChevronDown className="w-3.5 h-3.5 text-indigo-500" />
           </button>
 
           {/* 智能主色搭配选项 */}
@@ -114,7 +114,7 @@ export function ExportToolbar({
                 onClick={() => onFontSizeChange(size)}
                 className={`px-1.5 sm:px-2 py-0.5 rounded-md transition-all font-medium cursor-pointer ${
                   fontSize === size
-                    ? 'bg-white text-blue-600 shadow-2xs font-bold'
+                    ? 'bg-white text-indigo-600 shadow-2xs font-bold'
                     : 'text-gray-500 hover:text-gray-800'
                 }`}
                 title={`${size}px 字号 - ${size === '14' ? '紧凑小巧' : size === '15' ? '微信推荐黄金字号' : '清晰大号'}`}
@@ -129,16 +129,16 @@ export function ExportToolbar({
             onClick={() => onToggleFootnotes(!linkFootnotes)}
             className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer shadow-2xs flex-shrink-0 ${
               linkFootnotes
-                ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
                 : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
             }`}
             title="微信公众号无法直接跳转外链。开启后自动将 [文字](链接) 编译为文末 [1] 参考链接清单"
           >
-            <Link2 className="w-3.5 h-3.5 text-blue-600" />
+            <Link2 className="w-3.5 h-3.5 text-indigo-600" />
             <span className="hidden sm:inline">外链脚注</span>
             <span
               className={`text-[10px] px-1 py-0.2 rounded font-bold ${
-                linkFootnotes ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'
+                linkFootnotes ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-600'
               }`}
             >
               {linkFootnotes ? '开' : '关'}
@@ -194,7 +194,7 @@ export function ExportToolbar({
           <div className="w-px h-6 bg-gray-200 mx-0.5" aria-hidden />
           <button
             onClick={handleCopyRichText}
-            className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-sm text-white font-semibold transition-colors cursor-pointer shadow-sm"
+            className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-sm text-white font-semibold transition-colors cursor-pointer shadow-sm"
             title="复制带完整内联样式的富文本，支持原封不动粘贴到微信公众号后台"
           >
             <Copy className="w-4 h-4" />

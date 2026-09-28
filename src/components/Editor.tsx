@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  PenLine,
   FlaskConical,
   Trash2,
   Sparkles,
@@ -355,7 +356,7 @@ function ImageBlockCard(props: {
             onClick={() => onLayout(n)}
             title={n === 1 ? '单图（各占一行）' : n + ' 列画廊；图片不足的格子可点击后补图'}
             className={`px-1.5 py-0.5 rounded text-[11px] font-medium cursor-pointer transition-colors ${
-              block.layout === n ? 'bg-blue-600 text-white' : 'text-gray-500 hover:bg-gray-100'
+              block.layout === n ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-100'
             }`}
           >
             {n}列
@@ -849,7 +850,7 @@ export function Editor({
 
   return (
     <div
-      className={`flex flex-col h-full bg-white relative ${isDragging ? 'ring-2 ring-blue-500 bg-blue-50/20' : ''}`}
+      className={`flex flex-col h-full bg-white relative ${isDragging ? 'ring-2 ring-indigo-500 bg-indigo-50/20' : ''}`}
       onDragOver={(e) => {
         e.preventDefault();
         setIsDragging(true);
@@ -869,19 +870,21 @@ export function Editor({
       />
 
       {/* 顶部主工具栏 */}
-      <div className="h-11 border-b border-gray-200/70 flex items-center px-3 sm:px-4 text-sm text-gray-600 justify-between flex-shrink-0 bg-white">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-gray-800 text-xs tracking-wider uppercase hidden sm:inline">
+      <div className="h-11 border-b border-black/[0.05] bg-white flex items-center px-3 sm:px-4 text-sm text-gray-600 justify-between flex-shrink-0 gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="hidden sm:flex items-center gap-1.5 font-semibold text-gray-800 text-xs flex-shrink-0">
+            <PenLine className="w-3.5 h-3.5 text-indigo-500" />
             输入内容
           </span>
+          <span className="hidden sm:block w-px h-4 bg-black/[0.07]" aria-hidden />
 
           {/* 模式选择切换（自动识别 / 纯文本 / Markdown） */}
-          <div className="flex items-center bg-gray-200/60 p-0.5 rounded-lg text-xs">
+          <div className="flex items-center bg-gray-100 ring-1 ring-black/[0.04] p-0.5 rounded-lg text-xs">
             <button
               onClick={() => onModeChange('auto')}
               className={`px-2 py-1 rounded-md transition-all flex items-center gap-1 font-medium cursor-pointer ${
                 mode === 'auto'
-                  ? 'bg-white text-blue-600 shadow-xs'
+                  ? 'bg-white text-indigo-600 shadow-xs'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
               title="智能检测并自动排版"
@@ -893,7 +896,7 @@ export function Editor({
               onClick={() => onModeChange('plain-text')}
               className={`px-2 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer ${
                 mode === 'plain-text'
-                  ? 'bg-white text-blue-600 shadow-xs font-medium'
+                  ? 'bg-white text-indigo-600 shadow-xs font-medium'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
               title="强制按纯文本提取层级排版"
@@ -905,7 +908,7 @@ export function Editor({
               onClick={() => onModeChange('markdown')}
               className={`px-2 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer ${
                 mode === 'markdown'
-                  ? 'bg-white text-blue-600 shadow-xs font-medium'
+                  ? 'bg-white text-indigo-600 shadow-xs font-medium'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
               title="按原始 Markdown 语法渲染"
@@ -917,18 +920,19 @@ export function Editor({
         </div>
 
         {/* 快捷操作区：本地图片插入 + 本地草稿状态 + 多格式范文库 + 一键清空 */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          <span className="hidden sm:block w-px h-4 bg-black/[0.07]" aria-hidden />
           {/* 插入图片按钮 */}
           <button
             onClick={() => triggerImagePicker()}
             disabled={isUploading}
-            className="px-2 py-1 rounded-md text-xs text-blue-700 bg-blue-50 hover:bg-blue-100/80 border border-blue-200 transition-all flex items-center gap-1 cursor-pointer font-medium"
+            className="px-2 py-1 rounded-md text-xs text-indigo-700 bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200 transition-all flex items-center gap-1 cursor-pointer font-medium"
             title="选择本地图片，或直接在输入框 Cmd+V / Ctrl+V 粘贴截屏"
           >
             {isUploading ? (
-              <Loader2 className="w-3 h-3 animate-spin text-blue-600" />
+              <Loader2 className="w-3 h-3 animate-spin text-indigo-600" />
             ) : (
-              <ImageIcon className="w-3 h-3 text-blue-600" />
+              <ImageIcon className="w-3 h-3 text-indigo-600" />
             )}
             <span className="hidden sm:inline">插入图片</span>
           </button>
@@ -949,10 +953,10 @@ export function Editor({
             <div className="flex items-center">
               <button
                 onClick={() => onRestoreSample('all-round-markdown')}
-                className="px-2 py-1 rounded-l-md text-xs text-gray-700 hover:text-blue-600 hover:bg-blue-50 transition-all flex items-center gap-1 cursor-pointer font-medium border border-gray-200 border-r-0"
+                className="px-2 py-1 rounded-l-md text-xs text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 transition-all flex items-center gap-1 cursor-pointer font-medium border border-gray-200 border-r-0"
                 title="载入全能 Markdown 范文（含单图、双排图、三排画廊、表格、代码、清单）"
               >
-                <RotateCcw className="w-3 h-3 text-blue-500" />
+                <RotateCcw className="w-3 h-3 text-indigo-500" />
                 <span className="hidden md:inline">测试范文</span>
               </button>
               <button
@@ -960,12 +964,12 @@ export function Editor({
                   e.stopPropagation();
                   setShowPresetMenu((prev) => !prev);
                 }}
-                className="px-1.5 py-1 rounded-r-md text-[11px] text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-all cursor-pointer font-medium border border-gray-200 flex items-center"
+                className="px-1.5 py-1 rounded-r-md text-[11px] text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all cursor-pointer font-medium border border-gray-200 flex items-center"
                 title="选择更多不同格式的测试范文"
               >
                 <ChevronDown
                   className={`w-3 h-3 transition-transform pointer-events-none ${
-                    showPresetMenu ? 'rotate-180 text-blue-600' : ''
+                    showPresetMenu ? 'rotate-180 text-indigo-600' : ''
                   }`}
                 />
               </button>
@@ -986,13 +990,13 @@ export function Editor({
                     onRestoreSample('all-round-markdown');
                     setShowPresetMenu(false);
                   }}
-                  className="w-full text-left px-2.5 py-2.5 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-all flex items-start gap-2.5 cursor-pointer group border-b border-gray-100"
+                  className="w-full text-left px-2.5 py-2.5 rounded-lg text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-all flex items-start gap-2.5 cursor-pointer group border-b border-gray-100"
                 >
-                  <FileCheck2 className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
+                  <FileCheck2 className="w-4 h-4 text-indigo-500 mt-0.5 shrink-0" />
                   <div>
-                    <div className="font-semibold text-gray-800 group-hover:text-blue-700 flex items-center gap-1.5">
+                    <div className="font-semibold text-gray-800 group-hover:text-indigo-700 flex items-center gap-1.5">
                       <span>全能旗舰 Markdown 范文</span>
-                      <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.2 rounded font-normal">
+                      <span className="text-[10px] bg-blue-100 text-indigo-700 px-1.5 py-0.2 rounded font-normal">
                         全格式
                       </span>
                     </div>
@@ -1023,17 +1027,17 @@ export function Editor({
                   </div>
                 </button>
 
-                <div className="px-2 pt-1.5 pb-1 text-[10px] font-semibold text-blue-400 uppercase tracking-wider border-t border-gray-100 mt-1">Ten Test Articles · 智能识别压测</div>
+                <div className="px-2 pt-1.5 pb-1 text-[10px] font-semibold text-indigo-400 uppercase tracking-wider border-t border-gray-100 mt-1">Ten Test Articles · 智能识别压测</div>
                 <button
                   onClick={() => {
                     onRestoreSample('test01-plain');
                     setShowPresetMenu(false);
                   }}
-                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-800 transition-all flex items-start gap-2.5 cursor-pointer group"
                 >
-                  <FlaskConical className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <FlaskConical className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
                   <div>
-                    <div className="font-semibold text-gray-800 group-hover:text-blue-800 flex items-center gap-1.5">
+                    <div className="font-semibold text-gray-800 group-hover:text-indigo-800 flex items-center gap-1.5">
                       <span>测试01 · 深度评测长文</span>
                     </div>
                     <div className="text-[11px] text-gray-400 leading-tight mt-0.5">多级章节、对齐表格、编号列表、小数评分边界</div>
@@ -1044,11 +1048,11 @@ export function Editor({
                     onRestoreSample('test02-plain');
                     setShowPresetMenu(false);
                   }}
-                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-800 transition-all flex items-start gap-2.5 cursor-pointer group"
                 >
-                  <FlaskConical className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <FlaskConical className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
                   <div>
-                    <div className="font-semibold text-gray-800 group-hover:text-blue-800 flex items-center gap-1.5">
+                    <div className="font-semibold text-gray-800 group-hover:text-indigo-800 flex items-center gap-1.5">
                       <span>测试02 · 图文安装教程</span>
                     </div>
                     <div className="text-[11px] text-gray-400 leading-tight mt-0.5">步骤编号与配图穿插、图注、缩进代码块</div>
@@ -1059,11 +1063,11 @@ export function Editor({
                     onRestoreSample('test03-plain');
                     setShowPresetMenu(false);
                   }}
-                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-800 transition-all flex items-start gap-2.5 cursor-pointer group"
                 >
-                  <FlaskConical className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <FlaskConical className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
                   <div>
-                    <div className="font-semibold text-gray-800 group-hover:text-blue-800 flex items-center gap-1.5">
+                    <div className="font-semibold text-gray-800 group-hover:text-indigo-800 flex items-center gap-1.5">
                       <span>测试03 · 创始人访谈</span>
                     </div>
                     <div className="text-[11px] text-gray-400 leading-tight mt-0.5">问答结构、引用行、金句候选短段</div>
@@ -1074,11 +1078,11 @@ export function Editor({
                     onRestoreSample('test04-plain');
                     setShowPresetMenu(false);
                   }}
-                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-800 transition-all flex items-start gap-2.5 cursor-pointer group"
                 >
-                  <FlaskConical className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <FlaskConical className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
                   <div>
-                    <div className="font-semibold text-gray-800 group-hover:text-blue-800 flex items-center gap-1.5">
+                    <div className="font-semibold text-gray-800 group-hover:text-indigo-800 flex items-center gap-1.5">
                       <span>测试04 · 政务公文风</span>
                     </div>
                     <div className="text-[11px] text-gray-400 leading-tight mt-0.5">第一章/第一节/一、/（一）四级章节体系</div>
@@ -1089,11 +1093,11 @@ export function Editor({
                     onRestoreSample('test05-plain');
                     setShowPresetMenu(false);
                   }}
-                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-800 transition-all flex items-start gap-2.5 cursor-pointer group"
                 >
-                  <FlaskConical className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <FlaskConical className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
                   <div>
-                    <div className="font-semibold text-gray-800 group-hover:text-blue-800 flex items-center gap-1.5">
+                    <div className="font-semibold text-gray-800 group-hover:text-indigo-800 flex items-center gap-1.5">
                       <span>测试05 · 工程手记</span>
                     </div>
                     <div className="text-[11px] text-gray-400 leading-tight mt-0.5">多语言代码块、围栏与语言标记、文末链接</div>
@@ -1104,11 +1108,11 @@ export function Editor({
                     onRestoreSample('test06-plain');
                     setShowPresetMenu(false);
                   }}
-                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-800 transition-all flex items-start gap-2.5 cursor-pointer group"
                 >
-                  <FlaskConical className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <FlaskConical className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
                   <div>
-                    <div className="font-semibold text-gray-800 group-hover:text-blue-800 flex items-center gap-1.5">
+                    <div className="font-semibold text-gray-800 group-hover:text-indigo-800 flex items-center gap-1.5">
                       <span>测试06 · 运营周报</span>
                     </div>
                     <div className="text-[11px] text-gray-400 leading-tight mt-0.5">时间线日程、日期段落、百分比、跳号清单</div>
@@ -1119,11 +1123,11 @@ export function Editor({
                     onRestoreSample('test07-plain');
                     setShowPresetMenu(false);
                   }}
-                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-800 transition-all flex items-start gap-2.5 cursor-pointer group"
                 >
-                  <FlaskConical className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <FlaskConical className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
                   <div>
-                    <div className="font-semibold text-gray-800 group-hover:text-blue-800 flex items-center gap-1.5">
+                    <div className="font-semibold text-gray-800 group-hover:text-indigo-800 flex items-center gap-1.5">
                       <span>测试07 · 旅行攻略</span>
                     </div>
                     <div className="text-[11px] text-gray-400 leading-tight mt-0.5">★●◆符号列表、callout提示、✓✗任务</div>
@@ -1134,11 +1138,11 @@ export function Editor({
                     onRestoreSample('test08-plain');
                     setShowPresetMenu(false);
                   }}
-                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-800 transition-all flex items-start gap-2.5 cursor-pointer group"
                 >
-                  <FlaskConical className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <FlaskConical className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
                   <div>
-                    <div className="font-semibold text-gray-800 group-hover:text-blue-800 flex items-center gap-1.5">
+                    <div className="font-semibold text-gray-800 group-hover:text-indigo-800 flex items-center gap-1.5">
                       <span>测试08 · 读书笔记</span>
                     </div>
                     <div className="text-[11px] text-gray-400 leading-tight mt-0.5">书名号、引用块、编号参考文献与链接</div>
@@ -1149,11 +1153,11 @@ export function Editor({
                     onRestoreSample('test09-plain');
                     setShowPresetMenu(false);
                   }}
-                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-800 transition-all flex items-start gap-2.5 cursor-pointer group"
                 >
-                  <FlaskConical className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <FlaskConical className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
                   <div>
-                    <div className="font-semibold text-gray-800 group-hover:text-blue-800 flex items-center gap-1.5">
+                    <div className="font-semibold text-gray-800 group-hover:text-indigo-800 flex items-center gap-1.5">
                       <span>测试09 · 需求文档</span>
                     </div>
                     <div className="text-[11px] text-gray-400 leading-tight mt-0.5">多级编号、任务清单、✅❌验收对照</div>
@@ -1164,11 +1168,11 @@ export function Editor({
                     onRestoreSample('test10-plain');
                     setShowPresetMenu(false);
                   }}
-                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-blue-50 hover:text-blue-800 transition-all flex items-start gap-2.5 cursor-pointer group"
+                  className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-800 transition-all flex items-start gap-2.5 cursor-pointer group"
                 >
-                  <FlaskConical className="w-4 h-4 text-blue-400 mt-0.5 shrink-0" />
+                  <FlaskConical className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
                   <div>
-                    <div className="font-semibold text-gray-800 group-hover:text-blue-800 flex items-center gap-1.5">
+                    <div className="font-semibold text-gray-800 group-hover:text-indigo-800 flex items-center gap-1.5">
                       <span>测试10 · 观点随笔</span>
                     </div>
                     <div className="text-[11px] text-gray-400 leading-tight mt-0.5">无结构长段、金句短段、数字边界压测</div>
@@ -1200,8 +1204,8 @@ export function Editor({
               已识别：Markdown 源码
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 font-medium text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-full text-[11px]">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+            <span className="inline-flex items-center gap-1 font-medium text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded-full text-[11px]">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
               {detection.stats?.summaryText || '已识别：自然普通文本 (已智能提取标题、配图、表格与段落)'}
             </span>
           )}
@@ -1212,10 +1216,10 @@ export function Editor({
           {!detection.isMarkdown && value.trim().length > 0 && (
             <button
               onClick={handleConvertToMarkdown}
-              className="flex items-center gap-1 text-[11px] text-blue-700 hover:text-blue-900 bg-white hover:bg-blue-50 px-2 py-0.5 rounded border border-blue-200 shadow-2xs transition-all cursor-pointer font-medium"
+              className="flex items-center gap-1 text-[11px] text-indigo-700 hover:text-indigo-900 bg-white hover:bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 shadow-2xs transition-all cursor-pointer font-medium"
               title="把当前智能解析的结构转换为带 # 等标号的 Markdown 源码写回编辑器"
             >
-              <Wand2 className="w-3 h-3 text-blue-600" />
+              <Wand2 className="w-3 h-3 text-indigo-600" />
               一键转为标准 Markdown
             </button>
           )}
@@ -1318,7 +1322,7 @@ export function Editor({
             )
           )}
           {isUploading && (
-            <div className="flex items-center gap-2 text-xs text-blue-600 py-2">
+            <div className="flex items-center gap-2 text-xs text-indigo-600 py-2">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
               正在处理图片…
             </div>
@@ -1335,7 +1339,7 @@ export function Editor({
           <p className="text-xs text-gray-300">⌘B 加粗 · ⌘I 斜体 · ⌘1/2/3 标题 · 选中文字可快速转格式</p>
           <button
             onClick={() => onRestoreSample('all-round-plain-text')}
-            className="mt-2 pointer-events-auto px-3.5 py-1.5 rounded-full bg-blue-50 text-blue-700 text-xs font-medium border border-blue-200 hover:bg-blue-100 transition-colors cursor-pointer"
+            className="mt-2 pointer-events-auto px-3.5 py-1.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-medium border border-indigo-200 hover:bg-indigo-100 transition-colors cursor-pointer"
           >
             载入范文试一试
           </button>
@@ -1343,7 +1347,7 @@ export function Editor({
       )}
 
       {isDragging && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center bg-blue-50/80 text-blue-600 text-sm font-medium pointer-events-none">
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-indigo-50/80 text-indigo-600 text-sm font-medium pointer-events-none">
           松开鼠标，插入图片
         </div>
       )}

@@ -26,7 +26,7 @@ export function AppPromoBadge() {
           onError={() => setImgOk(false)}
         />
       ) : (
-        <span className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] font-bold">
+        <span className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[10px] font-bold">
           Xt
         </span>
       )}
