@@ -475,6 +475,7 @@ export function Editor({
   const menuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const pendingFocusRef = useRef(false);
 
   // 分块：文本块（源码编辑）与图片块（可视化编辑）交替。
   // 编辑态以 blocksState 为准（保留文本块行尾换行等编辑意图），
@@ -493,9 +494,17 @@ export function Editor({
   const detection = useMemo(() => detectContentFormat(value), [value]);
 
   const commitBlocks = (next: EditorBlock[], reparse?: boolean) => {
-    const md = serializeEditorBlocks(next);
-    // 文本编辑（reparse=false）保留逐字状态（含行尾换行）；图片结构变更后重析归一化（拆出图片块）
-    setBlocksState(reparse ? parseEditorBlocks(md) : next);
+    let final = next;
+    if (reparse) {
+      const reparsed = parseEditorBlocks(serializeEditorBlocks(next));
+      // 只剩图片块时（如空文档贴图）自动补一个空文本块，保证始终有可输入位置
+      final = reparsed.some((b) => b.kind === 'text')
+        ? reparsed
+        : [...reparsed, { kind: 'text' as const, lines: [''] }];
+      if (final.length !== reparsed.length) pendingFocusRef.current = true;
+    }
+    const md = serializeEditorBlocks(final);
+    setBlocksState(final);
     setLastSerialized(md);
     onChange(md);
   };
@@ -559,6 +568,30 @@ export function Editor({
     }
     const merged: EditorBlock = { kind: 'images', images: groupImages, captions: groupCaptions, layout, polaroid: false };
     updateBlocks([...blocks.slice(0, start), merged, ...blocks.slice(end + 1)]);
+  };
+
+  // 图片插入后自动聚焦新增的空文本块（贴图后可直接打字）
+  useEffect(() => {
+    if (!pendingFocusRef.current) return;
+    pendingFocusRef.current = false;
+    const tas = Array.from((scrollRef.current || document).querySelectorAll('textarea'));
+    const last = tas[tas.length - 1];
+    if (last) {
+      last.focus();
+      const n = last.value.length;
+      last.setSelectionRange(n, n);
+    }
+  }, [blocksState]);
+
+  // 点击块与块之间的空白区域 → 聚焦最近的文本块
+  const focusLastTextBlock = () => {
+    const tas = Array.from((scrollRef.current || document).querySelectorAll('textarea'));
+    const last = tas[tas.length - 1];
+    if (last) {
+      last.focus();
+      const n = last.value.length;
+      last.setSelectionRange(n, n);
+    }
   };
 
   // 点击外部自动关闭范文下拉菜单
@@ -1225,8 +1258,16 @@ export function Editor({
         ref={scrollRef}
         className="relative flex-1 min-h-0 overflow-y-auto custom-scrollbar"
         onScroll={handleContentScroll}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) focusLastTextBlock();
+        }}
       >
-        <div className="px-4 py-4 space-y-3">
+        <div
+          className="px-4 py-4 space-y-3 min-h-full"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) focusLastTextBlock();
+          }}
+        >
           {value.trim() === '' && (
             <p className="text-sm text-gray-300 text-center py-8">
               在这里输入或粘贴文章内容……纯文本即可，系统会自动识别结构并排版；也可以直接粘贴截图插入图片。
