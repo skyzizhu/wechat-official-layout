@@ -1,4 +1,12 @@
 User-Agent: *
 Allow: /
 
+User-Agent: Googlebot
+User-Agent: bingbot
+User-Agent: Baiduspider
+User-Agent: Sogou web spider
+User-Agent: 360Spider
+User-Agent: YisouSpider
+Allow: /
+
 Sitemap: https://www.yourtools.xyz/sitemap.xml
