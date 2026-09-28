@@ -50,10 +50,12 @@ function prependMarker(children: React.ReactNode[], marker: React.ReactNode): Re
     return typeof c.type === 'string' && ['p', 'div', 'section'].includes(c.type);
   };
   const idx = children.findIndex(isBlockish);
-  if (idx === -1) return [marker, ...children];
+  // 标记进入数组 children 必须带 key，否则触发 React 缺失 key 警告
+  const keyedMarker = React.isValidElement(marker) ? React.cloneElement(marker, { key: 'li-marker' }) : marker;
+  if (idx === -1) return [keyedMarker, ...children];
   const first = children[idx] as React.ReactElement<{ children?: React.ReactNode }>;
   const inner = React.Children.toArray(first.props.children);
-  const cloned = React.cloneElement(first, {}, marker, ...inner);
+  const cloned = React.cloneElement(first, {}, keyedMarker, ...inner);
   const out = [...children];
   out[idx] = cloned;
   return out;
