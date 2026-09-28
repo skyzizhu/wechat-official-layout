@@ -12,7 +12,7 @@ export function Header() {
         </span>
         <span className="font-bold text-lg tracking-tight bg-gradient-to-r from-gray-900 via-gray-800 to-gray-500 bg-clip-text text-transparent">文排</span>
         <span className="text-[10px] text-gray-300 ml-1 hidden md:inline" title="当前部署版本（线上排查旧缓存时核对）">{APP_VERSION}</span>
-        <span className="text-xs text-gray-400 ml-2 hidden sm:inline">一键文章排版</span>
+        <span className="text-xs text-gray-400 ml-2 hidden sm:inline">公众号文章排版工具 · 纯文本一键美化</span>
       </div>
       <div className="flex items-center gap-3">
         <span className="text-xs text-gray-400">选择排版，一键美化</span>

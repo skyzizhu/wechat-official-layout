@@ -19,6 +19,7 @@ import { processContentByMode, ConversionDecision } from '@/lib/smart-parser';
 import { enhanceWithAi, loadAiSettings, saveAiSettings, AiSettings } from '@/lib/ai-enhance';
 import { AiSettingsModal } from '@/components/AiSettingsModal';
 import { AppPromoBadge } from '@/components/AppPromoBadge';
+import { SiteFooter } from '@/components/SiteFooter';
 import { convertLinksToFootnotes } from '@/lib/link-footnotes';
 import { extractAndTokenizeDataUrls } from '@/lib/image-store';
 import { PenLine, Eye } from 'lucide-react';
@@ -541,6 +542,9 @@ function MainLayout() {
 
       {/* 右下角悬浮：引导前往 XTools 官网（新标签页） */}
       <AppPromoBadge />
+
+      {/* 站点页脚：品牌 / Slogan / 版权 / 备案 */}
+      <SiteFooter />
 
       {/* 移动端底部 Tab 栏 */}
       <div className="lg:hidden flex-shrink-0 bg-white border-t border-gray-200 flex">
