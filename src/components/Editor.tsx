@@ -347,7 +347,7 @@ function ImageBlockCard(props: {
   const [pickSlot, setPickSlot] = useState<number | null>(null);
   const slotInputRef = useRef<HTMLInputElement>(null);
   return (
-    <div className="relative group rounded-xl border border-gray-200 bg-gray-50/50 p-3">
+    <div className="relative group rounded-xl border border-black/[0.06] bg-gray-50/60 p-3 shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
       <div className="absolute right-2 top-2 z-10 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 rounded-lg border border-gray-200 px-1 py-0.5 shadow-sm">
         {([1, 2, 3] as const).map((n) => (
           <button
@@ -394,7 +394,7 @@ function ImageBlockCard(props: {
                     setPickSlot(k);
                     slotInputRef.current?.click();
                   }}
-                  className="rounded-lg border border-dashed border-gray-300 bg-white flex flex-col items-center justify-center gap-1 min-h-[140px] text-gray-400 hover:border-blue-400 hover:text-blue-500 transition-colors cursor-pointer"
+                  className="rounded-lg border border-dashed border-gray-300/90 bg-white/70 flex flex-col items-center justify-center gap-1 min-h-[140px] text-gray-400 hover:border-indigo-400 hover:text-indigo-500 hover:bg-indigo-50/30 transition-colors cursor-pointer"
                   title="选择本地图片填充此格子"
                 >
                   <ImageIcon className="w-6 h-6" />
@@ -409,8 +409,8 @@ function ImageBlockCard(props: {
             <div key={k} className="flex flex-col gap-1.5 min-w-0">
               <div
                 className={
-                  'rounded-lg border border-gray-200 bg-white overflow-hidden flex items-center justify-center ' +
-                  (block.polaroid ? 'p-3 pb-4 shadow-md' : '')
+                  'rounded-lg border border-black/[0.06] bg-white overflow-hidden flex items-center justify-center ' +
+                  (block.polaroid ? 'p-3 pb-4 shadow-[0_2px_8px_rgba(15,23,42,0.06)]' : '')
                 }
               >
                 {resolved ? (
@@ -1191,7 +1191,7 @@ export function Editor({
       </div>
 
       {/* 智能检测状态提示浮条 */}
-      <div className="px-4 py-1.5 bg-blue-50/40 border-b border-blue-100/70 flex items-center justify-between text-xs text-gray-600 flex-shrink-0">
+      <div className="px-4 py-1.5 bg-slate-50/80 border-b border-black/[0.04] flex items-center justify-between text-xs text-gray-500 flex-shrink-0">
         <span className="hidden xl:inline text-[11px] text-gray-400 whitespace-nowrap overflow-hidden text-ellipsis flex-shrink min-w-0" title="选中文字后可使用快捷键与悬浮工具栏">选中文字可转格式 · ⌘B 加粗 · ⌘1/2/3 标题 · ⌘S 保存</span>
         <div className="flex items-center gap-1.5">
           {detection.isMarkdown ? (

@@ -443,14 +443,14 @@ function MainLayout() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-[#f6f7f9]">
+    <div className="flex flex-col h-screen bg-transparent">
       <Header />
 
       {/* 桌面端：左右分栏布局（仅桌面挂载，移动端不渲染这份隐藏预览，省一半渲染开销） */}
       <main className="flex-1 flex overflow-hidden">
         {/* 左栏：编辑器 */}
         {isDesktop && (
-          <div className="hidden lg:flex w-[45%] border-r border-gray-200/70 flex-col">
+          <div className="hidden lg:flex w-[45%] border-r border-black/[0.05] flex-col bg-white">
             <Editor
               value={markdown}
               onChange={setMarkdown}

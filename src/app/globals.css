@@ -27,9 +27,24 @@
 
 /* Global styles */
 body {
-  background: var(--color-background);
+  background: linear-gradient(180deg, #fbfbfc 0%, #f4f5f7 100%);
+  background-attachment: fixed;
   color: var(--color-foreground);
   font-family: "Noto Sans SC", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(99, 102, 241, 0.16);
+}
+
+/* 键盘导航焦点环（精致、低噪声） */
+:focus-visible {
+  outline: 2px solid rgba(99, 102, 241, 0.45);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 
 /* 核心修复：清除引用块内部段落的首尾 margin，确保边框内容完美垂直居中 */
@@ -90,18 +105,27 @@ th, td {
 }
 
 /* Custom scrollbar */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.14) transparent;
+}
 .custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
+  height: 8px;
 }
 .custom-scrollbar::-webkit-scrollbar-track {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.13);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: rgba(0, 0, 0, 0.24);
+  background-clip: content-box;
+  border: 2px solid transparent;
 }
 
 /* 统一编辑器图片题注占位符提示 */

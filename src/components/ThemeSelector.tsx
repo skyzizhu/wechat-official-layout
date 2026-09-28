@@ -25,7 +25,7 @@ export function ThemeSelector({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl w-full max-w-5xl max-h-[88vh] overflow-auto p-6 sm:p-8 shadow-2xl border border-gray-100 animate-fade-in"
+        className="bg-white rounded-2xl w-full max-w-5xl max-h-[88vh] overflow-auto p-6 sm:p-8 shadow-[0_4px_12px_rgba(15,23,42,0.05),0_24px_64px_-16px_rgba(15,23,42,0.18)] ring-1 ring-black/[0.05] animate-fade-in"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

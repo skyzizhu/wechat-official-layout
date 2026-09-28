@@ -76,7 +76,7 @@ export function ExportToolbar({
 
   return (
     <>
-      <div className="h-12 border-b border-gray-200 bg-white flex items-center justify-between px-3 sm:px-4 flex-shrink-0 shadow-xs gap-2">
+      <div className="h-12 border-b border-black/[0.05] bg-white/70 backdrop-blur-xl [saturate:1.6] flex items-center justify-between px-3 sm:px-4 flex-shrink-0 gap-2">
         {/* 左侧：排版预设选择按钮 + 风格主色调节 + 字号大小微调器 + 外链转脚注开关 + 首句标题开关 */}
         <div className="flex items-center gap-1 sm:gap-1.5 xl:gap-2 overflow-x-auto no-scrollbar py-1 min-w-0">
           <button
