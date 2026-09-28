@@ -1,6 +1,7 @@
 'use client';
 
 import { Type } from 'lucide-react';
+import { APP_VERSION } from '@/lib/version';
 
 export function Header() {
   return (
@@ -10,6 +11,7 @@ export function Header() {
           <Type className="w-4 h-4 text-white" />
         </span>
         <span className="font-bold text-lg bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent">文排</span>
+        <span className="text-[10px] text-gray-300 ml-1 hidden md:inline" title="当前部署版本（线上排查旧缓存时核对）">{APP_VERSION}</span>
         <span className="text-xs text-gray-400 ml-2 hidden sm:inline">一键文章排版</span>
       </div>
       <div className="flex items-center gap-3">
