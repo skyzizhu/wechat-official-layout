@@ -1,0 +1,16 @@
+import type { MetadataRoute } from 'next';
+
+export const dynamic = 'force-static';
+
+export default function manifest(): MetadataRoute.Manifest {
+  return {
+    name: '文排 — 微信公众号文章排版工具',
+    short_name: '文排',
+    description: '粘贴纯文本智能识别结构，16 款主题一键美化，复制即可发布到公众号。',
+    start_url: '/',
+    display: 'standalone',
+    background_color: '#ffffff',
+    theme_color: '#4f46e5',
+    icons: [{ src: '/favicon.ico', sizes: 'any', type: 'image/x-icon' }],
+  };
+}
