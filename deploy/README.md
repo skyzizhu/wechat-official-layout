@@ -110,3 +110,21 @@ systemctl reload httpd
 
 ---
 
+---
+
+## SEO 检查清单（Google 收录）
+
+构建产物已内置完整 SEO 基础设施（`src/app/layout.tsx` 统一配置）：
+
+- ✅ 完整 title / description / keywords（含核心关键词：公众号排版、微信排版工具等）
+- ✅ canonical、OpenGraph、Twitter Card、JSON-LD 结构化数据（WebApplication）
+- ✅ `robots.txt`、`sitemap.xml`、`manifest.webmanifest`（静态导出自动生成）
+- ✅ 品牌化 OG 分享图（1200×630，`public/og-image.png`）
+- ✅ 预渲染 HTML 含完整正文（Google 无需执行 JS 即可索引）
+
+### 上线后必做
+
+1. **改域名**：`src/lib/site.ts` 中的 `SITE_URL` 改为实际线上域名（canonical/OG/sitemap 均引用它），重新构建
+2. **提交搜索引擎**：Google Search Console 添加资源并验证，提交 `https://你的域名/sitemap.xml`
+3. **确认服务器**：`robots.txt` 与 `sitemap.xml` 可直接访问
+4. **验证结构化数据**：Google Rich Results Test 测试首页，确认 WebApplication 无告警
