@@ -80,3 +80,33 @@ docker build -t radiant-maxwell:latest .
 # 启动容器
 docker run -d --name radiant-maxwell -p 80:80 radiant-maxwell:latest
 ```
+
+---
+
+## 方案二：Apache 静态托管
+
+仓库已内置 `public/.htaccess`（构建时自动复制到 `out/`），包含与 Nginx 方案对等的缓存与压缩策略：
+
+- HTML / txt **禁止缓存**（发版后浏览器立即拉新页面，避免"拉了代码线上还是旧版"）
+- `_next/static` 带哈希 JS/CSS 一年期永久缓存（immutable）
+- 图片/字体 30 天缓存、Gzip 压缩、404 页面
+
+### 启用要点
+
+1. 将 `out/` 内容部署到 Apache 站点目录（如 `/var/www/html/radiant-maxwell/`），`.htaccess` 必须位于该目录
+2. 站点目录需允许覆盖配置（`AllowOverride All`），否则 .htaccess 不生效。编辑 `/etc/httpd/conf/httpd.conf`：
+
+```apache
+<Directory "/var/www/html/radiant-maxwell">
+    AllowOverride All
+</Directory>
+```
+
+```bash
+systemctl reload httpd
+```
+
+3. 若无法修改 AllowOverride，可把 .htaccess 内容直接写入该站点的 VirtualHost 配置段
+
+---
+
