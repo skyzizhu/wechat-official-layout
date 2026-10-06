@@ -625,11 +625,11 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
           </li>
         );
       }
-      // 顶层无序列表项（二级视觉）：主题色圆点
+      // 顶层无序列表项（二级视觉）：主题色圆点（文本圆点，微信粘贴稳定）
       if (listInfo.depth === 1 && !listInfo.isTaskList) {
         return (
           <li style={{ ...listStyles.depth1Li, listStyleType: 'none' }} className={liClassName}>
-            {prependMarker(processedChildren, <span style={listStyles.dot} />)}
+            {prependMarker(processedChildren, <span style={listStyles.dot}>{'●'}</span>)}
           </li>
         );
       }

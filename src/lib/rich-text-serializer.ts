@@ -873,6 +873,19 @@ export function serializeToWeChatRichText(
           if (n.nodeType === 1 && ((n as HTMLElement).tagName === 'UL' || (n as HTMLElement).tagName === 'OL')) return;
           itemSec.appendChild(n);
         });
+        // 规范化预览迁移来的标记 span：剥离定高/vertical-align（微信实测重排来源）
+        const markerSpan = itemSec.firstElementChild;
+        if (markerSpan && markerSpan.tagName === 'SPAN' && markerSpan.textContent.trim().length <= 2) {
+          const st = markerSpan.getAttribute('style') || '';
+          markerSpan.setAttribute(
+            'style',
+            st
+              .replace(/height:\s*[^;]+;?/g, '')
+              .replace(/min-width:\s*[^;]+;?/g, '')
+              .replace(/line-height:\s*[^;]+;?/g, '')
+              .replace(/vertical-align:\s*[^;]+;?/g, '')
+          );
+        }
         sink.push(itemSec);
 
         Array.from(li.children)
