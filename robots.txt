@@ -9,4 +9,4 @@ User-Agent: 360Spider
 User-Agent: YisouSpider
 Allow: /
 
-Sitemap: https://www.yourtools.xyz/sitemap.xml
+Sitemap: https://wol.yourtools.xyz/sitemap.xml
