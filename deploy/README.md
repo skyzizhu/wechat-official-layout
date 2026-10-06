@@ -125,7 +125,7 @@ systemctl reload httpd
 ### 上线后必做
 
 1. **改域名**：`src/lib/site.ts` 中的 `SITE_URL` 改为实际线上域名（canonical/OG/sitemap 均引用它），重新构建
-2. **提交搜索引擎**：Google Search Console 添加资源并验证，提交 `https://你的域名/sitemap.xml`
+2. **提交搜索引擎**：Google Search Console 添加资源并验证，提交 `https://wol.yourtools.xyz/sitemap.xml`
 3. **确认服务器**：`robots.txt` 与 `sitemap.xml` 可直接访问
 4. **验证结构化数据**：Google Rich Results Test 测试首页，确认 WebApplication 无告警
 
@@ -143,7 +143,7 @@ systemctl reload httpd
 3. 主动推送加速收录（普通收录 → API 提交，接口地址里带你的 token）：
 
 ```bash
-curl -H "Content-Type:text/plain" --data-binary "https://你的域名/" "http://data.zz.baidu.com/urls?site=你的域名&token=你的token"
+curl -H "Content-Type:text/plain" --data-binary "https://wol.yourtools.xyz/" "http://data.zz.baidu.com/urls?site=wol.yourtools.xyz&token=你的token"
 ```
 
 > 注：自动推送（JS 代码）已逐步被百度弱化，推荐 API 主动推送 + sitemap 双通道。百度对 keywords meta 权重很低，重点在正文质量与移动体验。
