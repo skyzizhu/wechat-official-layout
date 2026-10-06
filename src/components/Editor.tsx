@@ -2,6 +2,8 @@
 
 import {
   PenLine,
+  Undo2,
+  Redo2,
   FlaskConical,
   Trash2,
   Sparkles,
@@ -19,7 +21,7 @@ import { detectContentFormat, convertPlainTextToMarkdown } from '@/lib/smart-par
 import { compressAndEncodeImage } from '@/lib/image-utils';
 import { putImageDataUrl, resolveImageSrc } from '@/lib/image-store';
 import type { ConversionDecision } from '@/lib/smart-parser';
-import React, { useMemo, useState, useRef, useEffect, useLayoutEffect } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 
 export type ContentMode = 'auto' | 'plain-text' | 'markdown';
 
@@ -197,7 +199,7 @@ function parseEditorBlocks(value: string): EditorBlock[] {
       layout = Math.min(3, Math.max(1, images.length)) as 1 | 2 | 3;
       // 老版本散落的画廊残行自愈：图片行后（隔一空行）的分隔行/空题注行并入图片块并恢复列数
       let absorbEnd = capFound ? j : j - 1;
-      let k2 = absorbEnd + 1;
+      const k2 = absorbEnd + 1;
       if (k2 < lines.length && !lines[k2].trim() && k2 + 1 < lines.length && lines[k2 + 1].trim().startsWith('|')) {
         const cellsOf = (idx: number) =>
           lines[idx].trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
@@ -571,6 +573,82 @@ export function Editor({
     updateBlocks([...blocks.slice(0, start), merged, ...blocks.slice(end + 1)]);
   };
 
+  // ===== 撤销/重做：基于文档快照的栈 =====
+  // 所有文档变化（打字/块操作/范文/清空/AI）统一在此记账：
+  // 500ms 内的连续变化合并为一个快照（打字不爆炸），块操作各成一步
+  const historyRef = useRef<{ stack: string[]; index: number; lastAt: number }>({ stack: [value], index: 0, lastAt: 0 });
+  const applyingRef = useRef(false);
+  const [histState, setHistState] = useState({ canUndo: false, canRedo: false });
+  const syncHistState = () => {
+    const h = historyRef.current;
+    setHistState({ canUndo: h.index > 0, canRedo: h.index < h.stack.length - 1 });
+  };
+
+  useEffect(() => {
+    if (applyingRef.current) {
+      applyingRef.current = false;
+      return;
+    }
+    const h = historyRef.current;
+    if (value === h.stack[h.index]) {
+      syncHistState();
+      return;
+    }
+    // 撤销后产生新编辑：丢弃重做分支
+    if (h.index < h.stack.length - 1) h.stack = h.stack.slice(0, h.index + 1);
+    const now = Date.now();
+    if (now - h.lastAt < 500 && h.stack.length > 1) {
+      h.stack[h.stack.length - 1] = value;
+    } else {
+      h.stack.push(value);
+      h.index = h.stack.length - 1;
+    }
+    h.lastAt = now;
+    if (h.stack.length > 100) {
+      h.stack.shift();
+      h.index = Math.max(0, h.index - 1);
+    }
+    syncHistState();
+  }, [value]);
+
+  const applyHistory = (md: string) => {
+    applyingRef.current = true;
+    setLastSerialized(md);
+    setBlocksState(parseEditorBlocks(md));
+    onChange(md);
+    syncHistState();
+  };
+  const undo = useCallback(() => {
+    const h = historyRef.current;
+    if (h.index <= 0) return;
+    h.index -= 1;
+    applyHistory(h.stack[h.index]);
+  }, [onChange]);
+  const redo = useCallback(() => {
+    const h = historyRef.current;
+    if (h.index >= h.stack.length - 1) return;
+    h.index += 1;
+    applyHistory(h.stack[h.index]);
+  }, [onChange]);
+
+  // 全局 ⌘Z / ⌘⇧Z / Ctrl+Y（覆盖文本块内外的所有场景）
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const k = e.key.toLowerCase();
+      if (k === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+      } else if (k === 'y') {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo]);
+
   // 图片插入后自动聚焦新增的空文本块（贴图后可直接打字）
   useEffect(() => {
     if (!pendingFocusRef.current) return;
@@ -921,6 +999,27 @@ export function Editor({
 
         {/* 快捷操作区：本地图片插入 + 本地草稿状态 + 多格式范文库 + 一键清空 */}
         <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          {/* 撤销 / 重做 */}
+          <button
+            onClick={() => historyRef.current.index > 0 && undo()}
+            disabled={!histState.canUndo}
+            title="撤销 (⌘Z)"
+            className={`p-1.5 rounded-md transition-colors ${
+              histState.canUndo ? 'text-gray-500 hover:text-gray-900 hover:bg-gray-100 cursor-pointer' : 'text-gray-200 cursor-not-allowed'
+            }`}
+          >
+            <Undo2 className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => historyRef.current.index < historyRef.current.stack.length - 1 && redo()}
+            disabled={!histState.canRedo}
+            title="重做 (⌘⇧Z)"
+            className={`p-1.5 rounded-md transition-colors ${
+              histState.canRedo ? 'text-gray-500 hover:text-gray-900 hover:bg-gray-100 cursor-pointer' : 'text-gray-200 cursor-not-allowed'
+            }`}
+          >
+            <Redo2 className="w-3.5 h-3.5" />
+          </button>
           <span className="hidden sm:block w-px h-4 bg-black/[0.07]" aria-hidden />
           {/* 插入图片按钮 */}
           <button
@@ -945,8 +1044,10 @@ export function Editor({
             </div>
           )}
 
-          {/* 字符计数 */}
-          <span className="text-xs text-gray-400">{charCount} 字</span>
+          {/* 字符计数 + 阅读时长（中文约 400 字/分钟） */}
+          <span className="text-xs text-gray-400" title="正文总字数与预计阅读时长">
+            {charCount} 字 · 约 {Math.max(1, Math.ceil(charCount / 400))} 分钟
+          </span>
 
           {/* 多格式范文库快捷下拉 */}
           <div className="relative" ref={menuRef}>

@@ -477,6 +477,7 @@ function MainLayout() {
         {/* 右栏：导出工具栏 + 实时排版预览 */}
         <div className="flex-1 flex flex-col min-w-0">
           <ExportToolbar
+            markdown={markdown}
             theme={theme}
             previewRef={previewRef}
             onOpenThemeSelector={() => setShowThemes(true)}

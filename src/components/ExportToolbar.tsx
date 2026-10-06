@@ -1,6 +1,6 @@
 'use client';
 
-import { Palette, ChevronDown, Copy, ImageDown, Pipette, Link2, Heading1, Sparkles, Settings2, Loader2 } from 'lucide-react';
+import { Palette, ChevronDown, Copy, ImageDown, FileDown, Pipette, Link2, Heading1, Sparkles, Settings2, Loader2 } from 'lucide-react';
 import type { ThemePreset, FontSizeOption } from '@/themes';
 import { copyRichText, exportAsImage } from '@/lib/export';
 import { useToast } from './Toast';
@@ -9,6 +9,7 @@ import React, { useState } from 'react';
 
 interface ExportToolbarProps {
   previewRef: React.RefObject<HTMLDivElement | null>;
+  markdown: string;
   theme: ThemePreset;
   onOpenThemeSelector: () => void;
   currentColor: string;
@@ -29,6 +30,7 @@ interface ExportToolbarProps {
 export function ExportToolbar({
 
   previewRef,
+  markdown,
   theme,
   onOpenThemeSelector,
   currentColor,
@@ -57,6 +59,24 @@ export function ExportToolbar({
     } catch {
       showToast('❌ 复制失败，请重试');
     }
+  };
+
+  // 下载 Markdown 源文件：保留用户的原始创作，可迁移到任何编辑器
+  const handleDownloadMd = () => {
+    const titleMatch = markdown.match(/^#\s+(.+)$/m)?.[1];
+    const name =
+      (titleMatch || '文排文档')
+        .replace(/[\\/:*?"<>|]/g, '')
+        .trim()
+        .slice(0, 40) || '文排文档';
+    const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name + '.md';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('✅ Markdown 源文件已下载');
   };
 
   const handleExportImage = async () => {
@@ -211,6 +231,16 @@ export function ExportToolbar({
             <ImageDown className="w-4 h-4 text-gray-600" />
             <span className="hidden md:inline">{exporting ? '导出中...' : '导出长图'}</span>
             <span className="md:hidden">长图</span>
+          </button>
+
+          <button
+            onClick={handleDownloadMd}
+            disabled={!markdown.trim()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-sm text-gray-700 font-medium transition-colors border border-gray-200 cursor-pointer shadow-2xs disabled:opacity-50"
+            title="下载当前内容的 Markdown 源文件（.md），可导入其他编辑器"
+          >
+            <FileDown className="w-4 h-4 text-gray-600" />
+            <span className="hidden xl:inline">下载 MD</span>
           </button>
         </div>
       </div>
