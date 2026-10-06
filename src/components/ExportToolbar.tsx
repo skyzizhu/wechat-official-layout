@@ -6,6 +6,7 @@ import { copyRichText, exportAsImage } from '@/lib/export';
 import { useToast } from './Toast';
 import { ColorPickerModal } from './ColorPickerModal';
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 interface ExportToolbarProps {
   previewRef: React.RefObject<HTMLDivElement | null>;
@@ -45,16 +46,19 @@ export function ExportToolbar({
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   // 字号滑杆气泡：点击 A 按钮弹出，点击外部关闭
   const [fontSizeOpen, setFontSizeOpen] = useState(false);
-  const fontSizeMenuRef = useRef<HTMLDivElement>(null);
+  const [popPos, setPopPos] = useState({ top: 0, left: 0 });
+  const fontSizeAnchorRef = useRef<HTMLButtonElement>(null);
 
+  // 页面滚动/缩放时关闭气泡（fixed 定位不跟随锚点）
   useEffect(() => {
-    function onDocMouseDown(event: MouseEvent) {
-      if (fontSizeMenuRef.current && !fontSizeMenuRef.current.contains(event.target as Node)) {
-        setFontSizeOpen(false);
-      }
-    }
-    if (fontSizeOpen) document.addEventListener('mousedown', onDocMouseDown);
-    return () => document.removeEventListener('mousedown', onDocMouseDown);
+    if (!fontSizeOpen) return;
+    const close = () => setFontSizeOpen(false);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
   }, [fontSizeOpen]);
 
   const handleCopyRichText = async () => {
@@ -103,7 +107,7 @@ export function ExportToolbar({
 
   return (
     <>
-      <div className="h-12 border-b border-black/[0.05] bg-white/70 backdrop-blur-xl [saturate:1.6] flex items-center justify-between px-3 sm:px-4 flex-shrink-0 gap-2">
+      <div className="relative z-30 h-12 border-b border-black/[0.05] bg-white/70 backdrop-blur-xl [saturate:1.6] flex items-center justify-between px-3 sm:px-4 flex-shrink-0 gap-2">
         {/* 左侧：排版预设选择按钮 + 风格主色调节 + 字号大小微调器 + 外链转脚注开关 + 首句标题开关 */}
         <div className="flex items-center gap-1 sm:gap-1.5 xl:gap-2 overflow-x-auto no-scrollbar py-1 min-w-0">
           <button
@@ -132,37 +136,27 @@ export function ExportToolbar({
             <Pipette className="w-3 h-3 text-gray-400" />
           </button>
 
-          {/* 字号：点击 A 按钮弹出滑杆（12~24px 连续调节） */}
-          <div className="relative flex-shrink-0" ref={fontSizeMenuRef}>
-            <button
-              onClick={() => setFontSizeOpen((v) => !v)}
-              title="正文字号（12~24px）"
-              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all border cursor-pointer ${
-                fontSizeOpen
-                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                  : 'bg-gray-50 text-gray-500 border-black/[0.04] hover:bg-gray-100'
-              }`}
-            >
-              <span className="text-[11px] font-semibold">A</span>
-              <span className="text-[11px] tabular-nums">{fontSize}</span>
-            </button>
-            {fontSizeOpen && (
-              <div className="absolute right-0 top-full mt-1.5 z-40 bg-white/95 backdrop-blur rounded-xl ring-1 ring-black/[0.06] shadow-[0_4px_12px_rgba(15,23,42,0.06),0_16px_40px_-12px_rgba(15,23,42,0.16)] p-3 flex items-center gap-2.5">
-                <span className="text-[11px] text-gray-400 font-semibold">A</span>
-                <input
-                  type="range"
-                  min={12}
-                  max={24}
-                  step={1}
-                  value={fontSize}
-                  onChange={(e) => onFontSizeChange(Number(e.target.value))}
-                  className="w-32 sm:w-40 accent-indigo-600 cursor-pointer"
-                  aria-label="正文字号"
-                />
-                <span className="text-[11px] text-gray-600 font-medium tabular-nums w-8 text-right">{fontSize}px</span>
-              </div>
-            )}
-          </div>
+          {/* 字号：点击 A 按钮弹出滑杆气泡（Portal 渲染到 body，不受工具栏裁剪） */}
+          <button
+            ref={fontSizeAnchorRef}
+            onClick={() => {
+              const r = fontSizeAnchorRef.current?.getBoundingClientRect();
+              if (r) {
+                const left = Math.min(Math.max(8, r.right - 252), Math.max(8, window.innerWidth - 264));
+                setPopPos({ top: r.bottom + 8, left });
+              }
+              setFontSizeOpen((v) => !v);
+            }}
+            title="正文字号（12~24px）"
+            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all border cursor-pointer flex-shrink-0 ${
+              fontSizeOpen
+                ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                : 'bg-gray-50 text-gray-500 border-black/[0.04] hover:bg-gray-100'
+            }`}
+          >
+            <span className="text-[11px] font-semibold">A</span>
+            <span className="text-[11px] tabular-nums">{fontSize}</span>
+          </button>
 
           {/* 外链转文末脚注开关 */}
           <button
@@ -243,6 +237,29 @@ export function ExportToolbar({
           </button>
         </div>
       </div>
+
+      {/* 字号滑杆气泡：Portal 到 body，逃离工具栏的 overflow 裁剪 */}
+      {fontSizeOpen &&
+        createPortal(
+          <div
+            className="fixed z-50 bg-white/95 backdrop-blur rounded-xl ring-1 ring-black/[0.06] shadow-[0_4px_12px_rgba(15,23,42,0.06),0_16px_40px_-12px_rgba(15,23,42,0.16)] p-3 flex items-center gap-2.5"
+            style={{ top: popPos.top, left: popPos.left }}
+          >
+            <span className="text-[11px] text-gray-400 font-semibold">A</span>
+            <input
+              type="range"
+              min={12}
+              max={24}
+              step={1}
+              value={fontSize}
+              onChange={(e) => onFontSizeChange(Number(e.target.value))}
+              className="w-32 sm:w-44 accent-indigo-600 cursor-pointer"
+              aria-label="正文字号"
+            />
+            <span className="text-[11px] text-gray-600 font-medium tabular-nums w-8 text-right">{fontSize}px</span>
+          </div>,
+          document.body
+        )}
 
       {/* 色彩选择器弹窗 */}
       <ColorPickerModal
