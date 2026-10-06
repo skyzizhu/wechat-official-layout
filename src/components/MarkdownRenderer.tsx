@@ -688,17 +688,12 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
           return (
             <span
               style={{
-                display: 'inline-block',
-                width: '15px',
-                height: '15px',
-                lineHeight: '15px',
-                textAlign: 'center',
                 backgroundColor: accent,
                 color: '#ffffff',
+                padding: '2px 6px',
                 borderRadius: '3px',
                 fontSize: '11px',
                 marginRight: '7px',
-                verticalAlign: 'middle',
                 fontWeight: 'bold',
                 userSelect: 'none',
               }}
@@ -711,18 +706,12 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
           <span
             data-role="task-checkbox"
             style={{
-              display: 'inline-block',
-              width: '15px',
-              height: '15px',
-              lineHeight: '15px',
-              textAlign: 'center',
-              border: '1.5px solid #cbd5e1',
+              border: '1px solid #cbd5e1',
               borderRadius: '3px',
+              padding: '1px 5px',
               fontSize: '11px',
               marginRight: '7px',
-              verticalAlign: 'middle',
-              boxSizing: 'border-box',
-              color: 'transparent',
+              color: '#94a3b8',
               userSelect: 'none',
             }}
           >

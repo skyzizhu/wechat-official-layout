@@ -615,14 +615,24 @@ export function serializeToWeChatRichText(
       );
     }
 
+    // 微信粘贴会重置 section 的 margin（导致分割线与文本间距不对称），
+    // 因此间距用外层 wrapper 的 padding 承载（padding 在粘贴后稳定保留），
+    // 线本体为内层 section，宽度照常可控
+    const hrPadVertical = (hrMargin.match(/^\s*([\d.]+)px/) || [])[1] || '26';
+    const wrapper = document.createElement('section');
+    wrapper.setAttribute('data-role', 'divider');
+    wrapper.setAttribute(
+      'style',
+      `margin: 0; padding: ${hrPadVertical}px 0; width: 100%; box-sizing: border-box; font-size: 0; line-height: 0;`
+    );
     const section = document.createElement('section');
-    section.setAttribute('data-role', 'divider');
     section.setAttribute(
       'style',
-      `margin: ${hrMargin}; width: ${hrWidth}; border: none; border-top: ${hrBorder}; max-width: 100%; box-sizing: border-box;`
+      `width: ${hrWidth}; border: none; border-top: ${hrBorder}; max-width: 100%; box-sizing: border-box;`
     );
+    wrapper.appendChild(section);
 
-    parent.replaceChild(section, hr);
+    parent.replaceChild(wrapper, hr);
   });
 
   // (8) 处理正文段落 p（保证两端对齐、黄金行距 1.85 与自适应字距，重点保证双分割线夹持文本绝对垂直居中，图片包装与题注紧凑对齐）
@@ -1235,4 +1245,11 @@ export async function copyHighFidelityRichText(
   if (!success) {
     throw new Error('All clipboard copy strategies failed');
   }
+}
+
+// 开发调试：暴露序列化器供复现微信粘贴问题（生产构建剔除）
+if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
+  (window as unknown as { __WENPAI_DEBUG__: unknown }).__WENPAI_DEBUG__ = {
+    serializeToWeChatRichText,
+  };
 }

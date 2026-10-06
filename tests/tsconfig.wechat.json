@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es2020",
+    "skipLibCheck": true,
+    "lib": ["dom", "es2020"],
+    "outDir": ".wechat-build",
+    "baseUrl": "..",
+    "paths": { "@/*": ["src/*"] },
+    "jsx": "react-jsx"
+  },
+  "include": ["../src/lib/rich-text-serializer.ts"]
+}
