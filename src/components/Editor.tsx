@@ -1048,7 +1048,7 @@ export function Editor({
             <div className="flex items-center">
               <button
                 onClick={() => onRestoreSample('all-round-markdown')}
-                className="px-2 py-1 rounded-l-md text-xs text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 transition-all flex items-center gap-1 cursor-pointer font-medium border border-gray-200 border-r-0"
+                className="h-7 px-2 rounded-l-md text-xs text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 transition-all flex items-center gap-1 cursor-pointer font-medium border border-gray-200 border-r-0"
                 title="载入全能 Markdown 范文（含单图、双排图、三排画廊、表格、代码、清单）"
               >
                 <RotateCcw className="w-3 h-3 text-indigo-500" />
@@ -1059,7 +1059,7 @@ export function Editor({
                   e.stopPropagation();
                   setShowPresetMenu((prev) => !prev);
                 }}
-                className="px-1.5 py-1 rounded-r-md text-[11px] text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all cursor-pointer font-medium border border-gray-200 flex items-center"
+                className="h-7 px-1.5 rounded-r-md text-[11px] text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all cursor-pointer font-medium border border-gray-200 flex items-center"
                 title="选择更多不同格式的测试范文"
               >
                 <ChevronDown
