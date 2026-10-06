@@ -64,7 +64,11 @@ function run(name, previewHtml, asserts) {
   }
   const out = new JSDOM(html).window.document;
   const notes = [];
-  const asserts2 = (h, o) => asserts(h, o, (msg) => notes.push(msg));
+  const asserts2 = (h, o) => {
+    const problems = asserts(h, o, (msg) => notes.push(msg));
+    noZeroFontPatterns(h).forEach((t) => problems.push('含 ' + t + '（触发微信行高告警）'));
+    return problems;
+  };
   const problems = asserts2(html, out);
   if (problems.length === 0) {
     if (notes.length) {
@@ -103,6 +107,14 @@ const maxNesting = (out, limit = 10) => {
 };
 const noForbiddenTags = (html) =>
   ['<input', '<hr>', '<hr ', '<video'].filter((t) => html.includes(t));
+
+// 微信规范 2.3.2：font-size: 0 / line-height: 0 的假占位会触发"行高小于字体大小"告警
+const noZeroFontPatterns = (html) => {
+  const bad = [];
+  if (/font-size:\s*0(?:px)?(?![.\d])/.test(html)) bad.push('font-size: 0');
+  if (/line-height:\s*0(?:px)?(?![.\d])/.test(html)) bad.push('line-height: 0');
+  return bad;
+};
 
 // ============ 用例 ============
 

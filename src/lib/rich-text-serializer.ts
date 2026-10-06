@@ -623,7 +623,9 @@ export function serializeToWeChatRichText(
     wrapper.setAttribute('data-role', 'divider');
     wrapper.setAttribute(
       'style',
-      `margin: 0; padding: ${hrPadVertical}px 0; width: 100%; box-sizing: border-box; font-size: 0; line-height: 0;`
+      // 不设 font-size/line-height 重置：font-size 0 会触发微信规范 2.3.2 行高告警（按继承字号计算）；
+      // wrapper 内无文本节点，无需重置
+      `margin: 0; padding: ${hrPadVertical}px 0; width: 100%; box-sizing: border-box;`
     );
     const section = document.createElement('section');
     section.setAttribute(
