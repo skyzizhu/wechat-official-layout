@@ -36,7 +36,7 @@ Module.default._resolveFilename = function (request, ...args) {
   }
   return origResolve.call(this, request, ...args);
 };
-const { serializeToWeChatRichText } = require(path.join(buildDir, 'rich-text-serializer.js'));
+const { serializeToWeChatRichText } = require(path.join(buildDir, 'lib', 'rich-text-serializer.js'));
 
 const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>');
 global.document = dom.window.document;
@@ -116,11 +116,14 @@ run(
     const p = [];
     if (html.includes('inline-block')) p.push('复选框仍是 inline-block（会被微信拆行）');
     if (html.includes('<input')) p.push('含 input 标签（微信会过滤）');
-    if (out.querySelectorAll('li').length !== 2) p.push('li 数量异常: ' + out.querySelectorAll('li').length);
-    const lis = Array.from(out.querySelectorAll('li'));
-    lis.forEach((li, i) => {
-      const first = li.firstElementChild;
-      if (!first || first.textContent.trim().length > 2) p.push('li' + i + ' 复选框与文本可能分离');
+    if (out.querySelectorAll('ul, ol, li').length > 0) p.push('输出仍含 ul/ol/li 结构');
+    // 复选框徽标与文本必须同处一个 section（微信不会拆分 section 内的行内内容）
+    const sections = Array.from(out.querySelectorAll('section')).filter(
+      (sec) => (sec.getAttribute('style') || '').includes('font-weight: 500')
+    );
+    if (sections.length !== 2) p.push('条目 section 数量异常: ' + sections.length);
+    sections.forEach((sec, i) => {
+      if (!sec.textContent.trim()) p.push('section ' + i + ' 为空');
     });
     p.push(...noBlockInsideSpan(out));
     return p;
@@ -163,10 +166,11 @@ run(
   '任务清单含中文括号与空格',
   `<ul><li><span style="color: rgb(79, 70, 229); font-weight: bold;">✓</span> 任务复选框高保真原生矢量化（杜绝微信过滤 input 标签）</li></ul>`,
   (html, out) => {
-    const p = [];
-    if (out.querySelector('li')?.textContent.includes('✓') !== true) p.push('勾选符丢失');
-    p.push(...noBlockInsideSpan(out));
-    return p;
+    const problems = [];
+    const sec = Array.from(out.querySelectorAll('section')).find((s) => (s.textContent || '').includes('✓'));
+    if (!sec || !sec.textContent.includes('任务复选框高保真原生矢量化')) problems.push('勾选符与文本丢失');
+    problems.push(...noBlockInsideSpan(out));
+    return problems;
   }
 );
 
@@ -177,6 +181,31 @@ run(
     const p = [];
     if (out.querySelectorAll('img').length !== 2) p.push('画廊图片丢失');
     p.push(...noBlockInsideSpan(out));
+    return p;
+  }
+);
+
+run(
+  '徽章编号列表（参考文献场景）',
+  `<ol>
+    <li><span style="display: inline-block; min-width: 20px; height: 20px; padding: 0 6px; margin-right: 9px; border-radius: 6px; background-color: rgb(5, 150, 105); color: rgb(255, 255, 255); font-size: 12px; font-weight: 700; text-align: center;">1</span><a href="https://a.example">微信公众平台技术开发规范</a><sup>[1]</sup></li>
+    <li><span style="display: inline-block; min-width: 20px; height: 20px; padding: 0 6px; margin-right: 9px; border-radius: 6px; background-color: rgb(5, 150, 105); color: rgb(255, 255, 255); font-size: 12px; font-weight: 700; text-align: center;">2</span><a href="https://b.example">Google Antigravity 官方开源仓库</a><sup>[2]</sup></li>
+  </ol>`,
+  (html, out) => {
+    const p = [];
+    // 核心断言：输出不再含 ul/ol/li（微信粘贴会拆分 li 内容），全部转为 section
+    if (out.querySelectorAll('ul, ol, li').length > 0) p.push('输出仍含 ul/ol/li 结构');
+    const sections = Array.from(out.querySelectorAll('section')).filter(
+      (sec) => (sec.getAttribute('style') || '').includes('font-weight: 500')
+    );
+    if (sections.length !== 2) p.push('条目 section 数量异常: ' + sections.length);
+    sections.forEach((sec, i) => {
+      const badge = sec.querySelector('span');
+      const link = sec.querySelector('a');
+      if (!badge || badge.textContent !== String(i + 1)) p.push('section ' + i + ' 徽章缺失/错位');
+      if (!link) p.push('section ' + i + ' 链接缺失');
+    });
+    if (!html.includes('微信公众平台技术开发规范') || !html.includes('Google Antigravity')) p.push('内容丢失');
     return p;
   }
 );

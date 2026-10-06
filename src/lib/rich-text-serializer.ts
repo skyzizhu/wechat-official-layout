@@ -803,78 +803,61 @@ export function serializeToWeChatRichText(
     return depth;
   };
 
-  const processListElement = (listEl: HTMLElement, depth: number) => {
+  // 列表 → section 结构（微信合规核心）：
+  // 微信编辑器粘贴 ul/ol/li 时，ProseMirror 会把 li 内的行内内容拆分为独立段落
+  // （复选框/徽章与文本换行分离），因此导出时将列表整体转写为 section 结构——
+  // 与正文其余部分的 section/p 同构，微信粘贴高度稳定
+  const itemBaseStyle = (depth: number) =>
+    depth === 1
+      ? `margin: 0 0 10px; font-size: ${pFontSize}; line-height: 1.75; color: ${strongColor}; font-weight: 500; word-break: break-word; box-sizing: border-box;`
+      : `margin: 0 0 6px; padding-left: ${20 * (depth - 1)}px; font-size: ${pFontSize}; line-height: 1.75; color: ${pColor}; font-weight: 400; word-break: break-word; box-sizing: border-box;`;
+  const listAccent = (themeElements?.a?.color as string) || (themeElements?.h2?.color as string) || '#2563eb';
+
+  const convertListToSections = (listEl: HTMLElement, depth: number, sink: HTMLElement[]) => {
     const isOl = listEl.tagName === 'OL';
-    const isTaskList =
-      !isOl && !!listEl.querySelector('[data-role="task-checkbox"], input[type="checkbox"]');
-
-    if (depth === 1 && isTaskList) {
-      // 任务列表（复选框自带视觉语义）：不做徽章化
-      listEl.setAttribute(
-        'style',
-        'list-style-type: none; padding-left: 8px; margin: 16px 0; box-sizing: border-box; max-width: 100%;'
-      );
-    } else if (depth === 1) {
-      // 二级视觉：原生编号/符号关闭，由徽章/圆点 span 承担
-      listEl.setAttribute(
-        'style',
-        'list-style-type: none; padding-left: 4px; margin: 16px 0 20px; box-sizing: border-box; max-width: 100%;'
-      );
-    } else {
-      // 三级及更深：统一轻量容器
-      const nestedListStyle = isOl ? 'decimal' : 'circle';
-      listEl.setAttribute(
-        'style',
-        `margin: 6px 0 10px; padding-left: 20px; list-style-type: ${nestedListStyle}; box-sizing: border-box; max-width: 100%;`
-      );
-    }
-
-    const isDepth1Plain = depth === 1 && !isTaskList;
+    let idx = 0;
     Array.from(listEl.children)
       .filter((c): c is HTMLElement => c.tagName === 'LI')
       .forEach((li) => {
-        // 关键优化 1：若 li 内部有 <p> 或 <section> 块级标签，解构并平铺为行内子节点，杜绝非法块嵌套破坏 ProseMirror 列表结构
-        const blockChildren = Array.from(li.querySelectorAll('p, section'));
-        blockChildren.forEach((blk) => {
+        const itemSec = document.createElement('section');
+        itemSec.setAttribute('style', itemBaseStyle(depth));
+
+        // 深层标记（预览中深层标记由 CSS ::marker 呈现，DOM 中不存在，导出需补文字标记）
+        if (depth >= 2) {
+          const marker = document.createElement('span');
+          marker.setAttribute('style', `margin-right: 8px; color: ${listAccent}; font-weight: 600;`);
+          marker.textContent = isOl ? `${idx + 1}. ` : '· ';
+          itemSec.appendChild(marker);
+        }
+
+        // 平铺 li 内的块级子节点（p/section），随后整体迁移行内内容（嵌套列表单独递归）
+        Array.from(li.querySelectorAll('p, section')).forEach((blk) => {
           while (blk.firstChild) {
             blk.parentElement?.insertBefore(blk.firstChild, blk);
           }
           blk.remove();
         });
 
-        // 关键优化 2：原子绑定 (Atomic Grouping) —— 将 <li> 中加粗标题 <strong> 与紧随其后的冒号（及标点）
-        // 永久封装在同一个带有 white-space: nowrap 的行内容器中，并在中文排版下将冒号规范化为全角冒号，
-        // 清除冒号后残留的空格，彻底杜绝微信编辑器在标题与冒号之间产生任何换行机会。
-        const strongs = Array.from(li.querySelectorAll('strong'));
-        strongs.forEach((strong) => {
+        // 原子绑定：加粗标题 + 紧随冒号封装 nowrap，杜绝微信在标题与冒号间换行
+        Array.from(li.querySelectorAll('strong')).forEach((strong) => {
           const parent = strong.parentElement;
           if (!parent) return;
-
           const next = strong.nextSibling;
           let matchedPunct: string | null = null;
-
           if (next && next.nodeType === 3 && next.nodeValue) {
             const punctMatch = next.nodeValue.match(/^[\s\u00A0]*([:：\-—–]+)[\s\u00A0]*/);
             if (punctMatch) {
               let pChar = punctMatch[1];
-              if (pChar === ':' || pChar === '：') {
-                pChar = '：'; // 规范化为中文全角标准冒号
-              } else if (pChar === '-') {
-                pChar = ' — ';
-              }
+              if (pChar === ':' || pChar === '：') pChar = '：';
+              else if (pChar === '-') pChar = ' — ';
               matchedPunct = pChar;
-              // 清除后继文本节点开头的标点和所有空格
               next.nodeValue = next.nodeValue.slice(punctMatch[0].length);
             }
           }
-
-          // 创建防折行原子行内容器
           const nowrapSpan = document.createElement('span');
           nowrapSpan.setAttribute('style', 'display: inline; white-space: nowrap;');
-
           parent.insertBefore(nowrapSpan, strong);
           nowrapSpan.appendChild(strong);
-
           if (matchedPunct) {
             const punctSpan = document.createElement('span');
             punctSpan.setAttribute('style', `font-weight: 700; color: ${strongColor};`);
@@ -883,24 +866,30 @@ export function serializeToWeChatRichText(
           }
         });
 
-        // 层级化列表项：二级半加重深色，三级及更深正文字色常规字重
-        li.setAttribute(
-          'style',
-          isDepth1Plain
-            ? `margin-bottom: 10px; font-size: ${pFontSize}; line-height: 1.75; color: ${strongColor}; font-weight: 500; word-break: break-word; box-sizing: border-box;`
-            : `margin-bottom: 6px; font-size: ${pFontSize}; line-height: 1.75; color: ${pColor}; font-weight: 400; word-break: break-word; box-sizing: border-box;`
-        );
+        // 迁移 li 的全部子节点（嵌套列表跳过，单独递归成缩进的兄弟 section）
+        Array.from(li.childNodes).forEach((n) => {
+          if (n.nodeType === 1 && ((n as HTMLElement).tagName === 'UL' || (n as HTMLElement).tagName === 'OL')) return;
+          itemSec.appendChild(n);
+        });
+        sink.push(itemSec);
 
-        // 递归处理嵌套列表（三级及更深）
         Array.from(li.children)
-          .filter((c): c is HTMLElement => c.tagName === 'UL' || c.tagName === 'OL')
-          .forEach((childList) => processListElement(childList, depth + 1));
+          .filter((c) => c.tagName === 'UL' || c.tagName === 'OL')
+          .forEach((childList) => convertListToSections(childList as HTMLElement, depth + 1, sink));
+        idx += 1;
       });
   };
 
   Array.from(clone.querySelectorAll('ol, ul'))
     .filter((el) => listDepthOf(el) === 0)
-    .forEach((el) => processListElement(el as HTMLElement, 1));
+    .forEach((topList) => {
+      const sink: HTMLElement[] = [];
+      convertListToSections(topList as HTMLElement, 1, sink);
+      const parent = topList.parentElement;
+      if (!parent) return;
+      sink.forEach((sec) => parent.insertBefore(sec, topList));
+      topList.remove();
+    });
 
   // (10) 处理行内强调与高亮 strong（规范 4.1.2 & 4.6: 若有渐变背景添加 data-ignore-dm="text-bg-gradient"）
   const markHighlight = theme?.markHighlight;
