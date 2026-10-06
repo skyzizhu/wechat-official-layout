@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { ThemePreset } from './types';
 import { modernMinimal } from './presets/modern-minimal';
 import { classicAcademic } from './presets/classic-academic';
@@ -128,133 +129,35 @@ export function applyColorToTheme(baseTheme: ThemePreset, customColor?: string):
   };
 }
 
-export type FontSizeOption = '14' | '15' | '16';
+export type FontSizeOption = number;
 
 /**
- * 字号大小微调器应用器：
- * 针对公众号阅读习惯定制三档黄金字号体系（14px 紧凑小号 / 15px 微信标准 / 16px 醒目大号）
- * 保持标题、正文、引用、列表层级比例协调微调。
+ * 字号连续缩放：以 15px 为基准，对主题内全部 px 字号等比缩放（保留主题内部层级比例）。
+ * em 单位（如代码块）自动跟随，无需处理。
  */
-export function applyFontSizeToTheme(
-  theme: ThemePreset,
-  size: FontSizeOption = '15'
-): ThemePreset {
-  if (size === '15') {
-    return theme; // 默认微信推荐黄金字号
-  }
-
-  if (size === '14') {
-    // 14px 紧凑精致型
-    return {
-      ...theme,
-      container: {
-        ...theme.container,
-        fontSize: '14px',
-        lineHeight: '1.8',
-      },
-      elements: {
-        ...theme.elements,
-        h1: {
-          ...theme.elements.h1,
-          fontSize: '22px',
-        },
-        h2: {
-          ...theme.elements.h2,
-          fontSize: '17px',
-        },
-        h3: {
-          ...theme.elements.h3,
-          fontSize: '15px',
-        },
-        h4: {
-          ...theme.elements.h4,
-          fontSize: '14.5px',
-        },
-        h5: {
-          ...theme.elements.h5,
-          fontSize: '14px',
-        },
-        h6: {
-          ...theme.elements.h6,
-          fontSize: '14px',
-        },
-        p: {
-          ...theme.elements.p,
-          fontSize: '14px',
-          lineHeight: '1.8',
-        },
-        blockquote: {
-          ...theme.elements.blockquote,
-          fontSize: '13.5px',
-          lineHeight: '1.75',
-        },
-        li: {
-          ...theme.elements.li,
-          fontSize: '14px',
-          lineHeight: '1.75',
-        },
-        code: {
-          ...theme.elements.code,
-          fontSize: '0.86em',
-        },
-      },
-    };
-  }
-
-  // size === '16': 16px 醒目通透型
+export function applyFontSizeToTheme(theme: ThemePreset, size: FontSizeOption = 15): ThemePreset {
+  if (!Number.isFinite(size) || size === 15 || size <= 0) return theme;
+  const ratio = size / 15;
+  const scalePx = (v: unknown, fallback: number): string => {
+    const m = typeof v === 'string' ? v.match(/^([\d.]+)px$/) : null;
+    const base = m ? parseFloat(m[1]) : fallback;
+    return Math.round(base * ratio * 10) / 10 + 'px';
+  };
+  const elements = { ...theme.elements } as ThemePreset['elements'];
+  (Object.keys(elements) as (keyof ThemePreset['elements'])[]).forEach((key) => {
+    if (key === 'code') return; // em 单位随父级自动缩放
+    const el = elements[key] as CSSProperties;
+    if (el && typeof el.fontSize === 'string' && el.fontSize.includes('px')) {
+      elements[key] = { ...el, fontSize: scalePx(el.fontSize, 15) };
+    }
+  });
   return {
     ...theme,
     container: {
       ...theme.container,
-      fontSize: '16.5px',
-      lineHeight: '1.9',
+      fontSize: scalePx(theme.container.fontSize, 15.5),
     },
-    elements: {
-      ...theme.elements,
-      h1: {
-        ...theme.elements.h1,
-        fontSize: '26px',
-      },
-      h2: {
-        ...theme.elements.h2,
-        fontSize: '20px',
-      },
-      h3: {
-        ...theme.elements.h3,
-        fontSize: '17.5px',
-      },
-      h4: {
-        ...theme.elements.h4,
-        fontSize: '17px',
-      },
-      h5: {
-        ...theme.elements.h5,
-        fontSize: '16.5px',
-      },
-      h6: {
-        ...theme.elements.h6,
-        fontSize: '16.5px',
-      },
-      p: {
-        ...theme.elements.p,
-        fontSize: '16.5px',
-        lineHeight: '1.9',
-      },
-      blockquote: {
-        ...theme.elements.blockquote,
-        fontSize: '15.5px',
-        lineHeight: '1.85',
-      },
-      li: {
-        ...theme.elements.li,
-        fontSize: '16px',
-        lineHeight: '1.85',
-      },
-      code: {
-        ...theme.elements.code,
-        fontSize: '0.9em',
-      },
-    },
+    elements,
   };
 }
 

@@ -119,23 +119,20 @@ export function ExportToolbar({
             <Pipette className="w-3 h-3 text-gray-400" />
           </button>
 
-          {/* 字号大小微调器 (14 / 15 / 16) */}
-          <div className="flex items-center bg-gray-100 p-0.5 rounded-lg border border-gray-200 text-xs flex-shrink-0">
-            <span className="text-gray-400 px-1 text-[11px] font-semibold" title="正文字号">A</span>
-            {(['14', '15', '16'] as const).map((size) => (
-              <button
-                key={size}
-                onClick={() => onFontSizeChange(size)}
-                className={`px-1.5 sm:px-2 py-0.5 rounded-md transition-all font-medium cursor-pointer ${
-                  fontSize === size
-                    ? 'bg-white text-indigo-600 shadow-2xs font-bold'
-                    : 'text-gray-500 hover:text-gray-800'
-                }`}
-                title={`${size}px 字号 - ${size === '14' ? '紧凑小巧' : size === '15' ? '微信推荐黄金字号' : '清晰大号'}`}
-              >
-                {size}
-              </button>
-            ))}
+          {/* 字号滑动条：12~24px 连续调节 */}
+          <div className="flex items-center gap-1.5 bg-gray-50 ring-1 ring-black/[0.04] px-2 py-1 rounded-lg flex-shrink-0" title="正文字号：拖动连续调节（12~24px）">
+            <span className="text-[11px] font-semibold text-gray-400">A</span>
+            <input
+              type="range"
+              min={12}
+              max={24}
+              step={1}
+              value={fontSize}
+              onChange={(e) => onFontSizeChange(Number(e.target.value))}
+              className="w-16 sm:w-24 accent-indigo-600 cursor-pointer"
+              aria-label="正文字号"
+            />
+            <span className="text-[11px] text-gray-500 font-medium tabular-nums w-7">{fontSize}px</span>
           </div>
 
           {/* 外链转文末脚注开关 */}
@@ -192,8 +189,7 @@ export function ExportToolbar({
             title="复制带完整内联样式的富文本，支持原封不动粘贴到微信公众号后台"
           >
             <Copy className="w-4 h-4" />
-            <span className="hidden sm:inline">复制富文本</span>
-            <span className="sm:hidden">复制</span>
+            <span>一键复制</span>
           </button>
 
           <button

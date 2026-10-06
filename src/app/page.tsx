@@ -50,7 +50,7 @@ function MainLayout() {
   const [markdown, setMarkdown] = useState(SAMPLE_MARKDOWN);
   const [themeId, setThemeId] = useState(DEFAULT_THEME_ID);
   const [customColor, setCustomColor] = useState<string>(''); // 用户自定义主色
-  const [fontSize, setFontSize] = useState<FontSizeOption>('15'); // 字号微调：14px / 15px / 16px
+  const [fontSize, setFontSize] = useState<FontSizeOption>(15); // 正文字号：12~24px 连续可调
   const [linkFootnotes, setLinkFootnotes] = useState<boolean>(true); // 微信外链转文末脚注开关 (默认开启)
   const [mode, setMode] = useState<ContentMode>('auto');
   const [firstLineAsTitle, setFirstLineAsTitle] = useState(true);
@@ -132,8 +132,8 @@ function MainLayout() {
       const savedColor = localStorage.getItem('radiant_custom_color');
       if (savedColor) setCustomColor(savedColor);
 
-      const savedFontSize = localStorage.getItem('radiant_font_size') as FontSizeOption;
-      if (savedFontSize && ['14', '15', '16'].includes(savedFontSize)) {
+      const savedFontSize = parseInt(localStorage.getItem('radiant_font_size') || '', 10);
+      if (!Number.isNaN(savedFontSize) && savedFontSize >= 12 && savedFontSize <= 24) {
         setFontSize(savedFontSize);
       }
 
@@ -177,7 +177,7 @@ function MainLayout() {
         localStorage.setItem('radiant_article_draft', markdown);
         localStorage.setItem('radiant_theme_id', themeId);
         localStorage.setItem('radiant_custom_color', customColor);
-        localStorage.setItem('radiant_font_size', fontSize);
+        localStorage.setItem('radiant_font_size', String(fontSize));
         localStorage.setItem('radiant_link_footnotes', String(linkFootnotes));
         localStorage.setItem('radiant_content_mode', mode);
         localStorage.setItem('radiant_first_line_title', String(firstLineAsTitle));
@@ -238,10 +238,12 @@ function MainLayout() {
     } catch {}
   };
 
-  // 5. 字号微调切换
+  // 5. 字号连续调节（滑动条，静默生效；提交时随草稿一并持久化）
   const handleFontSizeChange = (size: FontSizeOption) => {
     setFontSize(size);
-    showToast(`🔤 已切换为 ${size}px 字号微调体系`);
+    try {
+      localStorage.setItem('radiant_font_size', String(size));
+    } catch {}
   };
 
   // 6. 外链转文末脚注切换
