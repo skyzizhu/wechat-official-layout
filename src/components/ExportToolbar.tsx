@@ -5,7 +5,7 @@ import type { ThemePreset, FontSizeOption } from '@/themes';
 import { copyRichText, exportAsImage } from '@/lib/export';
 import { useToast } from './Toast';
 import { ColorPickerModal } from './ColorPickerModal';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface ExportToolbarProps {
   previewRef: React.RefObject<HTMLDivElement | null>;
@@ -43,6 +43,19 @@ export function ExportToolbar({
   const { showToast } = useToast();
   const [exporting, setExporting] = useState(false);
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
+  // 字号滑杆气泡：点击 A 按钮弹出，点击外部关闭
+  const [fontSizeOpen, setFontSizeOpen] = useState(false);
+  const fontSizeMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDocMouseDown(event: MouseEvent) {
+      if (fontSizeMenuRef.current && !fontSizeMenuRef.current.contains(event.target as Node)) {
+        setFontSizeOpen(false);
+      }
+    }
+    if (fontSizeOpen) document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, [fontSizeOpen]);
 
   const handleCopyRichText = async () => {
     if (onPrepareExport) await onPrepareExport();
@@ -119,20 +132,36 @@ export function ExportToolbar({
             <Pipette className="w-3 h-3 text-gray-400" />
           </button>
 
-          {/* 字号滑动条：12~24px 连续调节 */}
-          <div className="flex items-center gap-1.5 bg-gray-50 ring-1 ring-black/[0.04] px-2 py-1 rounded-lg flex-shrink-0" title="正文字号：拖动连续调节（12~24px）">
-            <span className="text-[11px] font-semibold text-gray-400">A</span>
-            <input
-              type="range"
-              min={12}
-              max={24}
-              step={1}
-              value={fontSize}
-              onChange={(e) => onFontSizeChange(Number(e.target.value))}
-              className="w-16 sm:w-24 accent-indigo-600 cursor-pointer"
-              aria-label="正文字号"
-            />
-            <span className="text-[11px] text-gray-500 font-medium tabular-nums w-7">{fontSize}px</span>
+          {/* 字号：点击 A 按钮弹出滑杆（12~24px 连续调节） */}
+          <div className="relative flex-shrink-0" ref={fontSizeMenuRef}>
+            <button
+              onClick={() => setFontSizeOpen((v) => !v)}
+              title="正文字号（12~24px）"
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all border cursor-pointer ${
+                fontSizeOpen
+                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                  : 'bg-gray-50 text-gray-500 border-black/[0.04] hover:bg-gray-100'
+              }`}
+            >
+              <span className="text-[11px] font-semibold">A</span>
+              <span className="text-[11px] tabular-nums">{fontSize}</span>
+            </button>
+            {fontSizeOpen && (
+              <div className="absolute right-0 top-full mt-1.5 z-40 bg-white/95 backdrop-blur rounded-xl ring-1 ring-black/[0.06] shadow-[0_4px_12px_rgba(15,23,42,0.06),0_16px_40px_-12px_rgba(15,23,42,0.16)] p-3 flex items-center gap-2.5">
+                <span className="text-[11px] text-gray-400 font-semibold">A</span>
+                <input
+                  type="range"
+                  min={12}
+                  max={24}
+                  step={1}
+                  value={fontSize}
+                  onChange={(e) => onFontSizeChange(Number(e.target.value))}
+                  className="w-32 sm:w-40 accent-indigo-600 cursor-pointer"
+                  aria-label="正文字号"
+                />
+                <span className="text-[11px] text-gray-600 font-medium tabular-nums w-8 text-right">{fontSize}px</span>
+              </div>
+            )}
           </div>
 
           {/* 外链转文末脚注开关 */}
