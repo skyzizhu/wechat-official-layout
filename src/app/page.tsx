@@ -16,8 +16,6 @@ import {
 } from '@/themes';
 import { SAMPLE_MARKDOWN, SAMPLE_PLAIN_TEXT, SAMPLE_PRESETS } from '@/lib/sample-markdown';
 import { processContentByMode, ConversionDecision } from '@/lib/smart-parser';
-import { enhanceWithAi, loadAiSettings, saveAiSettings, AiSettings } from '@/lib/ai-enhance';
-import { AiSettingsModal } from '@/components/AiSettingsModal';
 import { AppPromoBadge } from '@/components/AppPromoBadge';
 import { SiteFooter } from '@/components/SiteFooter';
 import { convertLinksToFootnotes } from '@/lib/link-footnotes';
@@ -64,9 +62,6 @@ function MainLayout() {
   const [suppressedKeys, setSuppressedKeys] = useState<string[]>([]);
   const [dismissedKeys, setDismissedKeys] = useState<string[]>([]);
   // 第三阶段：AI 增强识别
-  const [aiSettings, setAiSettings] = useState<AiSettings>({ endpoint: '', apiKey: '', model: 'gpt-4o-mini' });
-  const [showAiSettings, setShowAiSettings] = useState(false);
-  const [aiApplying, setAiApplying] = useState(false);
 
   const previewRef = useRef<HTMLDivElement>(null);
   const scrollSyncLastRef = useRef(0);
@@ -152,7 +147,6 @@ function MainLayout() {
         setMode(savedMode);
       }
 
-      setAiSettings(loadAiSettings());
 
       const savedSuppressed = localStorage.getItem('radiant_suppressed_decisions');
       if (savedSuppressed) {
@@ -412,37 +406,6 @@ function MainLayout() {
     } catch {}
   };
 
-  // 第三阶段：AI 增强排版 —— 将当前纯文本交给 AI 按系统排版约定直接转换为 Markdown；失败回退启发式结果
-  const handleAiEnhance = async () => {
-    if (!aiSettings.endpoint || !aiSettings.apiKey) {
-      setShowAiSettings(true);
-      return;
-    }
-    setAiApplying(true);
-    setDraftStatus('⏳ AI 正在排版…');
-    try {
-      const md = await enhanceWithAi(markdown, aiSettings);
-      setFirstLineAsTitle(true); // AI 输出的 # 大标题需要首句标题开启才能保留
-      setMarkdown(md);
-      try {
-        localStorage.setItem('radiant_article_draft', md);
-      } catch {}
-      setDraftStatus('✨ AI 排版完成');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setDraftStatus(`AI 排版失败：${msg}`);
-      console.warn('AI enhance failed', err);
-    } finally {
-      setAiApplying(false);
-    }
-  };
-
-  const handleSaveAiSettings = (s: AiSettings) => {
-    setAiSettings(s);
-    saveAiSettings(s);
-    setDraftStatus('AI 设置已保存');
-  };
-
   return (
     <div className="flex flex-col h-screen bg-transparent">
       <Header />
@@ -489,9 +452,6 @@ function MainLayout() {
             onToggleFootnotes={handleToggleFootnotes}
             firstLineAsTitle={firstLineAsTitle}
             onToggleFirstLineAsTitle={handleToggleFirstLineAsTitle}
-            aiApplying={aiApplying}
-            onAiEnhance={handleAiEnhance}
-            onOpenAiSettings={() => setShowAiSettings(true)}
             onPrepareExport={ensurePreviewMounted}
           />
 
@@ -579,12 +539,6 @@ function MainLayout() {
         }}
       />
 
-      <AiSettingsModal
-        isOpen={showAiSettings}
-        settings={aiSettings}
-        onClose={() => setShowAiSettings(false)}
-        onSave={handleSaveAiSettings}
-      />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { Palette, ChevronDown, Copy, ImageDown, FileDown, Pipette, Link2, Heading1, Sparkles, Settings2, Loader2 } from 'lucide-react';
+import { Palette, ChevronDown, Copy, ImageDown, FileDown, Pipette, Link2, Heading1, Loader2 } from 'lucide-react';
 import type { ThemePreset, FontSizeOption } from '@/themes';
 import { copyRichText, exportAsImage } from '@/lib/export';
 import { useToast } from './Toast';
@@ -20,9 +20,6 @@ interface ExportToolbarProps {
   onToggleFootnotes: (enabled: boolean) => void;
   firstLineAsTitle?: boolean;
   onToggleFirstLineAsTitle?: (enabled: boolean) => void;
-  aiApplying?: boolean;
-  onAiEnhance?: () => void;
-  onOpenAiSettings?: () => void;
   /** 导出前的准备钩子：移动端编辑 Tab 下预览未挂载时，先切到预览 Tab 等待挂载完成 */
   onPrepareExport?: () => Promise<void> | void;
 }
@@ -41,9 +38,6 @@ export function ExportToolbar({
   onToggleFootnotes,
   firstLineAsTitle = false,
   onToggleFirstLineAsTitle,
-  aiApplying,
-  onAiEnhance,
-  onOpenAiSettings,
   onPrepareExport,
 } : ExportToolbarProps) {
   const { showToast } = useToast();
@@ -191,26 +185,6 @@ export function ExportToolbar({
 
         {/* 右侧：导出操作（复制为主操作，置于最前；AI 与导出为次级） */}
         <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-          <button
-            onClick={onAiEnhance}
-            disabled={aiApplying}
-            title="AI 增强识别：将纯文本交给 AI 按排版约定直接转换为 Markdown"
-            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg border border-violet-200 bg-violet-50 hover:bg-violet-100 text-sm text-violet-700 font-medium transition-colors cursor-pointer disabled:opacity-50"
-          >
-            {aiApplying ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Sparkles className="w-4 h-4" />
-            )}
-            <span className="hidden sm:inline">{aiApplying ? 'AI 排版中…' : 'AI 排版'}</span>
-          </button>
-          <button
-            onClick={onOpenAiSettings}
-            title="AI 增强识别设置（接口地址 / 密钥 / 模型）"
-            className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:text-gray-700 hover:bg-gray-50 cursor-pointer"
-          >
-            <Settings2 className="w-4 h-4" />
-          </button>
           <div className="w-px h-6 bg-gray-200 mx-0.5" aria-hidden />
           <button
             onClick={handleCopyRichText}
