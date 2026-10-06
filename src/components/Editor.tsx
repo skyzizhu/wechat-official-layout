@@ -1,7 +1,6 @@
 'use client';
 
 import {
-  PenLine,
   Undo2,
   Redo2,
   FlaskConical,
@@ -950,11 +949,6 @@ export function Editor({
       {/* 顶部主工具栏 */}
       <div className="h-11 border-b border-black/[0.05] bg-white flex items-center px-3 sm:px-4 text-sm text-gray-600 justify-between flex-shrink-0 gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="hidden sm:flex items-center gap-1.5 font-semibold text-gray-800 text-xs flex-shrink-0">
-            <PenLine className="w-3.5 h-3.5 text-indigo-500" />
-            输入内容
-          </span>
-          <span className="hidden sm:block w-px h-4 bg-black/[0.07]" aria-hidden />
 
           {/* 模式选择切换（自动识别 / 纯文本 / Markdown） */}
           <div className="flex items-center bg-gray-100 ring-1 ring-black/[0.04] p-0.5 rounded-lg text-xs">
@@ -1058,7 +1052,7 @@ export function Editor({
                 title="载入全能 Markdown 范文（含单图、双排图、三排画廊、表格、代码、清单）"
               >
                 <RotateCcw className="w-3 h-3 text-indigo-500" />
-                <span className="hidden md:inline">测试范文</span>
+                <span className="hidden md:inline">范文</span>
               </button>
               <button
                 onClick={(e) => {
