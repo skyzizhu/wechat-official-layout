@@ -592,6 +592,10 @@ function emphasizeItemHeader(text: string): string {
     const title = colonMatch[1].trim();
     const punct = '：';
     const rest = colonMatch[3].trim();
+    // 冒号后必须跟非空白内容：行尾冒号（"全文如下备查："）是引导句而非「标题：说明」结构，不强调
+    if (!rest) {
+      return text;
+    }
     // 防止把 URL 协议的冒号误判为条目标题分隔符
     if (/(?:https?|ftp|file|ws|wss)$/i.test(title) || /^\/\//.test(rest)) {
       return text;
@@ -610,6 +614,10 @@ function emphasizeItemHeader(text: string): string {
   if (dashMatch) {
     const title = dashMatch[1].trim();
     const rest = dashMatch[3].trim();
+    // 破折号后必须跟非空白内容，否则不强调
+    if (!rest) {
+      return text;
+    }
     if (/(?:https?|ftp|file|ws|wss)$/i.test(title)) {
       return text;
     }
