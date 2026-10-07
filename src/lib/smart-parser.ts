@@ -1734,27 +1734,12 @@ export function convertPlainTextToMarkdown(
       }
     }
 
-    // 3.17 孤立短行（前后空行，无标点，2~18字）识别为小节标题
-    const isPrevEmpty = idx > 0 && !blockProcessedLines[idx - 1].trim();
-    const isNextEmpty = idx < blockProcessedLines.length - 1 && !blockProcessedLines[idx + 1].trim();
-    if (
-      isPrevEmpty &&
-      isNextEmpty &&
-      trimmed.length >= 2 &&
-      trimmed.length <= 18 &&
-      !/[，。；！？…、“”'’（）()：:]/.test(trimmed) &&
-      !trimmed.startsWith('#') &&
-      !trimmed.startsWith('-') &&
-      !isSuppressed('小节标题（短行）', trimmed)
-    ) {
-      // 置信度：孤立短句（如「受益匪浅」）可能是文末感叹而非标题，提示用户确认
-      noteDecision('小节标题（短行）', 0.7, trimmed);
-      processedLines.push(`### ${trimmed}`);
-      continue;
-    }
+    // 3.17 孤立短行不再自动提升为标题：无编号证据的普通短行默认就是正文。
+    // （编辑时「字少 = H3、写多 = 正文」的形态漂移对写作干扰极大；确需标题时
+    //   用悬浮菜单 H2/H3 设置，或使用带编号的「一、/1./（一）」形态触发章节识别）
 
     // 3.18 识别参考文献段落标头（覆盖常见中英文关键词）
-    if (/^(?:参考资料|参考文献|参考链接|引用来源|资料来源|相关阅读|延伸阅读|参考|引用|链接|References?|Links?|Sources?)[：:]?$/i.test(trimmed)) {
+    if (/^(?:参考资料|参考文献|参考链接|参考来源|引用来源|资料来源|相关阅读|延伸阅读|参考|引用|链接|References?|Links?|Sources?)[：:]?$/i.test(trimmed)) {
       processedLines.push('');
       processedLines.push(`### 🔗 ${trimmed.replace(/[：:]$/, '')}`);
       processedLines.push('');
