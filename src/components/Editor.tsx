@@ -6,14 +6,13 @@ import {
   FlaskConical,
   Trash2,
   FileText,
-  Wand2,
   RotateCcw,
   ChevronDown,
   FileCheck2,
   Image as ImageIcon,
   Loader2,
 } from 'lucide-react';
-import { detectContentFormat, convertPlainTextToMarkdown } from '@/lib/smart-parser';
+import { detectContentFormat } from '@/lib/smart-parser';
 
 import { compressAndEncodeImage } from '@/lib/image-utils';
 import { putImageDataUrl, resolveImageSrc } from '@/lib/image-store';
@@ -23,6 +22,8 @@ import React, { useMemo, useState, useRef, useEffect, useLayoutEffect, useCallba
 interface EditorProps {
   value: string;
   onChange: (value: string) => void;
+  /** 输入源是 Markdown（双副本模型下左侧已自动转为纯文本编辑） */
+  sourceIsMarkdown?: boolean;
   onClear: () => void;
   onRestoreSample: (presetKey?: string) => void;
   draftStatus?: string;
@@ -446,6 +447,7 @@ function ImageBlockCard(props: {
 export function Editor({
     value,
     onChange,
+    sourceIsMarkdown,
     onClear,
     onRestoreSample,
     draftStatus,
@@ -484,8 +486,9 @@ export function Editor({
   const rawBlocks = blocksState;
   const blocks = rawBlocks.length > 0 ? rawBlocks : [{ kind: 'text' as const, lines: [''] }];
 
-  // 实时分析文本格式
+  // 实时分析文本格式（输入源为 Markdown 时以双副本语义为准）
   const detection = useMemo(() => detectContentFormat(value), [value]);
+  const showsMarkdown = sourceIsMarkdown ?? detection.isMarkdown;
 
   const commitBlocks = (next: EditorBlock[], reparse?: boolean) => {
     let final = next;
@@ -678,12 +681,6 @@ export function Editor({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showPresetMenu]);
-
-  // 一键将当前普通文本转为标准 Markdown 填回编辑器
-  const handleConvertToMarkdown = () => {
-    if (!value.trim()) return;
-    onChange(convertPlainTextToMarkdown(value, { treatFirstLineAsTitle: firstLineAsTitle }));
-  };
 
   // 插入图片（工具栏/拖放/文件选择）：图片入库并在文末追加图片块
   const insertImageMarkdown = async (file: File) => {
@@ -1243,30 +1240,16 @@ export function Editor({
       <div className="px-4 py-1.5 bg-slate-50/80 border-b border-black/[0.04] flex items-center justify-between text-xs text-gray-500 flex-shrink-0">
         <span className="hidden xl:inline text-[11px] text-gray-400 whitespace-nowrap overflow-hidden text-ellipsis flex-shrink min-w-0" title="选中文字后可使用快捷键与悬浮工具栏">选中文字可转格式 · ⌘B 加粗 · ⌘1/2/3 标题 · ⌘S 保存</span>
         <div className="flex items-center gap-1.5">
-          {detection.isMarkdown ? (
+          {showsMarkdown ? (
             <span className="inline-flex items-center gap-1 font-medium text-emerald-700 bg-emerald-100/70 px-2 py-0.5 rounded-full text-[11px]">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-              已识别：Markdown 源码
+              已识别：Markdown 输入 · 左侧已转为纯文本编辑
             </span>
           ) : (
             <span className="inline-flex items-center gap-1 font-medium text-indigo-700 bg-indigo-100/70 px-2 py-0.5 rounded-full text-[11px]">
               <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
               {detection.stats?.summaryText || '已识别：自然普通文本 (已智能提取标题、配图、表格与段落)'}
             </span>
-          )}
-        </div>
-
-        {/* 当是纯文本或自动识别时，提供一键格式化 */}
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          {!detection.isMarkdown && value.trim().length > 0 && (
-            <button
-              onClick={handleConvertToMarkdown}
-              className="flex items-center gap-1 text-[11px] text-indigo-700 hover:text-indigo-900 bg-white hover:bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200 shadow-2xs transition-all cursor-pointer font-medium"
-              title="把当前智能解析的结构转换为带 # 等标号的 Markdown 源码写回编辑器"
-            >
-              <Wand2 className="w-3 h-3 text-indigo-600" />
-              一键转为标准 Markdown
-            </button>
           )}
         </div>
       </div>

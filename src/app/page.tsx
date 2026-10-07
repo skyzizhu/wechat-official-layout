@@ -15,7 +15,8 @@ import {
   FontSizeOption,
 } from '@/themes';
 import { SAMPLE_MARKDOWN, SAMPLE_PLAIN_TEXT, SAMPLE_PRESETS } from '@/lib/sample-markdown';
-import { processContentByMode, ConversionDecision } from '@/lib/smart-parser';
+import { detectContentFormat, processContentByMode, ConversionDecision } from '@/lib/smart-parser';
+import { stripMarkdownToPlainText } from '@/lib/markdown-plain';
 import { AppPromoBadge } from '@/components/AppPromoBadge';
 import { SiteFooter } from '@/components/SiteFooter';
 import { convertLinksToFootnotes } from '@/lib/link-footnotes';
@@ -66,6 +67,24 @@ function MainLayout() {
   const scrollSyncLastRef = useRef(0);
   const isDesktop = useIsDesktop();
 
+  // ===== 双副本内容模型 =====
+  // 编辑器 state（markdown）永远是「纯文本」副本，即用户的编辑面；
+  // importedRef 持有「排版用 markdown」副本（原始 Markdown 源，保留加粗/标题层级等完整语义），
+  // 仅当编辑器文本与快照纯文本一致（用户尚未编辑）时，预览与导出 MD 使用该副本；
+  // 一旦编辑使两者分歧，副本立即失效，预览改由智能引擎从纯文本重新推导。
+  const importedRef = useRef<{ plain: string; md: string } | null>(null);
+
+  // 整篇内容的唯一入口：Markdown 输入 → 编辑器降级为纯文本展示并登记排版副本；纯文本输入 → 原样
+  const importContent = useCallback((raw: string): string => {
+    if (raw.trim() && detectContentFormat(raw).isMarkdown) {
+      const plain = stripMarkdownToPlainText(raw);
+      importedRef.current = { plain, md: raw };
+      return plain;
+    }
+    importedRef.current = null;
+    return raw;
+  }, []);
+
   // 编辑器 → 预览 比例滚动同步（单向联动；时间戳节流 ~60fps，不依赖 rAF 以免后台标签页被节流后失效）
   const handleEditorScroll = useCallback((ratio: number) => {
     const now = performance.now();
@@ -91,6 +110,7 @@ function MainLayout() {
       let savedDraft = localStorage.getItem('radiant_article_draft');
       if (savedDraft !== null) {
         if (savedDraft.trim() === '') {
+          importedRef.current = null;
           setMarkdown('');
         } else {
           // 自动平滑升级旧草稿中不稳定的外网图片为本地高可靠静态图片，避免吞噬末尾的括号或管道符
@@ -121,6 +141,15 @@ function MainLayout() {
           try {
             localStorage.setItem('radiant_article_draft', savedDraft);
           } catch {}
+          // 双副本恢复：优先用持久化的「排版用 markdown」副本重建快照（编辑器仍展示纯文本）；
+          // 旧版本草稿若是 Markdown 源码，现场降级为纯文本展示并登记排版副本
+          const savedSource = localStorage.getItem('radiant_article_source_md');
+          if (savedSource && stripMarkdownToPlainText(savedSource) === savedDraft) {
+            importedRef.current = { plain: savedDraft, md: savedSource };
+          } else {
+            const imported = importContent(savedDraft);
+            savedDraft = imported;
+          }
           setMarkdown(savedDraft);
         }
       }
@@ -168,6 +197,10 @@ function MainLayout() {
     const timer = setTimeout(() => {
       try {
         localStorage.setItem('radiant_article_draft', markdown);
+        // 排版用 markdown 副本：仅在用户未编辑（快照新鲜）时持久化，否则留空
+        const snapshot = importedRef.current;
+        const freshSource = snapshot && markdown === snapshot.plain ? snapshot.md : '';
+        localStorage.setItem('radiant_article_source_md', freshSource);
         localStorage.setItem('radiant_theme_id', themeId);
         localStorage.setItem('radiant_custom_color', customColor);
         localStorage.setItem('radiant_font_size', String(fontSize));
@@ -190,30 +223,33 @@ function MainLayout() {
 
   // 3. 一键清空处理
   const handleClear = () => {
+    importedRef.current = null;
     setMarkdown('');
     try {
       localStorage.setItem('radiant_article_draft', '');
+      localStorage.setItem('radiant_article_source_md', '');
     } catch {}
     setDraftStatus('内容已清空');
     showToast('🗑️ 输入框内容已清空');
   };
 
-  // 4. 快速恢复范文处理（支持多格式预设库）
+  // 4. 快速恢复范文处理（支持多格式预设库；Markdown 范文自动降级为纯文本编辑）
   const handleRestoreSample = (presetKey: string = 'markdown') => {
     let text = SAMPLE_MARKDOWN;
-    let toastMsg = '📄 已恢复全能 Markdown 范文';
+    let toastMsg = '📄 已载入 Markdown 范文（左侧已转为纯文本编辑）';
 
     if (presetKey === 'plain-text' || presetKey === 'all-round-plain-text') {
       text = SAMPLE_PLAIN_TEXT;
-      toastMsg = '📝 已恢复全格式纯文本排版范文';
+      toastMsg = '📝 已载入全格式纯文本排版范文';
     } else if (SAMPLE_PRESETS[presetKey]) {
       text = SAMPLE_PRESETS[presetKey].content;
       toastMsg = `📋 已载入「${SAMPLE_PRESETS[presetKey].title}」`;
     }
 
-    setMarkdown(text);
+    const editorText = importContent(text);
+    setMarkdown(editorText);
     try {
-      localStorage.setItem('radiant_article_draft', text);
+      localStorage.setItem('radiant_article_draft', editorText);
     } catch {}
     setDraftStatus('范文已载入');
     showToast(toastMsg);
@@ -264,9 +300,18 @@ function MainLayout() {
   // 快速打字时 React 自动合并中间态，长文也不会阻塞输入
   const deferredMarkdown = useDeferredValue(markdown);
 
+  // 排版源选择：用户未编辑时用「排版用 markdown」副本（保留完整语义）；
+  // 编辑后副本失效，由智能引擎从纯文本重新推导
+  const snapshot = importedRef.current;
+  const renderSource =
+    snapshot && deferredMarkdown === snapshot.plain ? snapshot.md : deferredMarkdown;
+  // 导出 MD 与识别徽标同样遵循双副本语义
+  const exportSource = snapshot && markdown === snapshot.plain ? snapshot.md : markdown;
+  const sourceIsMarkdown = !!snapshot && markdown === snapshot.plain;
+
   // 智能区分与预处理输入内容，并根据开关自动执行外链转文末脚注与首句标题识别
   const processed = useMemo(() => {
-    const rawResult = processContentByMode(deferredMarkdown, 'auto', {
+    const rawResult = processContentByMode(renderSource, 'auto', {
       treatFirstLineAsTitle: firstLineAsTitle,
       suppressedDecisions: suppressedKeys,
     });
@@ -276,7 +321,7 @@ function MainLayout() {
       renderedMarkdown: withFootnotes.content,
       footnotes: withFootnotes.footnotes,
     };
-  }, [deferredMarkdown, linkFootnotes, firstLineAsTitle, suppressedKeys]);
+  }, [renderSource, linkFootnotes, firstLineAsTitle, suppressedKeys]);
 
   // 第二阶段：低置信度识别决策的纠偏与反馈
   const lowConfidenceDecisions = (processed.decisions || []).filter(
@@ -411,6 +456,7 @@ function MainLayout() {
             <Editor
               value={markdown}
               onChange={setMarkdown}
+              sourceIsMarkdown={sourceIsMarkdown}
               onClear={handleClear}
               onRestoreSample={handleRestoreSample}
               draftStatus={draftStatus}
@@ -431,7 +477,7 @@ function MainLayout() {
         {/* 右栏：导出工具栏 + 实时排版预览 */}
         <div className="flex-1 flex flex-col min-w-0">
           <ExportToolbar
-            markdown={markdown}
+            markdown={exportSource}
             theme={theme}
             previewRef={previewRef}
             onOpenThemeSelector={() => setShowThemes(true)}
@@ -453,7 +499,8 @@ function MainLayout() {
                 <Editor
                   value={markdown}
                   onChange={setMarkdown}
-                          onClear={handleClear}
+                  sourceIsMarkdown={sourceIsMarkdown}
+                  onClear={handleClear}
                   onRestoreSample={handleRestoreSample}
                   draftStatus={draftStatus}
                   firstLineAsTitle={firstLineAsTitle}
