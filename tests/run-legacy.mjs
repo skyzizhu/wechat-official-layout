@@ -20,7 +20,8 @@ const buildDir = path.join(root, 'tests', '.editor-build');
 // 从 Editor.tsx 提取分块纯函数（依赖类型声明一起带上）
 const editorSrc = fs.readFileSync(path.join(root, 'src/components/Editor.tsx'), 'utf8');
 const i1 = editorSrc.indexOf('interface ImageItem');
-const i2 = editorSrc.indexOf('function AutoTextarea');
+const i2 = editorSrc.indexOf('// 统一编辑面');
+if (i1 < 0 || i2 < 0 || i2 <= i1) throw new Error('Editor.tsx 中找不到分块纯函数切片标记');
 const tsBody = editorSrc.slice(i1, i2) + '\nexport { parseEditorBlocks, serializeEditorBlocks };';
 fs.writeFileSync(path.join(buildDir, 'rt-src.ts'), tsBody);
 execSync(`npx tsc ${path.join(buildDir, 'rt-src.ts')} --outDir ${buildDir} --module commonjs --target es2020`, { cwd: root, stdio: 'pipe' });

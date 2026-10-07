@@ -140,3 +140,21 @@ th, td {
 [data-role="image-caption"] em {
   font-style: normal;
 }
+
+/* ===== 统一编辑面（单一 contentEditable）：文本段落与内联图片组连续排布 ===== */
+.wenpai-ce {
+  caret-color: #4f46e5;
+  word-break: break-word;
+}
+.wenpai-ce p {
+  margin: 0 0 8px;
+  white-space: pre-wrap; /* 粘贴的纯文本换行在段内原样渲染 */
+  min-height: 1.4em;
+}
+.wenpai-ce p:last-child {
+  margin-bottom: 0;
+}
+.wenpai-ce::selection,
+.wenpai-ce *::selection {
+  background: rgba(99, 102, 241, 0.18);
+}
