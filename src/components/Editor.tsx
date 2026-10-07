@@ -17,7 +17,7 @@ import { detectContentFormat } from '@/lib/smart-parser';
 import { compressAndEncodeImage } from '@/lib/image-utils';
 import { putImageDataUrl, resolveImageSrc } from '@/lib/image-store';
 import type { ConversionDecision } from '@/lib/smart-parser';
-import React, { useMemo, useState, useRef, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 
 interface EditorProps {
   value: string;
@@ -333,11 +333,23 @@ export function Editor({
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   // 选中文本意图转换工具栏：{ 起始段落索引, 结束段落索引 }
-  const [intentBar, setIntentBar] = useState<{ s: number; e: number } | null>(null);
+  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number } | null>(null);
+  const intentBarRef = useRef<HTMLDivElement>(null);
+  // 渲染后按菜单实际宽度做左右边界收敛（translateX(-50%) 居中依赖真实宽度）
+  useLayoutEffect(() => {
+    if (!intentBar || !intentBarRef.current || !editSurfaceRef.current) return;
+    const w = intentBarRef.current.offsetWidth;
+    const half = w / 2 + 8;
+    const clamped = Math.min(Math.max(intentBar.left, half), Math.max(half, editSurfaceRef.current.clientWidth - half));
+    if (clamped !== intentBar.left) {
+      setIntentBar((prev) => (prev ? { ...prev, left: clamped } : prev));
+    }
+  }, [intentBar]);
   const menuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const ceRef = useRef<HTMLDivElement>(null);
+  const editSurfaceRef = useRef<HTMLDivElement>(null);
   const lastSerializedRef = useRef(value);
   const pendingFocusRef = useRef(false);
 
@@ -991,7 +1003,7 @@ export function Editor({
     }
   };
 
-  // ---------- 选中 → 意图转换工具栏 ----------
+  // ---------- 选中 → 意图转换工具栏（悬浮层，锚定选区上方） ----------
 
   const handleSelect = () => {
     const range = getSelectionParagraphRange();
@@ -999,7 +1011,27 @@ export function Editor({
       setIntentBar((prev) => (prev ? null : prev));
       return;
     }
-    setIntentBar((prev) => (prev && prev.s === range.s && prev.e === range.e ? prev : { s: range.s, e: range.e }));
+    // 计算悬浮位置：水平居中于选区、垂直贴在选区上方（贴近视口顶部时改到下方）。
+    // 坐标相对编辑面内容层（随滚动保持贴合文字）
+    let top = 0;
+    let left = 0;
+    const sel = window.getSelection();
+    const wrap = editSurfaceRef.current;
+    if (sel && sel.rangeCount > 0 && wrap && scrollRef.current) {
+      const rect = sel.getRangeAt(0).getBoundingClientRect();
+      const wrapRect = wrap.getBoundingClientRect();
+      const BAR_H = 40;
+      const above = rect.top - wrapRect.top + scrollRef.current.scrollTop - BAR_H - 6;
+      top = above >= 0 ? above : rect.bottom - wrapRect.top + scrollRef.current.scrollTop + 6;
+      const center = rect.left + rect.width / 2 - wrapRect.left;
+      const half = Math.min(210, wrap.clientWidth / 2 - 8);
+      left = Math.min(Math.max(center, half), Math.max(half, wrap.clientWidth - half));
+    }
+    setIntentBar((prev) =>
+      prev && prev.s === range.s && prev.e === range.e && prev.top === top && prev.left === left
+        ? prev
+        : { s: range.s, e: range.e, top, left }
+    );
   };
 
   /** 意图转换：把选中范围内的段落文本按行提取 → 行级变换 → 回写段落 */
@@ -1349,38 +1381,6 @@ export function Editor({
         </div>
       </div>
 
-      {/* 选中段落意图转换工具栏 */}
-      {intentBar && (
-        <div className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 bg-gray-900/90 backdrop-blur text-white text-xs flex-wrap rounded-lg mx-3 mt-2 z-10">
-          <span className="text-gray-400 mr-1">选中 {intentBar.e - intentBar.s + 1} 段：</span>
-          {[
-            { kind: 'h2', label: 'H2' },
-            { kind: 'h3', label: 'H3' },
-            { kind: 'list', label: '列表' },
-            { kind: 'table', label: '表格' },
-            { kind: 'quote', label: '引用' },
-            { kind: 'code', label: '代码' },
-            { kind: 'caption', label: '题注' },
-            { kind: 'text', label: '正文' },
-          ].map((item) => (
-            <button
-              key={item.kind}
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => applyIntentTransform(item.kind)}
-              className="px-2 py-0.5 rounded hover:bg-white/20 cursor-pointer whitespace-nowrap"
-            >
-              {item.label}
-            </button>
-          ))}
-          <button
-            onClick={() => setIntentBar(null)}
-            className="ml-1 px-1.5 py-0.5 rounded hover:bg-white/20 text-gray-400 cursor-pointer"
-          >
-            ×
-          </button>
-        </div>
-      )}
-
       {/* 统一编辑面：文本段落 + 内联图片组连续排布 */}
       <div
         ref={scrollRef}
@@ -1391,11 +1391,48 @@ export function Editor({
         }}
       >
         <div
-          className="min-h-full"
+          ref={editSurfaceRef}
+          className="relative min-h-full"
           onClick={(e) => {
             if (e.target === e.currentTarget) focusLastParagraph();
           }}
         >
+          {/* 悬浮格式菜单：锚定选区上方（随内容滚动保持贴合），不占文档流 */}
+          {intentBar && (
+            <div
+              ref={intentBarRef}
+              className="absolute z-30 flex items-center gap-1 px-3 py-1.5 bg-gray-900/95 backdrop-blur text-white text-xs flex-wrap rounded-lg shadow-xl border border-white/10 max-w-[94%]"
+              style={{ top: intentBar.top, left: intentBar.left, transform: 'translateX(-50%)' }}
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              <span className="text-gray-400 mr-1">选中 {intentBar.e - intentBar.s + 1} 段：</span>
+              {[
+                { kind: 'h2', label: 'H2' },
+                { kind: 'h3', label: 'H3' },
+                { kind: 'list', label: '列表' },
+                { kind: 'table', label: '表格' },
+                { kind: 'quote', label: '引用' },
+                { kind: 'code', label: '代码' },
+                { kind: 'caption', label: '题注' },
+                { kind: 'text', label: '正文' },
+              ].map((item) => (
+                <button
+                  key={item.kind}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => applyIntentTransform(item.kind)}
+                  className="px-2 py-0.5 rounded hover:bg-white/20 cursor-pointer whitespace-nowrap"
+                >
+                  {item.label}
+                </button>
+              ))}
+              <button
+                onClick={() => setIntentBar(null)}
+                className="ml-1 px-1.5 py-0.5 rounded hover:bg-white/20 text-gray-400 cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+          )}
           <div
             ref={ceRef}
             contentEditable
