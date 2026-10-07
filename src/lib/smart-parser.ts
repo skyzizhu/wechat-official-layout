@@ -1717,6 +1717,23 @@ export function convertPlainTextToMarkdown(
       continue;
     }
 
+    // 3.16.9 跨行引导句：本行以冒号结尾且无后文，下一非空行为正文/清单
+    // → 冒号前引导语强调（"全文如下备查：\n大声道……" 的跨行引导形态）。
+    // 引导语须为标题样文本；下一行不得是标题/引用/表格/代码/图片等结构化内容
+    // （那种情况下一行自己就有形态，引导语强调反而画蛇添足）
+    const leadInMatch = trimmed.match(/^([^：:——\-。！？\n#>|![\]]{2,18})：\s*$/);
+    if (leadInMatch) {
+      const leadTitle = leadInMatch[1].trim();
+      const nextNearest = nearestNonEmptyLine(blockProcessedLines, idx + 1, 1);
+      const nextIsPlainContent =
+        Boolean(nextNearest) &&
+        !/^(?:#{1,6}\s|>|!\[|\||\s*```|<[a-zA-Z])/.test(nextNearest.trim());
+      if (nextIsPlainContent && isTitleLikeHeader(leadTitle)) {
+        processedLines.push(`**${leadTitle}**：`);
+        continue;
+      }
+    }
+
     // 3.17 孤立短行（前后空行，无标点，2~18字）识别为小节标题
     const isPrevEmpty = idx > 0 && !blockProcessedLines[idx - 1].trim();
     const isNextEmpty = idx < blockProcessedLines.length - 1 && !blockProcessedLines[idx + 1].trim();
