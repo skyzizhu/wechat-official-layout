@@ -447,6 +447,7 @@ function MainLayout() {
               onChange={setMarkdown}
               sourceIsMarkdown={sourceIsMarkdown}
               markdownSource={exportSource}
+              onNotify={showToast}
               onClear={handleClear}
               onRestoreSample={handleRestoreSample}
               draftStatus={draftStatus}
@@ -491,6 +492,7 @@ function MainLayout() {
                   onChange={setMarkdown}
                   sourceIsMarkdown={sourceIsMarkdown}
                   markdownSource={exportSource}
+                  onNotify={showToast}
                   onClear={handleClear}
                   onRestoreSample={handleRestoreSample}
                   draftStatus={draftStatus}

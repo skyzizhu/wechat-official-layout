@@ -23,6 +23,8 @@ interface EditorProps {
   sourceIsMarkdown?: boolean;
   /** 当前生效的排版用 Markdown 源码（与预览/下载 MD 同源），供只读透镜展示 */
   markdownSource?: string;
+  /** 轻通知（如远程图片本地化失败提示） */
+  onNotify?: (msg: string) => void;
   onClear: () => void;
   onRestoreSample: () => void;
   draftStatus?: string;
@@ -373,6 +375,7 @@ export function Editor({
     onChange,
     sourceIsMarkdown,
     markdownSource,
+    onNotify,
     onClear,
     onRestoreSample,
     draftStatus,
@@ -873,30 +876,51 @@ export function Editor({
     return { p, offset: pre.toString().length };
   };
 
-  /** 在指定位置（或文末）插入节点：光标所在段落从中间断开（同旧版「\n\n![..](..)\n\n」行为） */
-  const insertNodeNearCaret = (node: HTMLElement, caret: { p: HTMLParagraphElement | null; offset: number }) => {
+  /** 图片文件批量入库（压缩 + 令牌化），保持顺序 */
+  const tokenizeImageFiles = async (fileList: File[]): Promise<ImageItem[]> => {
+    const out: ImageItem[] = [];
+    for (const f of fileList) {
+      const { dataUrl, fileName } = await compressAndEncodeImage(f);
+      const alt = fileName.replace(/\.[^/.]+$/, '') || '配图';
+      const { token, persisted } = putImageDataUrl(dataUrl);
+      out.push({ alt, src: persisted ? token : dataUrl });
+    }
+    return out;
+  };
+
+  /** 由一组图片构建内联图片组节点 */
+  const buildGroupElement = (images: ImageItem[]): HTMLElement =>
+    buildImageGroup({
+      kind: 'images',
+      images,
+      captions: images.map(() => ''),
+      layout: Math.min(3, Math.max(1, images.length)) as 1 | 2 | 3,
+    });
+
+  /** 在指定位置（或文末）插入节点片段：光标所在段落从中间断开（同旧版「\n\n![..](..)\n\n」行为） */
+  const insertFragmentNearCaret = (frag: DocumentFragment, caret: { p: HTMLParagraphElement | null; offset: number }) => {
     const ce = ceRef.current;
     if (!ce) return;
     const targetP = caret.p && caret.p.isConnected ? caret.p : null;
     if (!targetP) {
       normalizeDom();
-      ce.appendChild(node);
+      ce.appendChild(frag);
       normalizeDom();
       syncFromDom();
-      const pAfter = node.nextElementSibling;
-      if (pAfter && pAfter.tagName === 'P') focusParagraphEnd(pAfter);
+      const last = ce.lastElementChild;
+      if (last && last.tagName === 'P') focusParagraphEnd(last);
       return;
     }
     const text = targetP.innerText || '';
     const off = Math.min(caret.offset, text.length);
     const before = text.slice(0, off);
     const after = text.slice(off);
-    const frag = document.createDocumentFragment();
-    if (before.trim()) frag.appendChild(buildParagraph(before));
-    frag.appendChild(node);
+    const wrap = document.createDocumentFragment();
+    if (before.trim()) wrap.appendChild(buildParagraph(before));
+    wrap.appendChild(frag);
     const afterP = buildParagraph(after);
-    frag.appendChild(afterP);
-    targetP.replaceWith(frag);
+    wrap.appendChild(afterP);
+    targetP.replaceWith(wrap);
     normalizeDom();
     syncFromDom();
     focusParagraphEnd(afterP);
@@ -904,26 +928,132 @@ export function Editor({
 
   // ---------- 粘贴 ----------
 
+  /**
+   * HTML 图文粘贴：按文档顺序解析——文字成段落、<img> 成图片卡。
+   * 图片源策略：data:/本站图片直接用；远程图尝试 fetch 本地化（压缩入库），
+   * 跨域失败则保留原链接并计数提示。
+   */
+  const localizeImage = async (im: ImageItem): Promise<ImageItem> => {
+    const { alt, src } = im;
+    if (!src) throw new Error('empty src');
+    if (src.startsWith('data:')) {
+      const { token, persisted } = putImageDataUrl(src);
+      return { alt, src: persisted ? token : src };
+    }
+    if (src.startsWith('/') || src.startsWith(location.origin + '/')) {
+      return { alt, src }; // 本站静态图直接引用
+    }
+    const res = await fetch(src, { mode: 'cors', signal: AbortSignal.timeout(8000) });
+    if (!res.ok) throw new Error('http ' + res.status);
+    const blob = await res.blob();
+    if (!blob.type.startsWith('image/')) throw new Error('not image');
+    const file = new File([blob], 'remote-image', { type: blob.type });
+    const { dataUrl, fileName } = await compressAndEncodeImage(file);
+    const { token, persisted } = putImageDataUrl(dataUrl);
+    return { alt: alt || fileName.replace(/\.[^/.]+$/, '') || '配图', src: persisted ? token : dataUrl };
+  };
+
+  const insertHtmlWithImages = async (html: string, caret: { p: HTMLParagraphElement | null; offset: number }) => {
+    setIsUploading(true);
+    try {
+      const holder = document.createElement('div');
+      // 注意：不能用 visibility:hidden——Chromium 对不可见元素的 innerText 返回空串
+      holder.setAttribute('style', 'position:fixed;left:-99999px;top:0;opacity:0;pointer-events:none;white-space:pre-wrap;');
+      holder.innerHTML = html;
+      holder.querySelectorAll('script,style,noscript,meta,link,title').forEach((el) => el.remove());
+      const imgs: ImageItem[] = [];
+      holder.querySelectorAll('img').forEach((im, i) => {
+        imgs.push({ alt: im.getAttribute('alt') || '', src: im.getAttribute('src') || '' });
+        im.replaceWith(document.createTextNode(`\u0000IMG${i}\u0000`));
+      });
+      // 挂到文档中读取 innerText，保证块级元素间产生换行
+      document.body.appendChild(holder);
+      const flattened = (holder.innerText || '').replace(/\u00a0/g, ' ');
+      holder.remove();
+
+      let failed = 0;
+      const resolved = await Promise.all(
+        imgs.map(async (im): Promise<ImageItem | null> => {
+          try {
+            return await localizeImage(im);
+          } catch {
+            const remote = im.src.startsWith('http') && !im.src.startsWith(location.origin);
+            if (remote) failed += 1;
+            return im.src ? im : null;
+          }
+        })
+      );
+      if (failed && onNotify) onNotify(`${failed} 张远程图片未能本地化（跨域限制），已保留原链接`);
+
+      const frag = document.createDocumentFragment();
+      let pending: ImageItem[] = [];
+      const flushPending = () => {
+        if (pending.length) {
+          frag.appendChild(buildGroupElement(pending));
+          pending = [];
+        }
+      };
+      for (const rawLine of flattened.split('\n')) {
+        const parts = rawLine.split(/\u0000IMG(\d+)\u0000/);
+        for (let k = 0; k < parts.length; k++) {
+          if (k % 2 === 1) {
+            const im = resolved[Number(parts[k])];
+            if (im && im.src) pending.push(im);
+            continue;
+          }
+          if (parts[k].trim()) {
+            flushPending();
+            frag.appendChild(buildParagraph(parts[k]));
+          }
+        }
+      }
+      flushPending();
+      insertFragmentNearCaret(frag, caret);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  /** 文本自带图片行/图片组的载荷：拆分为段落 + 内联图片组片段 */
+  const buildTextPayloadFragment = (text: string): DocumentFragment => {
+    const frag = document.createDocumentFragment();
+    parseEditorBlocks(text).forEach((b) => {
+      if (b.kind === 'text') {
+        appendLinesAsParagraphs(frag, b.lines);
+      } else {
+        frag.appendChild(buildImageGroup(b));
+      }
+    });
+    return frag;
+  };
+
   const handlePaste = async (e: React.ClipboardEvent<HTMLDivElement>) => {
     const cd = e.clipboardData;
     if (!cd) return;
     const files = Array.from(cd.files || []);
     const items = Array.from(cd.items || []);
-    const itemImg = items.find((it) => it.type.startsWith('image/'));
-    const imgFile = files.find((f) => f.type.startsWith('image/')) || (itemImg ? itemImg.getAsFile() : null);
-    if (imgFile) {
+    const clipImages = files.filter((f) => f.type.startsWith('image/'));
+    const itemImages = items
+      .filter((it) => it.kind === 'file' && it.type.startsWith('image/'))
+      .map((it) => it.getAsFile())
+      .filter((f): f is File => !!f);
+    const imageFiles = clipImages.length ? clipImages : itemImages;
+    const text = cd.getData('text/plain') || '';
+    const html = cd.getData('text/html') || '';
+    const htmlHasImages = /<img\b/i.test(html);
+
+    // 1) 纯图片粘贴（截图等，无文本）
+    if (imageFiles.length && !text.trim()) {
       e.preventDefault();
-      // currentTarget 与选区在异步等待后都会失效，必须在事件同步阶段先捕获光标
       const caret = captureCaret();
       void (async () => {
         try {
           setIsUploading(true);
-          const { dataUrl, fileName } = await compressAndEncodeImage(imgFile);
-          const cleanAlt = fileName.replace(/\.[^/.]+$/, '') || '配图';
-          const { token, persisted } = putImageDataUrl(dataUrl);
-          const src = persisted ? token : dataUrl;
-          const fig = buildImageGroup({ kind: 'images', images: [{ alt: cleanAlt, src }], captions: [''], layout: 1 });
-          insertNodeNearCaret(fig, caret);
+          const images = await tokenizeImageFiles(imageFiles);
+          if (!images.length) return;
+          const frag = document.createDocumentFragment();
+          frag.appendChild(buildGroupElement(images));
+          insertFragmentNearCaret(frag, caret);
         } catch (err) {
           console.error('Image paste failed', err);
         } finally {
@@ -932,59 +1062,75 @@ export function Editor({
       })();
       return;
     }
-    const text = cd.getData('text/plain');
+
+    // 2) 图文混合粘贴（图片文件 + 文本）：文本成段、图片成卡，全部保留
+    if (imageFiles.length && text.trim()) {
+      e.preventDefault();
+      const caret = captureCaret();
+      void (async () => {
+        try {
+          setIsUploading(true);
+          const images = await tokenizeImageFiles(imageFiles);
+          const frag = document.createDocumentFragment();
+          text.split('\n').forEach((l) => frag.appendChild(buildParagraph(l)));
+          if (images.length) frag.appendChild(buildGroupElement(images));
+          insertFragmentNearCaret(frag, caret);
+        } catch (err) {
+          console.error('Mixed paste failed', err);
+        } finally {
+          setIsUploading(false);
+        }
+      })();
+      return;
+    }
+
+    // 3) 仅 HTML（无纯文本形态）：按图文解析
+    if (!text && htmlHasImages) {
+      e.preventDefault();
+      const caret = captureCaret();
+      void (async () => {
+        try {
+          await insertHtmlWithImages(html, caret);
+        } catch (err) {
+          console.error('HTML paste failed', err);
+        }
+      })();
+      return;
+    }
+
     if (!text) return;
+
     const pastedLines = text.split('\n').map((l) => l.trim());
     const hasImagePayload =
       pastedLines.some((l) => IMAGE_LINE_RE.test(l)) ||
       pastedLines.some((l) => l.startsWith('|') && l.includes('![')) ||
       pastedLines.some((l) => /^<section\b/i.test(l) && /photo-card/i.test(l));
+
     if (hasImagePayload) {
-      // 含图片载荷的文本：拆分为段落 + 内联图片组插入光标处
+      // 4) 文本自带图片载荷：拆分为段落 + 内联图片组插入光标处
       e.preventDefault();
-      const blocks = parseEditorBlocks(text);
-      const frag = document.createDocumentFragment();
-      blocks.forEach((b) => {
-        if (b.kind === 'text') {
-          appendLinesAsParagraphs(frag, b.lines);
-        } else {
-          frag.appendChild(buildImageGroup(b));
-        }
-      });
-      // 吞掉选区后插入
+      const caret = captureCaret();
       const sel = window.getSelection();
       if (sel && !sel.isCollapsed) sel.deleteFromDocument();
-      let targetP: Element | null = null;
-      if (sel && sel.anchorNode && ceRef.current?.contains(sel.anchorNode)) {
-        let n: Node | null = sel.anchorNode;
-        while (n && n.parentNode !== ceRef.current) n = n.parentNode;
-        if (n && (n as Element).tagName === 'P') targetP = n as Element;
-      }
-      const ce = ceRef.current;
-      if (!ce) return;
-      if (targetP) {
-        const full = (targetP as HTMLParagraphElement).innerText || '';
-        const off = Math.min(sel ? sel.anchorOffset : full.length, full.length);
-        const before = full.slice(0, off);
-        const after = full.slice(off);
-        const wrapFrag = document.createDocumentFragment();
-        if (before.trim()) wrapFrag.appendChild(buildParagraph(before));
-        wrapFrag.appendChild(frag);
-        const afterP = buildParagraph(after);
-        wrapFrag.appendChild(afterP);
-        ce.replaceChild(wrapFrag, targetP);
-        focusParagraphEnd(afterP);
-      } else {
-        normalizeDom();
-        ce.appendChild(frag);
-        normalizeDom();
-        const last = ce.lastElementChild;
-        if (last && last.tagName === 'P') focusParagraphEnd(last);
-      }
-      syncFromDom();
+      insertFragmentNearCaret(buildTextPayloadFragment(text), caret);
       return;
     }
-    // 纯文本粘贴：insertText 保留段落内的换行（white-space: pre-wrap 渲染）
+
+    // 5) 纯文本但 HTML 里有 <img>（网页/Word 图文混选）：按 HTML 文档顺序解析
+    if (htmlHasImages) {
+      e.preventDefault();
+      const caret = captureCaret();
+      void (async () => {
+        try {
+          await insertHtmlWithImages(html, caret);
+        } catch (err) {
+          console.error('HTML paste failed', err);
+        }
+      })();
+      return;
+    }
+
+    // 6) 纯文本粘贴：insertText 保留段落内的换行（white-space: pre-wrap 渲染）
     e.preventDefault();
     document.execCommand('insertText', false, text);
   };
@@ -1293,6 +1439,30 @@ export function Editor({
     if (imgFile) {
       pickSlotRef.current = null;
       void handlePickedFile(imgFile);
+      return;
+    }
+    const textFile = files.find((f) => /\.(txt|md|markdown)$/i.test(f.name));
+    if (textFile) {
+      void (async () => {
+        try {
+          setIsUploading(true);
+          const text = await textFile.text();
+          if (!text.trim()) return;
+          const caret = captureCaret();
+          if (text.includes('![') || text.includes('| ![') || text.includes('photo-card')) {
+            insertFragmentNearCaret(buildTextPayloadFragment(text), caret);
+          } else {
+            text.split('\n').forEach((l) => ceRef.current?.appendChild(buildParagraph(l)));
+            normalizeDom();
+            syncFromDom();
+            focusLastParagraph();
+          }
+        } catch (err) {
+          console.error('Text file drop failed', err);
+        } finally {
+          setIsUploading(false);
+        }
+      })();
     }
   };
 
