@@ -1880,6 +1880,11 @@ export function adjustFirstLineTitle(markdown: string, treatAsTitle: boolean): s
   const trimmed = lines[targetIdx].trim();
 
   if (treatAsTitle) {
+    // 行尾冒号引导句（"全文如下备查："）不是大标题——它是引出后续内容的导语，
+    // 提升为 H1 会把引导语当成文章标题；保持普通段落（后续正文可走引导语强调）
+    if (/[:：]\s*$/.test(trimmed)) {
+      return markdown;
+    }
     if (!trimmed.startsWith('#')) {
       const isSpecialBlock = /^[>\-*+`|]/.test(trimmed) || /^\d+\.\s/.test(trimmed);
       if (!isSpecialBlock) {
