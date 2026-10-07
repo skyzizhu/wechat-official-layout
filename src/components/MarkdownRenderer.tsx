@@ -688,33 +688,39 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
       if (props.type === 'checkbox') {
         if (checked) {
           return (
-            <span
-              style={{
-                backgroundColor: accent,
-                color: '#ffffff',
-                borderRadius: '3px',
-                fontSize: '11px',
-                fontWeight: 'bold',
-                userSelect: 'none',
-              }}
-            >
-              {'\u00A0'}✓{'\u00A0\u00A0'}
-            </span>
+            <>
+              <span
+                style={{
+                  backgroundColor: accent,
+                  color: '#ffffff',
+                  borderRadius: '3px',
+                  fontSize: '11px',
+                  fontWeight: 'bold',
+                  userSelect: 'none',
+                }}
+              >
+                {'\u00A0'}✓{'\u00A0'}
+              </span>
+              {'\u00A0'}
+            </>
           );
         }
         return (
-          <span
-            data-role="task-checkbox"
-            style={{
-              border: '1px solid ' + accent,
-              borderRadius: '3px',
-              fontSize: '11px',
-              color: 'transparent',
-              userSelect: 'none',
-            }}
-          >
-            {'\u00A0'}□{'\u00A0\u00A0'}
-          </span>
+          <>
+            <span
+              data-role="task-checkbox"
+              style={{
+                border: '1px solid ' + accent,
+                borderRadius: '3px',
+                fontSize: '11px',
+                color: 'transparent',
+                userSelect: 'none',
+              }}
+            >
+              {'\u00A0'}□{'\u00A0'}
+            </span>
+            {'\u00A0'}
+          </>
         );
       }
       return <input checked={checked} {...props} />;
