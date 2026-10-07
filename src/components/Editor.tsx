@@ -1025,6 +1025,26 @@ export function Editor({
     return frag;
   };
 
+  /**
+   * 剥离「聊天外壳围栏」：从聊天消息复制文章时，常会把包裹用的
+   * ```text 首行与 ``` 尾行一并带入草稿——围栏一开，后面全部内容
+   * 都会被渲染成代码块。仅当首行为 ```/```text 且末行为 ``` 时成对剥离，
+   * 正式的代码块（带语言标记或成对出现在文内）不受影响。
+   */
+  const stripChatFenceWrapper = (t: string): string => {
+    const lines = t.split('\n');
+    let first = lines.findIndex((l) => l.trim());
+    let last = lines.length - 1;
+    while (last >= 0 && !lines[last].trim()) last--;
+    if (first < 0 || last <= first) return t;
+    if (/^\s*```\s*(text|txt)?\s*$/i.test(lines[first]) && /^\s*```\s*$/.test(lines[last])) {
+      lines.splice(last, 1);
+      lines.splice(first, 1);
+      return lines.join('\n');
+    }
+    return t;
+  };
+
   const handlePaste = async (e: React.ClipboardEvent<HTMLDivElement>) => {
     const cd = e.clipboardData;
     if (!cd) return;
@@ -1036,7 +1056,7 @@ export function Editor({
       .map((it) => it.getAsFile())
       .filter((f): f is File => !!f);
     const imageFiles = clipImages.length ? clipImages : itemImages;
-    const text = cd.getData('text/plain') || '';
+    const text = stripChatFenceWrapper(cd.getData('text/plain') || '');
     const html = cd.getData('text/html') || '';
     const htmlHasImages = /<img\b/i.test(html);
 
