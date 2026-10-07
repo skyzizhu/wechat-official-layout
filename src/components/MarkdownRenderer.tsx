@@ -696,6 +696,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
                   borderRadius: '3px',
                   fontSize: '11px',
                   fontWeight: 'bold',
+                  textIndent: 0,
                   userSelect: 'none',
                 }}
               >
@@ -714,6 +715,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
                 borderRadius: '3px',
                 fontSize: '11px',
                 color: 'transparent',
+                textIndent: 0,
                 userSelect: 'none',
               }}
             >
