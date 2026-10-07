@@ -508,10 +508,11 @@ export function serializeToWeChatRichText(
             `width: ${colWidth}; border: none; background: transparent; padding: 0 4px; vertical-align: top; text-align: center; line-height: 1.75; box-sizing: border-box;`
           );
         } else {
-          // 题注文字单元格：显式注入安全 font-size 与 line-height: 1.75
+          // 题注文字单元格：显式注入安全 font-size 与 line-height: 1.75；
+          // 强调色 + 斜体内联样式与单图题注一致（em 解构后斜体以内联样式补回）
           cell.setAttribute(
             'style',
-            `width: ${colWidth}; border: none; background: transparent; padding: 8px 4px 0 4px; vertical-align: top; text-align: center; font-size: 13px; line-height: 1.75; color: ${captionAccentColor}; letter-spacing: 0.02em; box-sizing: border-box; word-break: break-word;`
+            `width: ${colWidth}; border: none; background: transparent; padding: 8px 4px 0 4px; vertical-align: top; text-align: center; font-size: 13px; line-height: 1.75; color: ${captionAccentColor}; font-style: italic; letter-spacing: 0.02em; box-sizing: border-box; word-break: break-word;`
           );
 
           // 核心优化：解构题注内部的 em / p / span 标签，将纯文本提升至 cell 直接子节点

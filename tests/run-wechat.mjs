@@ -197,13 +197,30 @@ run(
 
 run(
   '嵌套画廊（表格结构）',
-  `<table><tbody><tr><td style="text-align: center;"><p style="margin: 0;"><img src="/a.jpg" alt="a" /></p></td><td style="text-align: center;"><p style="margin: 0;"><img src="/b.jpg" alt="b" /></p></td></tr></tbody></table>`,
+  `<table><tbody>
+     <tr><td style="text-align: center;"><p style="margin: 0;"><img src="/a.jpg" alt="a" /></p></td><td style="text-align: center;"><p style="margin: 0;"><img src="/b.jpg" alt="b" /></p></td></tr>
+     <tr><td><em>▲ 图 2-A：双列画廊</em></td><td><em>▲ 图 2-B：手机端并排</em></td></tr>
+   </tbody></table>`,
   (html, out) => {
     const p = [];
     if (out.querySelectorAll('img').length !== 2) p.push('画廊图片丢失');
+    // 画廊题注单元格：主题强调色 + 斜体（em 解构后以内联样式补回）
+    const capCells = Array.from(out.querySelectorAll('td')).filter((td) => !td.querySelector('img') && td.textContent?.includes('▲'));
+    if (capCells.length !== 2) {
+      p.push('题注单元格数量异常: ' + capCells.length);
+    } else {
+      capCells.forEach((td, i) => {
+        const s = td.getAttribute('style') || '';
+        if (!/font-style:\s*italic/.test(s)) p.push('题注单元格 ' + i + ' 缺少斜体');
+        const colorMatch = s.match(/color:\s*([^;]+);?/);
+        if (!colorMatch || !/b91c1c/i.test(colorMatch[1])) p.push('题注单元格 ' + i + ' 未跟随主题强调色: ' + (colorMatch ? colorMatch[1] : '无'));
+        if (td.querySelectorAll('em').length > 0) p.push('题注单元格 ' + i + ' 残留 em 标签');
+      });
+    }
     p.push(...noBlockInsideSpan(out));
     return p;
-  }
+  },
+  { elements: { h3: { color: '#b91c1c' }, a: { color: '#b91c1c' }, td: { color: '#94a3b8' }, p: { color: '#374151' } } }
 );
 
 run(
