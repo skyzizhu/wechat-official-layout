@@ -154,20 +154,29 @@ run(
     if (html.includes('<hr')) p.push('hr 未转换');
     const wrappers = Array.from(out.querySelectorAll('section[data-role="divider"]'));
     if (wrappers.length !== 2) p.push('分割线 wrapper 数量: ' + wrappers.length);
-    wrappers.forEach((w, i) => {
+    const padNums = wrappers.map((w) => {
       const s = w.getAttribute('style') || '';
-      if (!/padding:\s*[\d.]+px\s+0/.test(s)) p.push('wrapper ' + i + ' 无对称 padding');
+      const m = s.match(/padding:\s*([\d.]+)px\s+0\s+([\d.]+)px/);
+      if (!m) p.push('wrapper padding 形态异常: ' + s.slice(0, 60));
       const marginVal = (s.match(/margin:\s*([^;]+);?/) || [])[1] || '0';
       const marginNums = marginVal.trim().split(/\s+/).map((x) => parseFloat(x) || 0);
-      if (marginNums.some((n) => n !== 0)) p.push('wrapper ' + i + ' 仍有 margin: ' + marginVal);
+      if (marginNums.some((n) => n !== 0)) p.push('wrapper 仍有 margin: ' + marginVal);
+      // 下方 padding 压缩（微信会额外撑出间距）：须小于上方 padding
+      if (m && parseFloat(m[2]) >= parseFloat(m[1])) p.push('下方 padding 未压缩: ' + m[0]);
+      return m ? { top: parseFloat(m[1]), bottom: parseFloat(m[2]) } : { top: 0, bottom: 0 };
     });
-    // 夹持文本段落 margin 必须归零（间距由 wrapper padding 承载）
+    // 夹持文本：下方归零，上方以「两个 divider 的 padding 差值」补偿保持视觉居中
+    // （上方间隙 = divider1 底 padding + margin-top = divider2 顶 padding = 下方间隙）
     const mid = Array.from(out.querySelectorAll('p')).find((el) => el.textContent.includes('水流般润物无声'));
     if (mid) {
       const s = mid.getAttribute('style') || '';
       const mtNum = parseFloat((s.match(/margin-top:\s*([\d.]+)/) || [])[1] || '0');
       const mbNum = parseFloat((s.match(/margin-bottom:\s*([\d.]+)/) || [])[1] || '0');
-      if (mtNum !== 0 || mbNum !== 0) p.push('夹持文本 margin 未归零: ' + mtNum + '/' + mbNum);
+      const expectMt = padNums[0].top - padNums[0].bottom;
+      if (mbNum !== 0) p.push('夹持文本 margin-bottom 应为 0: ' + mbNum);
+      if (Math.abs(mtNum - expectMt) > 0.5) p.push('夹持文本补偿 margin-top 异常: ' + mtNum + '（应为 ' + expectMt + '）');
+      const gapAbove = padNums[0].bottom + mtNum;
+      if (Math.abs(gapAbove - padNums[1].top) > 0.5) p.push('夹持文本视觉不居中: 上 ' + gapAbove + ' vs 下 ' + padNums[1].top);
     }
     p.push(...noBlockInsideSpan(out));
     return p;

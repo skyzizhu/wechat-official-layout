@@ -605,6 +605,10 @@ export function serializeToWeChatRichText(
   const hrBorder = (themeElements?.hr?.borderTop as string) || (themeElements?.hr?.border as string) || '1.5px solid #cbd5e1';
   const hrMargin = (themeElements?.hr?.margin as string) || '32px 0';
   const hrWidth = (themeElements?.hr?.width as string) || '100%';
+  // 分割线 wrapper 的上下 padding：下方压缩到约 1/3（微信会在分割线与后续
+  // 段落之间额外撑出间距，对称 padding 在公众号里表现为下方留白过大）
+  const hrPadTop = Math.max(8, Math.round(parseFloat((hrMargin.match(/^\s*([\d.]+)px/) || [])[1] || '26')));
+  const hrPadBottom = Math.max(8, Math.round(hrPadTop * 0.35));
 
   hrElements.forEach((hr) => {
     const parent = hr.parentElement;
@@ -621,15 +625,16 @@ export function serializeToWeChatRichText(
 
     // 微信粘贴会重置 section 的 margin（导致分割线与文本间距不对称），
     // 因此间距用外层 wrapper 的 padding 承载（padding 在粘贴后稳定保留），
-    // 线本体为内层 section，宽度照常可控
-    const hrPadVertical = (hrMargin.match(/^\s*([\d.]+)px/) || [])[1] || '26';
+    // 线本体为内层 section，宽度照常可控。
+    // 下方 padding 压缩到约 1/3：微信会在分割线与后续段落之间额外撑出
+    // 一段默认间距，对称 padding 在公众号里表现为分割线下方留白过大。
     const wrapper = document.createElement('section');
     wrapper.setAttribute('data-role', 'divider');
     wrapper.setAttribute(
       'style',
       // 不设 font-size/line-height 重置：font-size 0 会触发微信规范 2.3.2 行高告警（按继承字号计算）；
       // wrapper 内无文本节点，无需重置
-      `margin: 0; padding: ${hrPadVertical}px 0; width: 100%; box-sizing: border-box;`
+      `margin: 0; padding: ${hrPadTop}px 0 ${hrPadBottom}px 0; width: 100%; box-sizing: border-box;`
     );
     const section = document.createElement('section');
     section.setAttribute(
@@ -779,8 +784,9 @@ export function serializeToWeChatRichText(
     let pMarginBottom = '18px';
 
     if (isAfterHr && isBeforeHr) {
-      // 双分割线夹持文本（题记/金句/引言）：上下边距绝对归零，由分割线的对称外边距提供完美居中留白
-      pMarginTop = '0';
+      // 双分割线夹持文本（题记/金句/引言）：上下边距归零；分割线下方 padding
+      // 压缩后小于上方 padding，差值由 margin-top 补偿，保持夹持文本视觉居中
+      pMarginTop = `${hrPadTop - hrPadBottom}px`;
       pMarginBottom = '0';
     } else if (isBeforeHr) {
       // 紧邻分割线之前的段落：底边距归零，由分割线顶边距统一承载
