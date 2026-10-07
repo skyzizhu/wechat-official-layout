@@ -103,7 +103,8 @@ for (const file of cases) {
       expect(hasNot('## 2026'), '年份句被误判为标题');
       break;
     case 'case09':
-      expect(result.isTransformed === false, 'Markdown 源码未被直通（isTransformed 应为 false）');
+      // 智能识别模式：即使源码恰好像是 Markdown，也必须走 convertPlainTextToMarkdown 规范化
+      expect(result.isTransformed === true, 'Markdown 形纯文本未被智能识别（isTransformed 应为 true）');
       expect(has('- [x] 数据库快照已创建'), '任务列表丢失');
       expect(has('# 迁移指南'), '一级标题丢失');
       expect(has('~~回滚脚本演练~~'), '删除线丢失');

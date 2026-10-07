@@ -1893,22 +1893,17 @@ export function processContentByMode(
   // 将文档中未格式化的各级章节、表格、清单、提示、列表与段落全面升级为语义化结构！
   // 仅当用户显式选择 'markdown' 模式时才直通跳过。
   if (mode === 'plain-text' || mode === 'auto') {
-    // 高置信 Markdown 源码直通：已成体系的标准 Markdown 无需再跑整套智能识别，
-    // 省一次全篇解析（性能），也让 isTransformed 语义保持准确
-    if (mode === 'auto' && detected.isMarkdown) {
-      baseMd = sanitizedContent;
-      isTransformed = false;
-    } else {
-      baseMd = convertPlainTextToMarkdown(
-        sanitizedContent,
-        {
-          ...options,
-          treatFirstLineAsTitle: treatAsTitle,
-        },
-        decisions
-      );
-      isTransformed = baseMd !== content;
-    }
+    // 用户输入永远视为纯文本：即便内容恰好像 Markdown，也按内容模式智能识别与规范化
+    // （引擎认识 #/**/表格/代码围栏等模式，直通会绕过智能排版）
+    baseMd = convertPlainTextToMarkdown(
+      sanitizedContent,
+      {
+        ...options,
+        treatFirstLineAsTitle: treatAsTitle,
+      },
+      decisions
+    );
+    isTransformed = baseMd !== content;
   } else {
     baseMd = sanitizedContent;
     isTransformed = false;
