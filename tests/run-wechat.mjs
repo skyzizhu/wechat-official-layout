@@ -223,6 +223,39 @@ run(
 );
 
 run(
+  '引用块贴分割线（间距由 padding 承载）',
+  `<hr style="margin: 26px 0;" />
+   <blockquote><p>导读：自然语言是人类最直接的思想流淌。</p></blockquote>
+   <hr style="margin: 26px 0;" />`,
+  (html, out) => {
+    const problems = [];
+    const quote = out.querySelector('section[data-role="blockquote"]');
+    if (!quote) problems.push('引用块 section 丢失');
+    if (quote) {
+      const st = quote.getAttribute('style') || '';
+      const mVal = (st.match(/margin:\s*([^;]+);?/) || [])[1] || '0';
+      const mNums = mVal.trim().split(/\s+/).map((x) => parseFloat(x) || 0);
+      if (mNums.some((x) => x !== 0)) problems.push('引用块仍有 margin: ' + mVal);
+      if (!(st.includes('padding: 0 20px 0') || st.includes('padding: 0px 20px 0px'))) problems.push('贴线引用块顶距未归零: ' + st.slice(0, 70));
+    }
+    return problems;
+  }
+);
+
+run(
+  '代码块尾部无空行',
+  `<pre><code style="font-family: monospace;">const a = 1;\n</code></pre>`,
+  (html, out) => {
+    const problems = [];
+    const spans = Array.from(out.querySelectorAll('span[style*="display: block"]'));
+    const last = spans[spans.length - 1];
+    if (last && (last.textContent || '') === '') problems.push('代码块尾部有空行 span');
+    if (!html.includes('const a = 1;')) problems.push('代码内容丢失');
+    return problems;
+  }
+);
+
+run(
   '深嵌套结构（10 层边界）',
   (() => {
     let inner = '<span>核心文本</span>';

@@ -402,11 +402,23 @@ export function serializeToWeChatRichText(
     const quoteFontSize = (bqStyle.fontSize as string) || '14.5px';
     const quoteBoxShadow = (bqStyle.boxShadow as string) ? `box-shadow: ${bqStyle.boxShadow};` : '';
 
+    // 微信粘贴会重置 section 的 margin（引用块与相邻内容间距因此不稳定/过大），
+    // 外间距转为 padding 承载（粘贴后稳定保留）；与相邻分割线组合时纵距归零，
+    // 由分割线 wrapper 的对称 padding 统一承载
+    const qPrev = quote.previousElementSibling;
+    const qNext = quote.nextElementSibling;
+    const isAfterDivider = (qPrev?.tagName === 'HR') || (qPrev?.getAttribute?.('data-role') === 'divider');
+    const isBeforeDivider = (qNext?.tagName === 'HR') || (qNext?.getAttribute?.('data-role') === 'divider');
+    const qpParts = quotePadding.split(/\s+/);
+    const qPadH = qpParts[1] || qpParts[0] || '20px';
+    const padTop = isAfterDivider ? '0' : '40px';
+    const padBottom = isBeforeDivider ? '0' : '40px';
+
     const section = document.createElement('section');
     section.setAttribute('data-role', 'blockquote');
     section.setAttribute(
       'style',
-      `margin: 24px 0; padding: ${quotePadding}; background-color: ${quoteBg}; ${fullBorder} ${borderLeftStyle} border-radius: ${quoteRadius}; ${quoteBoxShadow} color: ${quoteColor}; font-size: ${quoteFontSize}; line-height: 1.85; max-width: 100%; box-sizing: border-box; word-break: break-word;`
+      `margin: 0; padding: ${padTop} ${qPadH} ${padBottom}; background-color: ${quoteBg}; ${fullBorder} ${borderLeftStyle} border-radius: ${quoteRadius}; ${quoteBoxShadow} color: ${quoteColor}; font-size: ${quoteFontSize}; line-height: 1.85; max-width: 100%; box-sizing: border-box; word-break: break-word;`
     );
 
     // 格式化引用块内部的所有子段落，移除多余外边距
@@ -439,7 +451,7 @@ export function serializeToWeChatRichText(
     section.setAttribute('data-ignore-width', ''); // 规范 1.4.4 豁免横向滚动容器宽检测
     section.setAttribute(
       'style',
-      `margin: 24px 0; padding: 16px 20px; background-color: ${preBg}; border: ${preBorder}; border-radius: ${preRadius}; overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; box-sizing: border-box;`
+      `margin: 0; padding: 20px; background-color: ${preBg}; border: ${preBorder}; border-radius: ${preRadius}; overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; box-sizing: border-box;`
     );
 
     const innerPre = document.createElement('pre');
@@ -449,7 +461,8 @@ export function serializeToWeChatRichText(
     );
 
     const code = pre.querySelector('code');
-    const rawContent = code ? code.innerHTML : pre.innerHTML;
+    // 尾部换行会被 white-space: pre-wrap 渲染为多余空行，剥掉
+    const rawContent = (code ? code.innerHTML : pre.innerHTML).replace(/\n+$/, '');
     const lines = rawContent.split('\n');
     const formattedLines = lines.map((line) => {
       const lineHtml = line.length > 0 ? line : '&nbsp;';
