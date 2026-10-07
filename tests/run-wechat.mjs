@@ -51,12 +51,12 @@ let failCount = 0;
 let infoCount = 0;
 let fail = 0;
 
-function run(name, previewHtml, asserts) {
+function run(name, previewHtml, asserts, theme) {
   document.body.innerHTML = `<div id="article">${previewHtml}</div>`;
   const article = document.getElementById('article');
   let html;
   try {
-    html = serializeToWeChatRichText(article, undefined, undefined);
+    html = serializeToWeChatRichText(article, theme, undefined);
   } catch (e) {
     fail++;
     console.log('FAIL ' + name + ' 序列化异常: ' + e.message);
@@ -261,6 +261,28 @@ run(
     if (!html.includes('const a = 1;')) problems.push('代码内容丢失');
     return problems;
   }
+);
+
+run(
+  '图片题注：主题强调色 + 斜体（微信不再剥落）',
+  `<p style="text-align: center;"><img src="/images/sample/sample-2.jpg" alt="成品" /></p>
+   <p data-role="image-caption"><em>▲ 图 1：合格成品应枣红发亮</em></p>`,
+  (html, out) => {
+    const p = [];
+    const caption = out.querySelector('p[data-role="image-caption"]');
+    if (!caption) return ['题注段落丢失'];
+    const s = caption.getAttribute('style') || '';
+    if (!/font-style:\s*italic/.test(s)) p.push('题注缺少斜体（em 被微信剥落后无补偿）');
+    const colorMatch = s.match(/color:\s*([^;]+);?/);
+    if (!colorMatch) p.push('题注缺少主题颜色');
+    else if (!/b91c1c/i.test(colorMatch[1])) p.push('题注未跟随主题强调色: ' + colorMatch[1]);
+    const emLeft = caption.querySelectorAll('em').length;
+    if (emLeft > 0) p.push('题注内残留 em 标签（微信会剥落）: ' + emLeft);
+    if (!caption.textContent.includes('枣红发亮')) p.push('题注内容丢失');
+    return p;
+  },
+  // 最小主题：H3/链接为强调色 #b91c1c，td 为弱化灰 #94a3b8——题注应取强调色而非弱化灰
+  { elements: { h3: { color: '#b91c1c' }, a: { color: '#b91c1c' }, td: { color: '#94a3b8' }, p: { color: '#374151' } } }
 );
 
 run(

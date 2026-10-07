@@ -176,6 +176,8 @@ export function serializeToWeChatRichText(
     (themeElements?.h1?.color as string) ||
     '#2563eb';
   const strongColor = (themeElements?.strong?.color as string) || '#0f172a';
+  // 题注强调色：与预览一致（MarkdownRenderer 图片题注用 H3/链接强调色，响应主色搭配）
+  const captionAccentColor = (themeElements?.h3?.color as string) || (themeElements?.a?.color as string) || captionColor;
 
   // 2. 预处理克隆节点中的各个微信敏感元素
 
@@ -509,7 +511,7 @@ export function serializeToWeChatRichText(
           // 题注文字单元格：显式注入安全 font-size 与 line-height: 1.75
           cell.setAttribute(
             'style',
-            `width: ${colWidth}; border: none; background: transparent; padding: 8px 4px 0 4px; vertical-align: top; text-align: center; font-size: 13px; line-height: 1.75; color: ${captionColor}; letter-spacing: 0.02em; box-sizing: border-box; word-break: break-word;`
+            `width: ${colWidth}; border: none; background: transparent; padding: 8px 4px 0 4px; vertical-align: top; text-align: center; font-size: 13px; line-height: 1.75; color: ${captionAccentColor}; letter-spacing: 0.02em; box-sizing: border-box; word-break: break-word;`
           );
 
           // 核心优化：解构题注内部的 em / p / span 标签，将纯文本提升至 cell 直接子节点
@@ -688,7 +690,7 @@ export function serializeToWeChatRichText(
           captionP.setAttribute('data-role', 'image-caption');
           captionP.setAttribute(
             'style',
-            `margin-top: 8px; margin-bottom: 26px; font-size: 13px; line-height: 1.75; color: ${captionColor}; letter-spacing: 0.02em; text-align: center; word-break: break-word; box-sizing: border-box; max-width: 100%;`
+            `margin-top: 8px; margin-bottom: 26px; font-size: 13px; line-height: 1.75; color: ${captionAccentColor}; letter-spacing: 0.02em; text-align: center; word-break: break-word; box-sizing: border-box; max-width: 100%;`
           );
           trailingNodes.forEach((n) => {
             if (n.nodeType === 1 && (n as HTMLElement).matches('em, span')) {
@@ -761,9 +763,11 @@ export function serializeToWeChatRichText(
       (isPrevImgBlock && (pText.length > 0 && pText.length < 120 && !/[。！？]$/.test(pText)));
 
     if (isCaption) {
+      // 与预览一致：主题强调色 + 斜体小字居中（em 解构后斜体以内联样式补回，
+      // 否则微信编辑器会剥掉 <em> 标签导致题注丢失斜体与主题色）
       p.setAttribute(
         'style',
-        `margin-top: 8px; margin-bottom: 26px; font-size: 13px; line-height: 1.75; color: ${captionColor}; letter-spacing: 0.02em; text-align: center; word-break: break-word; box-sizing: border-box; max-width: 100%;`
+        `margin-top: 8px; margin-bottom: 26px; font-size: 13px; line-height: 1.75; color: ${captionAccentColor}; font-style: italic; letter-spacing: 0.02em; text-align: center; word-break: break-word; box-sizing: border-box; max-width: 100%;`
       );
       // 解构题注内部的 em / span 标签，将纯文本提升至 p 的直接子节点，杜绝任何内联碎片导致叠字误判
       const inlineWrappers = Array.from(p.querySelectorAll('em, span'));
@@ -1125,7 +1129,7 @@ export function serializeToWeChatRichText(
     card.querySelectorAll('p').forEach((p) => {
       p.setAttribute(
         'style',
-        `margin: 12px 0 0 0; font-size: 13px; line-height: 1.75; color: ${captionColor}; font-weight: 500; text-align: center; box-sizing: border-box;`
+        `margin: 12px 0 0 0; font-size: 13px; line-height: 1.75; color: ${captionAccentColor}; font-weight: 500; text-align: center; box-sizing: border-box;`
       );
     });
   });
