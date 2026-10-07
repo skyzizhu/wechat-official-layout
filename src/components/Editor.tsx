@@ -1012,10 +1012,74 @@ export function Editor({
     }
   };
 
+  /** 判断围栏内内容是否为「文章文本」：中文为主即视为文章，而非代码 */
+  const looksLikeArticleContent = (seg: string[]): boolean => {
+    const s = seg.join('\n');
+    const compact = s.replace(/\s/g, '');
+    if (compact.length < 12) return false;
+    const cjk = (s.match(/[\u4e00-\u9fff]/g) || []).length;
+    return cjk / compact.length > 0.3;
+  };
+
+  /**
+   * 剥离聊天/引用类围栏对：从聊天消息复制文章时，常带 ```text 或裸 ```
+   * 包裹围栏（可能出现在文首、文末甚至文章中段）——围栏一开，后面全部
+   * 内容都会被渲染成代码块。仅当围栏内容为「文章形态」（中文为主）时
+   * 成对剥除、保留内容；带语言标记的正式代码块（```python 等）与
+   * 代码形态的裸围栏原样保留。
+   */
+  const unwrapTextFences = (t: string): string => {
+    const lines = t.split('\n');
+    const out: string[] = [];
+    const isBareOrTextFence = (l: string) => /^\s*```\s*(text|txt)?\s*$/i.test(l);
+    let i = 0;
+    let inLangFence = false;
+    while (i < lines.length) {
+      const trimmed = lines[i].trim();
+      if (inLangFence) {
+        out.push(lines[i]);
+        if (trimmed.startsWith('```')) inLangFence = false;
+        i++;
+        continue;
+      }
+      if (trimmed.startsWith('```') && !isBareOrTextFence(trimmed)) {
+        // 带语言标记的正式代码块：连同闭合行原样保留
+        inLangFence = true;
+        out.push(lines[i]);
+        i++;
+        continue;
+      }
+      if (isBareOrTextFence(trimmed)) {
+        // 收集到下一个围栏行（任意形态）为止
+        let j = i + 1;
+        const seg: string[] = [];
+        while (j < lines.length && !/^```/.test(lines[j].trim())) {
+          seg.push(lines[j]);
+          j++;
+        }
+        if (looksLikeArticleContent(seg)) {
+          // 聊天外壳/引用包装：剥围栏保内容
+          seg.forEach((l) => out.push(l));
+          i = j + 1;
+          continue;
+        }
+        // 代码形态或空内容：按普通代码块原样保留
+        out.push(lines[i]);
+        for (let k = i + 1; k <= Math.min(j, lines.length - 1); k++) out.push(lines[k]);
+        i = j + 1;
+        continue;
+      }
+      out.push(lines[i]);
+      i++;
+    }
+    return out.join('\n');
+  };
+
   /** 文本自带图片行/图片组的载荷：拆分为段落 + 内联图片组片段 */
   const buildTextPayloadFragment = (text: string): DocumentFragment => {
+    const clean = unwrapTextFences(text);
     const frag = document.createDocumentFragment();
-    parseEditorBlocks(text).forEach((b) => {
+    parseEditorBlocks(clean).forEach((b) => {
       if (b.kind === 'text') {
         appendLinesAsParagraphs(frag, b.lines);
       } else {
@@ -1122,7 +1186,8 @@ export function Editor({
     const hasImagePayload =
       pastedLines.some((l) => IMAGE_LINE_RE.test(l)) ||
       pastedLines.some((l) => l.startsWith('|') && l.includes('![')) ||
-      pastedLines.some((l) => /^<section\b/i.test(l) && /photo-card/i.test(l));
+      pastedLines.some((l) => /^<section\b/i.test(l) && /photo-card/i.test(l)) ||
+      pastedLines.some((l) => l.startsWith('```'));
 
     if (hasImagePayload) {
       // 4) 文本自带图片载荷：拆分为段落 + 内联图片组插入光标处
@@ -1467,7 +1532,7 @@ export function Editor({
           const text = await textFile.text();
           if (!text.trim()) return;
           const caret = captureCaret();
-          if (text.includes('![') || text.includes('| ![') || text.includes('photo-card')) {
+          if (text.includes('![') || text.includes('```') || text.includes('photo-card')) {
             insertFragmentNearCaret(buildTextPayloadFragment(text), caret);
           } else {
             text.split('\n').forEach((l) => ceRef.current?.appendChild(buildParagraph(l)));
