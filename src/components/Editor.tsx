@@ -1249,6 +1249,67 @@ export function Editor({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // Tab / Shift+Tab：段落首行缩进与取消缩进（缩进 = 两个 em 空格，
+    // 预览与微信粘贴均保留）；代码段落内 Tab 在光标处插入两个半角空格
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const ce = ceRef.current;
+      const sel = window.getSelection();
+      if (!ce || !sel || sel.rangeCount === 0) return;
+      const range = sel.getRangeAt(0);
+      let n: Node | null = range.startContainer;
+      while (n && n !== ce) {
+        if ((n as Element).tagName === 'P' && (n as Element).parentNode === ce) break;
+        n = n.parentNode;
+      }
+      const p = n && n !== ce ? (n as HTMLParagraphElement) : null;
+      if (!p) return;
+      const text = p.innerText || '';
+      const pre = document.createRange();
+      pre.selectNodeContents(p);
+      try {
+        pre.setEnd(range.startContainer, range.startOffset);
+      } catch {
+        return;
+      }
+      const caretOffset = pre.toString().length;
+      const placeCaret = (offset: number) => {
+        const sel2 = window.getSelection();
+        if (!sel2) return;
+        const r = document.createRange();
+        const node = p.firstChild;
+        if (node && node.nodeType === Node.TEXT_NODE) {
+          r.setStart(node, Math.min(offset, (node as Text).length));
+        } else {
+          r.selectNodeContents(p);
+          r.collapse(false);
+        }
+        r.collapse(true);
+        sel2.removeAllRanges();
+        sel2.addRange(r);
+      };
+      if (p.dataset.kind === 'code') {
+        // 代码段落：Tab 在光标处插入两个半角空格（代码缩进惯例）
+        const next = text.slice(0, caretOffset) + '  ' + text.slice(caretOffset);
+        p.textContent = next;
+        syncFromDom();
+        placeCaret(caretOffset + 2);
+        return;
+      }
+      if (e.shiftKey) {
+        const stripped = text.replace(/^(\u2003\u2003|　　|\u2003|　|\t| {1,4})/, '');
+        if (stripped === text) return;
+        p.textContent = stripped;
+        syncFromDom();
+        placeCaret(Math.max(0, Math.min(caretOffset - 2, stripped.length)));
+      } else {
+        if (/^\u2003/.test(text)) return; // 已缩进，不重复
+        p.textContent = '\u2003\u2003' + text;
+        syncFromDom();
+        placeCaret(Math.min(caretOffset + 2, (p.innerText || '').length));
+      }
+      return;
+    }
     // 回车在语义段落（标题/引用/题注）的开头或结尾：浏览器默认会克隆 data-kind，
     // 这里改为插入普通段落——标题后回车回到正文，代码块内回车保持代码（交给默认行为）
     if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
@@ -1466,6 +1527,16 @@ export function Editor({
         for (let k = 0; k < out.length; k++) {
           const t = (out[k] || '').trim().replace(/^[*_]+|[*_]+$/g, '');
           if (t) out[k] = '*' + (t.startsWith('▲') ? t : '▲ ' + t) + '*';
+        }
+        break;
+      case 'indent':
+        for (let k = 0; k < out.length; k++) {
+          if ((out[k] || '').trim()) out[k] = '\u2003\u2003' + out[k];
+        }
+        break;
+      case 'outdent':
+        for (let k = 0; k < out.length; k++) {
+          out[k] = (out[k] || '').replace(/^(\u2003\u2003|　　|\u2003|　|\t| {1,4})/, '');
         }
         break;
       case 'text':
@@ -1739,6 +1810,8 @@ export function Editor({
                 { kind: 'quote', label: '引用' },
                 { kind: 'code', label: '代码' },
                 { kind: 'caption', label: '题注' },
+                { kind: 'indent', label: '缩进' },
+                { kind: 'outdent', label: '取消缩进' },
                 { kind: 'text', label: '正文' },
               ].map((item) => (
                 <button
