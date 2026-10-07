@@ -233,10 +233,9 @@ run(
     if (!quote) problems.push('引用块 section 丢失');
     if (quote) {
       const st = quote.getAttribute('style') || '';
-      const mVal = (st.match(/margin:\s*([^;]+);?/) || [])[1] || '0';
-      const mNums = mVal.trim().split(/\s+/).map((x) => parseFloat(x) || 0);
-      if (mNums.some((x) => x !== 0)) problems.push('引用块仍有 margin: ' + mVal);
-      if (!(st.includes('padding: 0 20px 0') || st.includes('padding: 0px 20px 0px'))) problems.push('贴线引用块顶距未归零: ' + st.slice(0, 70));
+      // 统一间距模型：引用块 margin-bottom only（20px），垂直呼吸由自身 padding 承载
+      if (!st.includes('margin: 0 0 20px')) problems.push('引用块 margin 模型异常: ' + (st.match(/margin:[^;]+/) || [''])[0]);
+      if (!st.includes('padding: 16px 20px') && !st.includes('padding: 18px 22px')) problems.push('引用块内边距缺失');
     }
     return problems;
   }
