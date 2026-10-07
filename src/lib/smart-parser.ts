@@ -690,12 +690,18 @@ export function convertPlainTextToMarkdown(
   const rawLines = text
     .replace(/\r\n/g, '\n')
     .replace(/\r/g, '\n')
-    // 去除段首无意义的中文全角空格 "　　"
-    .replace(/^[　 \t]+/gm, (match) => {
-      // 保留可能的代码缩进（4个半角空格以上），清除全角缩进
-      return match.includes('　') ? '' : match;
-    })
-    .split('\n');
+    .split('\n')
+    .map((line) => {
+      // 段首缩进保留用户意图：全角空格/em 空格的缩进转为哨兵字符（\uE000 私有区，
+      // trim 不剥、不干扰任何识别规则），管线末端统一还原为两个 em 空格。
+      // 结构行（列表/标题/引用/表格/围栏）的缩进剥离，不干扰结构识别；
+      // 4 个以上半角空格保留为代码缩进
+      const m = line.match(/^[　\u2003 \t]+/);
+      if (!m || (!m[0].includes('　') && !m[0].includes('\u2003'))) return line;
+      const rest = line.slice(m[0].length);
+      if (/^(?:[-*+]\s|\d{1,3}[.、)）]\s|#{1,6}\s|>|```|\|)/.test(rest)) return rest;
+      return '\uE000' + rest;
+    });
 
   // 2. 第一阶段：多行块探测与规整（代码块、全形态表格块）
   const blockProcessedLines: string[] = [];
@@ -1831,7 +1837,19 @@ export function convertPlainTextToMarkdown(
     }
   }
 
-  return finalResult.join('\n').trim();
+  // 段首缩进还原：行首哨兵（\uE000 私有区字符，trim 不剥、不干扰识别规则）转换为
+  // 两个 em 空格（\u2003 不参与 HTML 空白折叠，预览与微信粘贴均保留首行缩进）；
+  // 其余残留哨兵（随结构化输出丢失行首位置的）统一清除，避免不可见字符泄漏。
+  // 注意：只去首尾空行——不能用 trim()，否则会把刚还原的缩进 em 空格又剥掉
+  const withIndent = finalResult
+    .join('\n')
+    .split('\n')
+    .map((l) => l.replace(/^\uE000+/, '\u2003\u2003'))
+    .join('\n')
+    .replace(/\uE000/g, '')
+    .replace(/^\n+/, '')
+    .replace(/\n+$/, '');
+  return withIndent;
 }
 
 /**
@@ -1873,7 +1891,6 @@ export function adjustFirstLineTitle(markdown: string, treatAsTitle: boolean): s
       lines[targetIdx] = trimmed.replace(/^#\s+/, '');
     }
   }
-
   return lines.join('\n');
 }
 
