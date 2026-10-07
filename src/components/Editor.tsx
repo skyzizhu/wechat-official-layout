@@ -10,6 +10,7 @@ import {
   ChevronDown,
   FileCheck2,
   Image as ImageIcon,
+  Code2,
   Loader2,
 } from 'lucide-react';
 import { detectContentFormat } from '@/lib/smart-parser';
@@ -24,6 +25,8 @@ interface EditorProps {
   onChange: (value: string) => void;
   /** 输入源是 Markdown（双副本模型下左侧已自动转为纯文本编辑） */
   sourceIsMarkdown?: boolean;
+  /** 当前生效的排版用 Markdown 源码（与预览/下载 MD 同源），供只读透镜展示 */
+  markdownSource?: string;
   onClear: () => void;
   onRestoreSample: (presetKey?: string) => void;
   draftStatus?: string;
@@ -373,6 +376,7 @@ export function Editor({
     value,
     onChange,
     sourceIsMarkdown,
+    markdownSource,
     onClear,
     onRestoreSample,
     draftStatus,
@@ -391,6 +395,8 @@ export function Editor({
   const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  // Markdown 透镜：只读查看当前生效的排版用 Markdown 源码（与预览/下载 MD 同源）
+  const [showMdSource, setShowMdSource] = useState(false);
   // 选中文本意图转换工具栏：{ 起始段落索引, 结束段落索引 }
   const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number } | null>(null);
   const intentBarRef = useRef<HTMLDivElement>(null);
@@ -1549,6 +1555,25 @@ export function Editor({
               {detection.stats?.summaryText || '已识别：自然普通文本 (已智能提取标题、配图、表格与段落)'}
             </span>
           )}
+
+          {/* Markdown 透镜开关：只读查看当前生效的排版用源码（与预览/下载 MD 同源） */}
+          {value.trim() && (
+            <button
+              onClick={() => {
+                setIntentBar(null);
+                setShowMdSource((prev) => !prev);
+              }}
+              className={`flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border transition-all cursor-pointer ${
+                showMdSource
+                  ? 'text-white bg-gray-900 border-gray-900'
+                  : 'text-gray-500 bg-white border-gray-200 hover:text-gray-800 hover:border-gray-400'
+              }`}
+              title={showMdSource ? '返回纯文本编辑' : '只读查看当前生效的排版用 Markdown 源码（与预览/下载 MD 同源）'}
+            >
+              <Code2 className="w-3 h-3" />
+              Markdown
+            </button>
+          )}
         </div>
       </div>
 
@@ -1609,13 +1634,20 @@ export function Editor({
             contentEditable
             suppressContentEditableWarning
             spellCheck={false}
-            className="wenpai-ce px-4 py-4 min-h-full outline-none text-[15px] leading-[1.9] tracking-[0.01em] text-gray-800 cursor-text"
+            className={`wenpai-ce px-4 py-4 min-h-full outline-none text-[15px] leading-[1.9] tracking-[0.01em] text-gray-800 cursor-text ${
+              showMdSource ? 'hidden' : ''
+            }`}
             onInput={() => syncFromDom()}
             onPaste={handlePaste}
             onKeyDown={handleKeyDown}
             onSelect={handleSelect}
             onBlur={() => setTimeout(() => setIntentBar((prev) => (prev ? null : prev)), 200)}
           />
+          {showMdSource && (
+            <pre className="px-4 py-4 min-h-full whitespace-pre-wrap break-words font-mono text-[13px] leading-[1.85] text-gray-700 select-text">
+              {markdownSource ?? value}
+            </pre>
+          )}
           {isUploading && (
             <div className="flex items-center gap-2 text-xs text-indigo-600 py-2 px-4">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
