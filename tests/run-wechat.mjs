@@ -200,8 +200,8 @@ run(
 run(
   '徽章编号列表（参考文献场景）',
   `<ol>
-    <li><span style="display: inline-block; min-width: 20px; height: 20px; padding: 0 6px; margin-right: 9px; border-radius: 6px; background-color: rgb(5, 150, 105); color: rgb(255, 255, 255); font-size: 12px; font-weight: 700; text-align: center;">1</span><a href="https://a.example">微信公众平台技术开发规范</a><sup>[1]</sup></li>
-    <li><span style="display: inline-block; min-width: 20px; height: 20px; padding: 0 6px; margin-right: 9px; border-radius: 6px; background-color: rgb(5, 150, 105); color: rgb(255, 255, 255); font-size: 12px; font-weight: 700; text-align: center;">2</span><a href="https://b.example">Google Antigravity 官方开源仓库</a><sup>[2]</sup></li>
+    <li><span style="display: inline-block; min-width: 20px; height: 20px; padding: 0 6px; margin-right: 9px; border-radius: 6px; background-color: rgb(5, 150, 105); color: rgb(255, 255, 255); font-size: 12px; font-weight: 700; text-align: center;">&#160;1&#160;</span><a href="https://a.example">微信公众平台技术开发规范</a><sup>[1]</sup></li>
+    <li><span style="display: inline-block; min-width: 20px; height: 20px; padding: 0 6px; margin-right: 9px; border-radius: 6px; background-color: rgb(5, 150, 105); color: rgb(255, 255, 255); font-size: 12px; font-weight: 700; text-align: center;">&#160;2&#160;</span><a href="https://b.example">Google Antigravity 官方开源仓库</a><sup>[2]</sup></li>
   </ol>`,
   (html, out) => {
     const p = [];
@@ -214,7 +214,7 @@ run(
     sections.forEach((sec, i) => {
       const badge = sec.querySelector('span');
       const link = sec.querySelector('a');
-      if (!badge || badge.textContent !== String(i + 1)) p.push('section ' + i + ' 徽章缺失/错位');
+      if (!badge || badge.textContent.replace(/\u00A0/g, '').trim() !== String(i + 1)) p.push('section ' + i + ' 徽章缺失/错位');
       if (!link) p.push('section ' + i + ' 链接缺失');
     });
     if (!html.includes('微信公众平台技术开发规范') || !html.includes('Google Antigravity')) p.push('内容丢失');

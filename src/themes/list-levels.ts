@@ -83,10 +83,9 @@ export function getListLevelStyles(theme?: ThemePreset): ListLevelStyleSet {
       boxSizing: 'border-box',
     },
     badge: {
-      // 微信合规：无固定宽高/line-height/vertical-align（实测重排告警来源），padding 撑起胶囊
+      // 微信合规：无固定宽高/CSS padding（微信粘贴会剥掉行内 padding 导致瘪条），
+      // 宽度由文本中的 &nbsp; 承载（渲染层输出 \u00A0 + 序号 + \u00A0）
       display: 'inline-block',
-      padding: '2px 7px',
-      marginRight: '9px',
       borderRadius: '6px',
       backgroundColor: accent,
       color: '#ffffff',

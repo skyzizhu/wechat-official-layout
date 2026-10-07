@@ -621,7 +621,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
       if (listInfo.depth === 1 && listInfo.ordered && olIndex > 0) {
         return (
           <li style={{ ...listStyles.depth1Li, listStyleType: 'none' }} className={liClassName}>
-            {prependMarker(processedChildren, <span style={listStyles.badge}>{olIndex}</span>)}
+            {prependMarker(processedChildren, <span style={listStyles.badge}>{'\u00A0' + olIndex + '\u00A0'}</span>)}
           </li>
         );
       }
@@ -629,7 +629,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
       if (listInfo.depth === 1 && !listInfo.isTaskList) {
         return (
           <li style={{ ...listStyles.depth1Li, listStyleType: 'none' }} className={liClassName}>
-            {prependMarker(processedChildren, <span style={listStyles.dot}>{'●'}</span>)}
+            {prependMarker(processedChildren, <span style={listStyles.dot}>{'●\u00A0'}</span>)}
           </li>
         );
       }
@@ -690,15 +690,13 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
               style={{
                 backgroundColor: accent,
                 color: '#ffffff',
-                padding: '2px 6px',
                 borderRadius: '3px',
                 fontSize: '11px',
-                marginRight: '7px',
                 fontWeight: 'bold',
                 userSelect: 'none',
               }}
             >
-              ✓
+              {'\u00A0'}✓{'\u00A0'}
             </span>
           );
         }
@@ -708,14 +706,12 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
             style={{
               border: '1px solid #cbd5e1',
               borderRadius: '3px',
-              padding: '1px 5px',
               fontSize: '11px',
-              marginRight: '7px',
               color: '#94a3b8',
               userSelect: 'none',
             }}
           >
-            □
+            {'\u00A0'}□{'\u00A0'}
           </span>
         );
       }
