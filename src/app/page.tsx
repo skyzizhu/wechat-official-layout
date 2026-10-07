@@ -14,7 +14,7 @@ import {
   applyFontSizeToTheme,
   FontSizeOption,
 } from '@/themes';
-import { SAMPLE_MARKDOWN, SAMPLE_PLAIN_TEXT, SAMPLE_PRESETS } from '@/lib/sample-markdown';
+import { SAMPLE_PLAIN_TEXT } from '@/lib/sample-markdown';
 import { detectContentFormat, processContentByMode, ConversionDecision } from '@/lib/smart-parser';
 import { stripMarkdownToPlainText } from '@/lib/markdown-plain';
 import { AppPromoBadge } from '@/components/AppPromoBadge';
@@ -48,7 +48,7 @@ export default function Home() {
 function MainLayout() {
   const { showToast } = useToast();
 
-  const [markdown, setMarkdown] = useState(SAMPLE_MARKDOWN);
+  const [markdown, setMarkdown] = useState(SAMPLE_PLAIN_TEXT);
   const [themeId, setThemeId] = useState(DEFAULT_THEME_ID);
   const [customColor, setCustomColor] = useState<string>(''); // 用户自定义主色
   const [fontSize, setFontSize] = useState<FontSizeOption>(15); // 正文字号：12~24px 连续可调
@@ -132,9 +132,9 @@ function MainLayout() {
             updated = tokenized.markdown;
           }
 
-          // 若草稿是系统范文但仍有外链遗留，直接对齐最新的 SAMPLE_MARKDOWN
+          // 若草稿是系统范文但仍有外链遗留，直接对齐最新的示例范文
           if (updated.includes('排版之美') && updated.includes('unsplash.com')) {
-            updated = SAMPLE_MARKDOWN;
+            updated = SAMPLE_PLAIN_TEXT;
           }
 
           savedDraft = updated;
@@ -233,26 +233,15 @@ function MainLayout() {
     showToast('🗑️ 输入框内容已清空');
   };
 
-  // 4. 快速恢复范文处理（支持多格式预设库；Markdown 范文自动降级为纯文本编辑）
-  const handleRestoreSample = (presetKey: string = 'markdown') => {
-    let text = SAMPLE_MARKDOWN;
-    let toastMsg = '📄 已载入 Markdown 范文（左侧已转为纯文本编辑）';
-
-    if (presetKey === 'plain-text' || presetKey === 'all-round-plain-text') {
-      text = SAMPLE_PLAIN_TEXT;
-      toastMsg = '📝 已载入全格式纯文本排版范文';
-    } else if (SAMPLE_PRESETS[presetKey]) {
-      text = SAMPLE_PRESETS[presetKey].content;
-      toastMsg = `📋 已载入「${SAMPLE_PRESETS[presetKey].title}」`;
-    }
-
-    const editorText = importContent(text);
+  // 4. 载入示例范文（唯一一篇纯文本旗舰范文：演示智能识别全格式）
+  const handleRestoreSample = () => {
+    const editorText = importContent(SAMPLE_PLAIN_TEXT);
     setMarkdown(editorText);
     try {
       localStorage.setItem('radiant_article_draft', editorText);
     } catch {}
     setDraftStatus('范文已载入');
-    showToast(toastMsg);
+    showToast('📄 已载入示例范文');
   };
 
   // ⌘S 手动保存草稿（平时 500ms 自动防抖已覆盖，这里提供即时保存反馈）

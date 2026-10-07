@@ -3,12 +3,8 @@
 import {
   Undo2,
   Redo2,
-  FlaskConical,
   Trash2,
-  FileText,
   RotateCcw,
-  ChevronDown,
-  FileCheck2,
   Image as ImageIcon,
   Code2,
   Loader2,
@@ -28,7 +24,7 @@ interface EditorProps {
   /** 当前生效的排版用 Markdown 源码（与预览/下载 MD 同源），供只读透镜展示 */
   markdownSource?: string;
   onClear: () => void;
-  onRestoreSample: (presetKey?: string) => void;
+  onRestoreSample: () => void;
   draftStatus?: string;
   firstLineAsTitle?: boolean;
   onToggleFirstLineAsTitle?: (enabled: boolean) => void;
@@ -392,7 +388,6 @@ export function Editor({
     onSaveDraft,
   }: EditorProps) {
   const charCount = value.replace(/\s/g, '').length;
-  const [showPresetMenu, setShowPresetMenu] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   // Markdown 透镜：只读查看当前生效的排版用 Markdown 源码（与预览/下载 MD 同源）
@@ -410,7 +405,6 @@ export function Editor({
       setIntentBar((prev) => (prev ? { ...prev, left: clamped } : prev));
     }
   }, [intentBar]);
-  const menuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const ceRef = useRef<HTMLDivElement>(null);
@@ -809,21 +803,6 @@ export function Editor({
   }, [undo, redo]);
 
   // 图片插入后自动聚焦新增位置（rebuildDom 的 focusEnd 处理，无额外副作用）
-
-  // 点击范文菜单外部自动关闭
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setShowPresetMenu(false);
-      }
-    }
-    if (showPresetMenu) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showPresetMenu]);
 
   // ---------- 插入图片 ----------
 
@@ -1415,118 +1394,15 @@ export function Editor({
             {charCount} 字 · 约 {Math.max(1, Math.ceil(charCount / 400))} 分钟
           </span>
 
-          {/* 多格式范文库快捷下拉 */}
-          <div className="relative" ref={menuRef}>
-            <div className="flex items-center">
-              <button
-                onClick={() => onRestoreSample('all-round-markdown')}
-                className="h-7 px-2 rounded-l-md text-xs text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 transition-all flex items-center gap-1 cursor-pointer font-medium border border-gray-200 border-r-0"
-                title="载入全能 Markdown 范文（含单图、双排图、三排画廊、表格、代码、清单）"
-              >
-                <RotateCcw className="w-3 h-3 text-indigo-500" />
-                <span className="hidden md:inline">范文</span>
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowPresetMenu((prev) => !prev);
-                }}
-                className="h-7 px-1.5 rounded-r-md text-[11px] text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 transition-all cursor-pointer font-medium border border-gray-200 flex items-center"
-                title="选择更多不同格式的测试范文"
-              >
-                <ChevronDown
-                  className={`w-3 h-3 transition-transform pointer-events-none ${
-                    showPresetMenu ? 'rotate-180 text-indigo-600' : ''
-                  }`}
-                />
-              </button>
-            </div>
-
-            {/* 下拉范文选项卡片 */}
-            {showPresetMenu && (
-              <div
-                onClick={(e) => e.stopPropagation()}
-                className="absolute right-0 top-full mt-1.5 w-72 max-h-[70vh] overflow-y-auto custom-scrollbar bg-white border border-gray-200 shadow-xl rounded-xl p-1.5 z-50"
-              >
-                <div className="px-2 py-1 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
-                  选择测试范文类型
-                </div>
-
-                <button
-                  onClick={() => {
-                    onRestoreSample('all-round-markdown');
-                    setShowPresetMenu(false);
-                  }}
-                  className="w-full text-left px-2.5 py-2.5 rounded-lg text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 transition-all flex items-start gap-2.5 cursor-pointer group border-b border-gray-100"
-                >
-                  <FileCheck2 className="w-4 h-4 text-indigo-500 mt-0.5 shrink-0" />
-                  <div>
-                    <div className="font-semibold text-gray-800 group-hover:text-indigo-700 flex items-center gap-1.5">
-                      <span>全能旗舰 Markdown 范文</span>
-                      <span className="text-[10px] bg-blue-100 text-indigo-700 px-1.5 py-0.2 rounded font-normal">
-                        全格式
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-gray-400 leading-tight mt-1">
-                      单图、双排图、三排画廊、大标题、任务清单、对齐表格、多语言代码、文末脚注
-                    </div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => {
-                    onRestoreSample('all-round-plain-text');
-                    setShowPresetMenu(false);
-                  }}
-                  className="w-full text-left px-2.5 py-2.5 rounded-lg text-xs text-gray-700 hover:bg-amber-50 hover:text-amber-800 transition-all flex items-start gap-2.5 cursor-pointer group"
-                >
-                  <FileText className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                  <div>
-                    <div className="font-semibold text-gray-800 group-hover:text-amber-800 flex items-center gap-1.5">
-                      <span>全能旗舰自然纯文本范文</span>
-                      <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.2 rounded font-normal">
-                        智能识别
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-gray-400 leading-tight mt-1">
-                      自然文本配图、管道符表格、纯文本代码段、问答访谈、智能分段呼吸感
-                    </div>
-                  </div>
-                </button>
-
-                <div className="px-2 pt-1.5 pb-1 text-[10px] font-semibold text-indigo-400 uppercase tracking-wider border-t border-gray-100 mt-1">Ten Test Articles · 智能识别压测</div>
-                {[
-                  { key: 'test01-plain', name: '测试01 · 深度评测长文', desc: '多级章节、对齐表格、编号列表、小数评分边界' },
-                  { key: 'test02-plain', name: '测试02 · 图文安装教程', desc: '步骤编号与配图穿插、图注、缩进代码块' },
-                  { key: 'test03-plain', name: '测试03 · 创始人访谈', desc: '问答结构、引用行、金句候选短段' },
-                  { key: 'test04-plain', name: '测试04 · 政务公文风', desc: '第一章/第一节/一、/（一）四级章节体系' },
-                  { key: 'test05-plain', name: '测试05 · 工程手记', desc: '多语言代码块、围栏与语言标记、文末链接' },
-                  { key: 'test06-plain', name: '测试06 · 运营周报', desc: '时间线日程、日期段落、百分比、跳号清单' },
-                  { key: 'test07-plain', name: '测试07 · 旅行攻略', desc: '★●◆符号列表、callout提示、✓✗任务' },
-                  { key: 'test08-plain', name: '测试08 · 读书笔记', desc: '书名号、引用块、编号参考文献与链接' },
-                  { key: 'test09-plain', name: '测试09 · 需求文档', desc: '多级编号、任务清单、✅❌验收对照' },
-                  { key: 'test10-plain', name: '测试10 · 观点随笔', desc: '无结构长段、金句短段、数字边界压测' },
-                ].map((t) => (
-                  <button
-                    key={t.key}
-                    onClick={() => {
-                      onRestoreSample(t.key);
-                      setShowPresetMenu(false);
-                    }}
-                    className="w-full text-left px-2.5 py-2 rounded-lg text-xs text-gray-700 hover:bg-indigo-50 hover:text-indigo-800 transition-all flex items-start gap-2.5 cursor-pointer group"
-                  >
-                    <FlaskConical className="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" />
-                    <div>
-                      <div className="font-semibold text-gray-800 group-hover:text-indigo-800 flex items-center gap-1.5">
-                        <span>{t.name}</span>
-                      </div>
-                      <div className="text-[11px] text-gray-400 leading-tight mt-0.5">{t.desc}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* 示例范文：一键载入 */}
+          <button
+            onClick={() => onRestoreSample()}
+            className="h-7 px-2 rounded-md text-xs text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 transition-all flex items-center gap-1 cursor-pointer font-medium border border-gray-200"
+            title="载入示例范文（纯文本智能识别全格式演示）"
+          >
+            <RotateCcw className="w-3 h-3 text-indigo-500" />
+            <span className="hidden md:inline">范文</span>
+          </button>
 
           {/* 一键清空 */}
           <button
@@ -1664,7 +1540,7 @@ export function Editor({
           <p className="text-sm text-gray-400">粘贴你的文稿开始排版，或直接拖入 / 截图粘贴图片</p>
           <p className="text-xs text-gray-300">⌘B 加粗 · ⌘I 斜体 · ⌘1/2/3 标题 · 选中文字可快速转格式</p>
           <button
-            onClick={() => onRestoreSample('all-round-plain-text')}
+            onClick={() => onRestoreSample()}
             className="mt-2 pointer-events-auto px-3.5 py-1.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-medium border border-indigo-200 hover:bg-indigo-100 transition-colors cursor-pointer"
           >
             载入范文试一试
