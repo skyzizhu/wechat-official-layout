@@ -44,3 +44,4 @@ next-env.d.ts
 tests/.parser-build/
 tests/.editor-build/
 tests/.wechat-build/
+tests/.dual-build/
