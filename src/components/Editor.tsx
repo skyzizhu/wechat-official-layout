@@ -939,12 +939,9 @@ export function Editor({
       />
 
       {/* 顶部主工具栏 */}
-      <div className="h-11 border-b border-black/[0.05] bg-white flex items-center px-3 sm:px-4 text-sm text-gray-600 justify-between flex-shrink-0 gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-
-        </div>
-
-        {/* 快捷操作区：本地图片插入 + 本地草稿状态 + 多格式范文库 + 一键清空 */}
+      {/* 顶部主工具栏 */}
+      <div className="h-11 border-b border-black/[0.05] bg-white flex items-center px-3 sm:px-4 text-sm text-gray-600 flex-shrink-0 gap-2">
+        {/* 快捷操作区：撤销重做 + 本地图片插入 + 本地草稿状态 + 多格式范文库 + 一键清空 */}
         <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           {/* 撤销 / 重做 */}
           <button
