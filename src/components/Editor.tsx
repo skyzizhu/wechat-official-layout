@@ -5,9 +5,7 @@ import {
   Redo2,
   FlaskConical,
   Trash2,
-  Sparkles,
   FileText,
-  Code2,
   Wand2,
   RotateCcw,
   ChevronDown,
@@ -22,13 +20,9 @@ import { putImageDataUrl, resolveImageSrc } from '@/lib/image-store';
 import type { ConversionDecision } from '@/lib/smart-parser';
 import React, { useMemo, useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 
-export type ContentMode = 'auto' | 'plain-text' | 'markdown';
-
 interface EditorProps {
   value: string;
   onChange: (value: string) => void;
-  mode: ContentMode;
-  onModeChange: (mode: ContentMode) => void;
   onClear: () => void;
   onRestoreSample: (presetKey?: string) => void;
   draftStatus?: string;
@@ -452,8 +446,6 @@ function ImageBlockCard(props: {
 export function Editor({
     value,
     onChange,
-    mode,
-    onModeChange,
     onClear,
     onRestoreSample,
     draftStatus,
@@ -950,45 +942,6 @@ export function Editor({
       <div className="h-11 border-b border-black/[0.05] bg-white flex items-center px-3 sm:px-4 text-sm text-gray-600 justify-between flex-shrink-0 gap-2">
         <div className="flex items-center gap-2 min-w-0">
 
-          {/* 模式选择切换（自动识别 / 纯文本 / Markdown） */}
-          <div className="flex items-center bg-gray-100 ring-1 ring-black/[0.04] p-0.5 rounded-lg text-xs">
-            <button
-              onClick={() => onModeChange('auto')}
-              className={`px-2 py-1 rounded-md transition-all flex items-center gap-1 font-medium cursor-pointer ${
-                mode === 'auto'
-                  ? 'bg-white text-indigo-600 shadow-xs'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-              title="智能检测并自动排版"
-            >
-              <Sparkles className="w-3 h-3 text-amber-500" />
-              <span>自动</span>
-            </button>
-            <button
-              onClick={() => onModeChange('plain-text')}
-              className={`px-2 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer ${
-                mode === 'plain-text'
-                  ? 'bg-white text-indigo-600 shadow-xs font-medium'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-              title="强制按纯文本提取层级排版"
-            >
-              <FileText className="w-3 h-3" />
-              <span>纯文本</span>
-            </button>
-            <button
-              onClick={() => onModeChange('markdown')}
-              className={`px-2 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer ${
-                mode === 'markdown'
-                  ? 'bg-white text-indigo-600 shadow-xs font-medium'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-              title="按原始 Markdown 语法渲染"
-            >
-              <Code2 className="w-3 h-3" />
-              <span>MD</span>
-            </button>
-          </div>
         </div>
 
         {/* 快捷操作区：本地图片插入 + 本地草稿状态 + 多格式范文库 + 一键清空 */}

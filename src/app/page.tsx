@@ -2,7 +2,7 @@
 
 import { useState, useRef, useMemo, useEffect, useDeferredValue, useCallback, useSyncExternalStore } from 'react';
 import { Header } from '@/components/Header';
-import { Editor, ContentMode } from '@/components/Editor';
+import { Editor } from '@/components/Editor';
 import { Preview } from '@/components/Preview';
 import { ThemeSelector } from '@/components/ThemeSelector';
 import { ExportToolbar } from '@/components/ExportToolbar';
@@ -52,7 +52,6 @@ function MainLayout() {
   const [customColor, setCustomColor] = useState<string>(''); // 用户自定义主色
   const [fontSize, setFontSize] = useState<FontSizeOption>(15); // 正文字号：12~24px 连续可调
   const [linkFootnotes, setLinkFootnotes] = useState<boolean>(true); // 微信外链转文末脚注开关 (默认开启)
-  const [mode, setMode] = useState<ContentMode>('auto');
   const [firstLineAsTitle, setFirstLineAsTitle] = useState(true);
   const [showThemes, setShowThemes] = useState(false);
   const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('preview');
@@ -142,12 +141,6 @@ function MainLayout() {
         setLinkFootnotes(savedFootnotes === 'true');
       }
 
-      const savedMode = localStorage.getItem('radiant_content_mode') as ContentMode;
-      if (savedMode && ['auto', 'plain-text', 'markdown'].includes(savedMode)) {
-        setMode(savedMode);
-      }
-
-
       const savedSuppressed = localStorage.getItem('radiant_suppressed_decisions');
       if (savedSuppressed) {
         try {
@@ -179,7 +172,6 @@ function MainLayout() {
         localStorage.setItem('radiant_custom_color', customColor);
         localStorage.setItem('radiant_font_size', String(fontSize));
         localStorage.setItem('radiant_link_footnotes', String(linkFootnotes));
-        localStorage.setItem('radiant_content_mode', mode);
         localStorage.setItem('radiant_first_line_title', String(firstLineAsTitle));
 
         const now = new Date();
@@ -194,7 +186,7 @@ function MainLayout() {
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [markdown, themeId, customColor, fontSize, linkFootnotes, mode, firstLineAsTitle, isLoaded]);
+  }, [markdown, themeId, customColor, fontSize, linkFootnotes, firstLineAsTitle, isLoaded]);
 
   // 3. 一键清空处理
   const handleClear = () => {
@@ -220,7 +212,6 @@ function MainLayout() {
     }
 
     setMarkdown(text);
-    setMode('auto');
     try {
       localStorage.setItem('radiant_article_draft', text);
     } catch {}
@@ -275,7 +266,7 @@ function MainLayout() {
 
   // 智能区分与预处理输入内容，并根据开关自动执行外链转文末脚注与首句标题识别
   const processed = useMemo(() => {
-    const rawResult = processContentByMode(deferredMarkdown, mode, {
+    const rawResult = processContentByMode(deferredMarkdown, 'auto', {
       treatFirstLineAsTitle: firstLineAsTitle,
       suppressedDecisions: suppressedKeys,
     });
@@ -285,7 +276,7 @@ function MainLayout() {
       renderedMarkdown: withFootnotes.content,
       footnotes: withFootnotes.footnotes,
     };
-  }, [deferredMarkdown, mode, linkFootnotes, firstLineAsTitle, suppressedKeys]);
+  }, [deferredMarkdown, linkFootnotes, firstLineAsTitle, suppressedKeys]);
 
   // 第二阶段：低置信度识别决策的纠偏与反馈
   const lowConfidenceDecisions = (processed.decisions || []).filter(
@@ -420,8 +411,6 @@ function MainLayout() {
             <Editor
               value={markdown}
               onChange={setMarkdown}
-              mode={mode}
-              onModeChange={setMode}
               onClear={handleClear}
               onRestoreSample={handleRestoreSample}
               draftStatus={draftStatus}
@@ -464,9 +453,7 @@ function MainLayout() {
                 <Editor
                   value={markdown}
                   onChange={setMarkdown}
-                  mode={mode}
-                  onModeChange={setMode}
-                  onClear={handleClear}
+                          onClear={handleClear}
                   onRestoreSample={handleRestoreSample}
                   draftStatus={draftStatus}
                   firstLineAsTitle={firstLineAsTitle}
