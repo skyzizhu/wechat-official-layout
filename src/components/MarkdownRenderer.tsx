@@ -52,10 +52,12 @@ function prependMarker(children: React.ReactNode[], marker: React.ReactNode): Re
   const idx = children.findIndex(isBlockish);
   // 标记进入数组 children 必须带 key，否则触发 React 缺失 key 警告
   const keyedMarker = React.isValidElement(marker) ? React.cloneElement(marker, { key: 'li-marker' }) : marker;
-  if (idx === -1) return [keyedMarker, ...children];
+  // 标记与内容之间的间距（微信粘贴会剥行内 margin/padding，间距用字符承载）
+  const gap = '\u00A0';
+  if (idx === -1) return [keyedMarker, gap, ...children];
   const first = children[idx] as React.ReactElement<{ children?: React.ReactNode }>;
   const inner = React.Children.toArray(first.props.children);
-  const cloned = React.cloneElement(first, {}, keyedMarker, ...inner);
+  const cloned = React.cloneElement(first, {}, keyedMarker, gap, ...inner);
   const out = [...children];
   out[idx] = cloned;
   return out;
@@ -696,7 +698,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
                 userSelect: 'none',
               }}
             >
-              {'\u00A0'}✓{'\u00A0'}
+              {'\u00A0'}✓{'\u00A0\u00A0'}
             </span>
           );
         }
@@ -711,7 +713,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
               userSelect: 'none',
             }}
           >
-            {'\u00A0'}□{'\u00A0'}
+            {'\u00A0'}□{'\u00A0\u00A0'}
           </span>
         );
       }
