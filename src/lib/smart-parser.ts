@@ -587,7 +587,7 @@ function emphasizeItemHeader(text: string): string {
   }
 
   // 3. 匹配冒号前面的条目标题：条目标题：具体说明...
-  const colonMatch = text.match(/^([^：:——\-，。！？\n]{2,18})([：:])\s*(.+)$/);
+  const colonMatch = text.match(/^([^：:——\-。！？\n]{2,18})([：:])\s*(.+)$/);
   if (colonMatch) {
     const title = colonMatch[1].trim();
     const punct = '：';
@@ -606,7 +606,7 @@ function emphasizeItemHeader(text: string): string {
 
   // 4. 匹配破折号前面的条目标题：条目标题 —— 具体说明...
   // 单个连字符/破折号必须两侧都有空格才视为分隔符（避免 "font-size"、"co-work" 等词内连字符被误判炸出 **）
-  const dashMatch = text.match(/^([^：:——\-，。！？\n]{2,18})(\s*——\s*|\s-\s|\s—\s)(.+)$/);
+  const dashMatch = text.match(/^([^：:——\-。！？\n]{2,18})(\s*——\s*|\s-\s|\s—\s)(.+)$/);
   if (dashMatch) {
     const title = dashMatch[1].trim();
     const rest = dashMatch[3].trim();
@@ -624,8 +624,11 @@ function emphasizeItemHeader(text: string): string {
 
 /** 条目标题引导段须为"干净"标题文本：中英文、数字、空格与常规括号，且至少含一个中文或字母 */
 function isTitleLikeHeader(title: string): boolean {
+  // 允许标题段内含逗号（"已在编辑器里，全文如下备查：" 这类引导语），
+  // 但不得以逗号结尾（"首先，：" 是残缺引导，不强调）
   return (
-    /^[\u4e00-\u9fa5A-Za-z0-9][\u4e00-\u9fa5A-Za-z0-9\s（）()]*$/.test(title) &&
+    /^[\u4e00-\u9fa5A-Za-z0-9][\u4e00-\u9fa5A-Za-z0-9\s（）()，,]*$/.test(title) &&
+    !/[，,]$/.test(title) &&
     /[\u4e00-\u9fa5A-Za-z]/.test(title)
   );
 }
