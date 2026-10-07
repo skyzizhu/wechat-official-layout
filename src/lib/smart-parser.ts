@@ -1365,6 +1365,12 @@ export function convertPlainTextToMarkdown(
 
     if (isMultiLevelLine) {
       if (isDenseNumberedLine(idx, 'arabic')) {
+        // 像正文句子且无「条目标题：」形态的多级编号行，即使处于密集家族也不收编为列表项——
+        // 否则会输出缩进清单行，进而被缩进代码规则误判为代码块（如 "1.5.1 不是标题……。"）
+        if (looksLikeSentence(mlContent) && !/[：:]/.test(mlContent)) {
+          processedLines.push(trimmed);
+          continue;
+        }
         // 嵌套深度：1.1 → 一层缩进；1.1.1 → 两层；以此类推（与有序列表 3 空格缩进约定一致）
         const indent = '   '.repeat(Math.min(mlDots, 3));
         processedLines.push(`${indent}- **${mlLabel}** ${emphasizeItemHeader(mlContent)}`);
@@ -1662,6 +1668,12 @@ export function convertPlainTextToMarkdown(
       // 空格分隔 + 句子特征（如 "2026 年度计划里，我们设置了三个里程碑。"）→ 普通段落：
       // 既不当小节标题，也不当列表项（列表化会渲染出 "2026." 的错误编号）
       if ((sepChar === ' ' || sepChar === '　') && looksLikeSentence(trimmed)) {
+        processedLines.push(trimmed);
+        continue;
+      }
+      // 年份形态（1000~2999）+ 点号 + 完整句子（如 "2026. 年度计划……以下。"）→ 普通段落：
+      // 四位数字在此语境里是年份而非章节号，带句末标点的更像正文
+      if (sepChar === '.' && /^[12]\d{3}$/.test(num) && looksLikeSentence(content)) {
         processedLines.push(trimmed);
         continue;
       }
