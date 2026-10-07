@@ -330,6 +330,7 @@ function buildParagraph(line: string): HTMLParagraphElement {
 /**
  * 把一组源码行写入文档片段：围栏行不渲染，围栏内的行转为代码段落
  * （首段携带语言标记 data-lang），其余行走 buildParagraph 语义识别。
+ * 围栏外的空行是段落边界（序列化时补的分隔），不渲染为空段落。
  */
 function appendLinesAsParagraphs(container: HTMLElement | DocumentFragment, lines: string[]) {
   let inFence = false;
@@ -344,6 +345,9 @@ function appendLinesAsParagraphs(container: HTMLElement | DocumentFragment, line
         inFence = false;
         lang = '';
       }
+      continue;
+    }
+    if (!inFence && line.trim() === '') {
       continue;
     }
     const p = buildParagraph(line);
@@ -429,7 +433,6 @@ export function Editor({
     if (!ce) return blocks;
     let buf: string[] = [];
     let inCode = false;
-    let prevStructural = false;
     const closeCode = () => {
       if (inCode) {
         buf.push('```');
@@ -442,7 +445,6 @@ export function Editor({
       while (buf.length && !buf[buf.length - 1].trim()) buf.pop();
       if (buf.length) blocks.push({ kind: 'text', lines: buf });
       buf = [];
-      prevStructural = false;
     };
     Array.from(ce.children).forEach((child) => {
       const el = child as HTMLElement;
@@ -463,24 +465,21 @@ export function Editor({
       const kind = el.dataset.kind || '';
       const text = (el.innerText || '').replace(/\n$/, '');
       const lines = text.split('\n');
+      // 编辑器中「换行即分段」：任意相邻段落之间补空行，保证预览与引擎
+      // 不会把紧邻的普通段落并进上一段或上一条列表项（如独立行「专业技能」）
+      if (!inCode && buf.length && buf[buf.length - 1].trim() !== '') {
+        buf.push('');
+      }
       if (kind === 'code') {
-        // 代码段：仅在开启围栏前补分隔空行；围栏内的内容行保持连续
         if (!inCode) {
           if (buf.length && buf[buf.length - 1].trim() !== '') buf.push('');
           buf.push('```' + (el.dataset.lang || ''));
           inCode = true;
         }
         lines.forEach((l) => buf.push(l));
-        prevStructural = true;
         return;
       }
       closeCode();
-      // 结构段落（标题/引用/题注）与相邻行之间补空行，
-      // 避免智能引擎把紧邻的普通段落并入引用或合并段落
-      const structural = kind !== '';
-      if ((structural || prevStructural) && buf.length && buf[buf.length - 1].trim() !== '') {
-        buf.push('');
-      }
       if (/^h[1-6]$/.test(kind)) {
         buf.push('#'.repeat(Number(kind[1])) + ' ' + text);
       } else if (kind === 'quote') {
@@ -490,7 +489,6 @@ export function Editor({
       } else {
         lines.forEach((l) => buf.push(l));
       }
-      prevStructural = structural;
     });
     flushText();
     return blocks;
