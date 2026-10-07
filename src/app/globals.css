@@ -158,3 +158,45 @@ th, td {
 .wenpai-ce *::selection {
   background: rgba(99, 102, 241, 0.18);
 }
+
+/* ===== 语义段落样式提示：格式可见但不显示 markdown 标记 ===== */
+.wenpai-ce p[data-kind^="h"] {
+  font-weight: 600;
+  margin-top: 10px;
+}
+.wenpai-ce p[data-kind="h1"] { font-size: 19px; }
+.wenpai-ce p[data-kind="h2"] { font-size: 17px; }
+.wenpai-ce p[data-kind="h3"] { font-size: 16px; }
+.wenpai-ce p[data-kind="h4"],
+.wenpai-ce p[data-kind="h5"],
+.wenpai-ce p[data-kind="h6"] { font-size: 15px; }
+.wenpai-ce p[data-kind="quote"] {
+  border-left: 3px solid #a5b4fc;
+  padding-left: 10px;
+  color: #475569;
+}
+.wenpai-ce p[data-kind="code"] {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 5px 10px;
+  white-space: pre-wrap;
+}
+.wenpai-ce p[data-kind="code"] + p[data-kind="code"] {
+  margin-top: -6px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-top: none;
+}
+.wenpai-ce p[data-kind="code"]:has(+ p[data-kind="code"]) {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-bottom: none;
+}
+.wenpai-ce p[data-kind="caption"] {
+  text-align: center;
+  color: #94a3b8;
+  font-size: 12px;
+}

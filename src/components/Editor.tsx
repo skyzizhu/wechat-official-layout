@@ -289,14 +289,73 @@ function serializeEditorBlocks(blocks: EditorBlock[]): string {
 // （范文/清空/撤销/粘贴全文）时才整体重建 DOM，避免光标跳动。
 // ======================================================================
 
+/**
+ * 行文本 → 语义化段落：标题/引用/题注等格式记在 data-kind 上，
+ * 编辑器只显示干净文本（序列化时再注入 markdown 标记）。
+ * 语义段落同样用于意图转换的回写（## x / > x / *▲ x* 自动转为对应 kind）。
+ */
 function buildParagraph(line: string): HTMLParagraphElement {
   const p = document.createElement('p');
-  if (line.trim() === '') {
-    p.innerHTML = '<br>';
-  } else {
-    p.textContent = line;
+  const t = line;
+  // 标题（含中文习惯 #标题 与闭合 ## 标题 ##）
+  const h = t.match(/^ {0,3}(#{1,6})[ \t]+(.*?)(?:[ \t]+#{1,6})?[ \t]*$/) || t.match(/^ {0,3}(#{1,6})(?=[\u4e00-\u9fff])(.*)$/);
+  if (h) {
+    p.dataset.kind = 'h' + h[1].length;
+    p.textContent = (h[2] || '').trim();
+    return p;
   }
+  // 引用
+  const q = t.match(/^ {0,3}> ?(.*)$/);
+  if (q) {
+    p.dataset.kind = 'quote';
+    p.textContent = q[1];
+    return p;
+  }
+  // 题注约定行（*▲ xxx*）——去掉星号显示，保留 ▲
+  const cap = t.match(/^\*▲?\s*([^*]+)\*$/);
+  if (cap) {
+    p.dataset.kind = 'caption';
+    p.textContent = ('▲ ' + cap[1].trim()).trim();
+    return p;
+  }
+  if (t.trim() === '') {
+    p.innerHTML = '<br>';
+    return p;
+  }
+  p.textContent = t;
   return p;
+}
+
+/**
+ * 把一组源码行写入文档片段：围栏行不渲染，围栏内的行转为代码段落
+ * （首段携带语言标记 data-lang），其余行走 buildParagraph 语义识别。
+ */
+function appendLinesAsParagraphs(container: HTMLElement | DocumentFragment, lines: string[]) {
+  let inFence = false;
+  let lang = '';
+  for (const line of lines) {
+    const fence = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (fence) {
+      if (!inFence) {
+        inFence = true;
+        lang = fence[2].trim();
+      } else {
+        inFence = false;
+        lang = '';
+      }
+      continue;
+    }
+    const p = buildParagraph(line);
+    if (inFence) {
+      p.dataset.kind = 'code';
+      if (lang) {
+        p.dataset.lang = lang;
+        lang = '';
+      }
+      if ((p.textContent || '') === '') p.innerHTML = '<br>';
+    }
+    container.appendChild(p);
+  }
 }
 
 /** 把光标定到段落末尾 */
@@ -359,17 +418,28 @@ export function Editor({
 
   // ---------- DOM ↔ blocks 双向 ----------
 
-  /** 遍历编辑面顶层节点还原 blocks（P → 文本行；image-group → 图片块） */
+  /** 遍历编辑面顶层节点还原 blocks（P → 文本行；image-group → 图片块）。
+   *  语义段落（data-kind）回写为带 markdown 标记的行；连续代码段落补回围栏 */
   const readBlocksFromDom = useCallback((): EditorBlock[] => {
     const ce = ceRef.current;
     const blocks: EditorBlock[] = [];
     if (!ce) return blocks;
     let buf: string[] = [];
+    let inCode = false;
+    let prevStructural = false;
+    const closeCode = () => {
+      if (inCode) {
+        buf.push('```');
+        inCode = false;
+      }
+    };
     const flushText = () => {
+      closeCode();
       while (buf.length && !buf[0].trim()) buf.shift();
       while (buf.length && !buf[buf.length - 1].trim()) buf.pop();
       if (buf.length) blocks.push({ kind: 'text', lines: buf });
       buf = [];
+      prevStructural = false;
     };
     Array.from(ce.children).forEach((child) => {
       const el = child as HTMLElement;
@@ -386,11 +456,38 @@ export function Editor({
         } catch {}
         return;
       }
-      if (el.tagName === 'P') {
-        const text = (el.innerText || '').replace(/\n$/, '');
-        text.split('\n').forEach((l) => buf.push(l));
+      if (el.tagName !== 'P') return;
+      const kind = el.dataset.kind || '';
+      const text = (el.innerText || '').replace(/\n$/, '');
+      const lines = text.split('\n');
+      if (kind === 'code') {
+        // 代码段：仅在开启围栏前补分隔空行；围栏内的内容行保持连续
+        if (!inCode) {
+          if (buf.length && buf[buf.length - 1].trim() !== '') buf.push('');
+          buf.push('```' + (el.dataset.lang || ''));
+          inCode = true;
+        }
+        lines.forEach((l) => buf.push(l));
+        prevStructural = true;
+        return;
       }
-      // 其他杂散节点忽略（normalize 已收敛）
+      closeCode();
+      // 结构段落（标题/引用/题注）与相邻行之间补空行，
+      // 避免智能引擎把紧邻的普通段落并入引用或合并段落
+      const structural = kind !== '';
+      if ((structural || prevStructural) && buf.length && buf[buf.length - 1].trim() !== '') {
+        buf.push('');
+      }
+      if (/^h[1-6]$/.test(kind)) {
+        buf.push('#'.repeat(Number(kind[1])) + ' ' + text);
+      } else if (kind === 'quote') {
+        lines.forEach((l) => buf.push('> ' + l));
+      } else if (kind === 'caption') {
+        lines.forEach((l) => buf.push(l.trim() ? '*' + l + '*' : l));
+      } else {
+        lines.forEach((l) => buf.push(l));
+      }
+      prevStructural = structural;
     });
     flushText();
     return blocks;
@@ -446,7 +543,7 @@ export function Editor({
     ce.innerHTML = '';
     blocks.forEach((b) => {
       if (b.kind === 'text') {
-        b.lines.forEach((l) => ce.appendChild(buildParagraph(l)));
+        appendLinesAsParagraphs(ce, b.lines);
       } else {
         ce.appendChild(buildImageGroup(b));
       }
@@ -864,9 +961,7 @@ export function Editor({
       const frag = document.createDocumentFragment();
       blocks.forEach((b) => {
         if (b.kind === 'text') {
-          b.lines.forEach((l) => {
-            frag.appendChild(buildParagraph(l));
-          });
+          appendLinesAsParagraphs(frag, b.lines);
         } else {
           frag.appendChild(buildImageGroup(b));
         }
@@ -940,6 +1035,57 @@ export function Editor({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    // 回车在语义段落（标题/引用/题注）的开头或结尾：浏览器默认会克隆 data-kind，
+    // 这里改为插入普通段落——标题后回车回到正文，代码块内回车保持代码（交给默认行为）
+    if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+      const ce = ceRef.current;
+      const sel = window.getSelection();
+      if (ce && sel && sel.isCollapsed && sel.rangeCount > 0) {
+        const range = sel.getRangeAt(0);
+        let n: Node | null = range.startContainer;
+        while (n && n !== ce) {
+          if ((n as Element).tagName === 'P' && (n as Element).parentNode === ce) break;
+          n = n.parentNode;
+        }
+        const p = n && n !== ce ? (n as HTMLParagraphElement) : null;
+        const kind = p?.dataset?.kind || '';
+        if (p && kind && kind !== 'code') {
+          const pre = document.createRange();
+          pre.selectNodeContents(p);
+          try {
+            pre.setEnd(range.startContainer, range.startOffset);
+          } catch {
+            return;
+          }
+          const off = pre.toString().length;
+          const text = (p.innerText || '').replace(/\n$/, '');
+          const atEnd = off >= text.length;
+          const atStart = off === 0;
+          if (!atEnd && !atStart) return; // 段中拆分：交给默认行为
+          e.preventDefault();
+          const fresh = document.createElement('p');
+          fresh.innerHTML = '<br>';
+          if (atEnd) {
+            p.after(fresh);
+            syncFromDom();
+            focusParagraphEnd(fresh);
+          } else {
+            p.before(fresh);
+            syncFromDom();
+            const sel2 = window.getSelection();
+            if (sel2) {
+              const r = document.createRange();
+              r.setStart(fresh, 0);
+              r.collapse(true);
+              sel2.removeAllRanges();
+              sel2.addRange(r);
+            }
+          }
+          return;
+        }
+      }
+      return;
+    }
     if (!(e.metaKey || e.ctrlKey)) return;
     const k = e.key.toLowerCase();
     if (k === 's') {
@@ -993,11 +1139,12 @@ export function Editor({
       const range = getSelectionParagraphRange();
       if (!range) return;
       const level = Number(k);
-      const prefix = '#'.repeat(level) + ' ';
+      // 语义化标题：格式记在 data-kind，编辑器内不显示 # 标记
       range.ps.forEach((p) => {
         const t = (p.innerText || '').replace(/\n$/, '');
         if (!t.trim()) return;
-        p.textContent = prefix + t.replace(/^#{1,6}\s*/, '');
+        p.dataset.kind = 'h' + level;
+        p.textContent = t.replace(/^#{1,6}[ \t]+/, '');
       });
       syncFromDom();
     }
@@ -1109,12 +1256,36 @@ export function Editor({
         break;
       case 'text':
         for (let k = 0; k < out.length; k++) {
-          out[k] = (out[k] || '').trim();
+          // 剥离结构标记，回写为普通正文段落（buildParagraph 不再识别出格式）
+          out[k] = (out[k] || '')
+            .replace(/^ {0,3}#{1,6}[ \t]+/, '')
+            .replace(/^ {0,3}>\s?/, '')
+            .replace(/^\*▲?\s*([^*]+)\*$/, '$1')
+            .trim();
         }
         break;
     }
-    // 回写：第一个目标段落替换为全部输出行，其余目标段落移除
-    targets[0].replaceWith(...out.map((l) => buildParagraph(l)));
+    // 回写：第一个目标段落替换为全部输出行，其余目标段落移除。
+    // 非代码行走 buildParagraph（自动把 ## /> *▲* 识别为语义段落，编辑器仍显示纯文本）；
+    // 代码合并为一个代码块：剥掉 out 里的围栏标记行（序列化器负责补围栏），
+    // 仅内容行转为语义代码段，首段携带语言标记
+    const frag = document.createDocumentFragment();
+    if (kind === 'code') {
+      const lang = targets[0]?.dataset?.lang || '';
+      const body = out.filter((l) => !/^ {0,3}(`{3,}|~{3,})/.test(l));
+      if (!body.length) body.push('');
+      body.forEach((l, i) => {
+        const p = document.createElement('p');
+        if (l.trim() === '') p.innerHTML = '<br>';
+        else p.textContent = l;
+        p.dataset.kind = 'code';
+        if (i === 0 && lang) p.dataset.lang = lang;
+        frag.appendChild(p);
+      });
+    } else {
+      out.forEach((l) => frag.appendChild(buildParagraph(l)));
+    }
+    targets[0].replaceWith(frag);
     targets.slice(1).forEach((p) => p.remove());
     setIntentBar(null);
     syncFromDom();

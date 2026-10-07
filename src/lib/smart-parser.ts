@@ -731,6 +731,17 @@ export function convertPlainTextToMarkdown(
       continue;
     }
 
+    // 2.0b 引用块收集：连续以 > 开头的行 → 归一化为 "> " 前缀后原样放行。
+    // 引用行绝不能落入下方的孤立行/标题规则（会被误转成 "### > xxx"）；
+    // 多级引用（> > x）保留层级，仅规范首个 > 后的空格
+    if (/^>/.test(trimmed)) {
+      while (i < rawLines.length && /^>/.test(rawLines[i].trim())) {
+        blockProcessedLines.push(rawLines[i].trim().replace(/^>\s*/, '> '));
+        i++;
+      }
+      continue;
+    }
+
     // 2.1 检查是否是纯文本代码块（如连续几行包含代码特征或 JSON 结构）
     const isCodeStart =
       /^(?:const|let|var|function|import|export|class|def|public|private|protected|static|void|async|interface|type|enum|readonly|echo)\s/.test(trimmed) ||
@@ -1207,6 +1218,12 @@ export function convertPlainTextToMarkdown(
     }
 
     if (inCodeBlock) {
+      processedLines.push(rawLine);
+      continue;
+    }
+
+    // 引用块行（2.0b 已收集归一）：原样放行，禁止标题/孤立短行等规则改写
+    if (trimmed.startsWith('>')) {
       processedLines.push(rawLine);
       continue;
     }
