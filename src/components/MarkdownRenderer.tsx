@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import type { ThemePreset } from '@/themes/types';
 import { resolveImageSrc } from '@/lib/image-store';
-import { getListLevelStyles } from '@/themes/list-levels';
+import { getListLevelStyles, resolveListAccent } from '@/themes/list-levels';
 import type { Components } from 'react-markdown';
 import React, { CSSProperties } from 'react';
 
@@ -684,7 +684,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
     ),
 
     input: ({ checked, ...props }) => {
-      const accent = (elements.h1?.color as string) || '#2563eb';
+      const accent = resolveListAccent(theme);
       if (props.type === 'checkbox') {
         if (checked) {
           return (
@@ -706,10 +706,10 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
           <span
             data-role="task-checkbox"
             style={{
-              border: '1px solid #cbd5e1',
+              border: '1px solid ' + accent,
               borderRadius: '3px',
               fontSize: '11px',
-              color: '#94a3b8',
+              color: 'transparent',
               userSelect: 'none',
             }}
           >
