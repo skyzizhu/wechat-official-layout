@@ -84,8 +84,9 @@ export function getListLevelStyles(theme?: ThemePreset): ListLevelStyleSet {
     },
     badge: {
       // 微信合规：无固定宽高/CSS padding（微信粘贴会剥掉行内 padding 导致瘪条），
-      // 宽度由文本中的 &nbsp; 承载（渲染层输出 \u00A0 + 序号 + \u00A0）
+      // 宽度由文本中的 &nbsp; 承载（渲染层输出 \u00A0 + 序号 + \u00A0），无垂直内边距使徽章接近方形
       display: 'inline-block',
+      padding: '0 4px',
       borderRadius: '6px',
       backgroundColor: accent,
       color: '#ffffff',
