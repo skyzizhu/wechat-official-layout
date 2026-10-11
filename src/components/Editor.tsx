@@ -409,7 +409,7 @@ export function Editor({
     const w = bar.offsetWidth;
     const h = bar.offsetHeight;
     // 垂直：实测高度精确保证「菜单底边与选区上沿间隙 24px」（上方放不下翻到下方时间隙同为 24px）
-    const top = intentBar.flipped ? intentBar.anchorBottom + 24 : intentBar.anchorTop - h - 24;
+    const top = intentBar.flipped ? intentBar.anchorBottom + 18 : intentBar.anchorTop - h - 18;
     // 水平：按实测宽度居中并夹在面板内
     const half = w / 2 + 8;
     const clamped = Math.min(Math.max(intentBar.left, half), Math.max(half, editSurfaceRef.current.clientWidth - half));
@@ -1452,7 +1452,7 @@ export function Editor({
       const rect = sel.getRangeAt(0).getBoundingClientRect();
       const wrapRect = wrap.getBoundingClientRect();
       const BAR_H = 30;
-      const BAR_GAP = 24;
+      const BAR_GAP = 18;
       // getBoundingClientRect 已含滚动偏移：内容坐标 = 视口坐标 - 容器视口顶，
       // 不需要再加 scrollTop（重复累加会让菜单被放到内容区下方数干像素的空白里）
       anchorTop = rect.top - wrapRect.top;
