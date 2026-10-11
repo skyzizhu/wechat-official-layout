@@ -400,16 +400,21 @@ export function Editor({
   // Markdown 透镜：只读查看当前生效的排版用 Markdown 源码（与预览/下载 MD 同源）
   const [showMdSource, setShowMdSource] = useState(false);
   // 选中文本意图转换工具栏：{ 起始段落索引, 结束段落索引 }
-  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number } | null>(null);
+  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number; anchorTop: number; anchorBottom: number; flipped: boolean } | null>(null);
   const intentBarRef = useRef<HTMLDivElement>(null);
   // 渲染后按菜单实际宽度做左右边界收敛（translateX(-50%) 居中依赖真实宽度）
   useLayoutEffect(() => {
     if (!intentBar || !intentBarRef.current || !editSurfaceRef.current) return;
-    const w = intentBarRef.current.offsetWidth;
+    const bar = intentBarRef.current;
+    const w = bar.offsetWidth;
+    const h = bar.offsetHeight;
+    // 垂直：实测高度精确保证「菜单底边与选区上沿间隙 24px」（上方放不下翻到下方时间隙同为 24px）
+    const top = intentBar.flipped ? intentBar.anchorBottom + 24 : intentBar.anchorTop - h - 24;
+    // 水平：按实测宽度居中并夹在面板内
     const half = w / 2 + 8;
     const clamped = Math.min(Math.max(intentBar.left, half), Math.max(half, editSurfaceRef.current.clientWidth - half));
-    if (clamped !== intentBar.left) {
-      setIntentBar((prev) => (prev ? { ...prev, left: clamped } : prev));
+    if (top !== intentBar.top || clamped !== intentBar.left) {
+      setIntentBar((prev) => (prev ? { ...prev, top, left: clamped } : prev));
     }
   }, [intentBar]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1433,18 +1438,25 @@ export function Editor({
       setIntentBar((prev) => (prev ? null : prev));
       return;
     }
-    // 计算悬浮位置：水平居中于选区、垂直贴在选区上方（贴近视口顶部时改到下方）。
-    // 坐标相对编辑面内容层（随滚动保持贴合文字）
+    // 悬浮位置：水平居中于选区；垂直贴选区上方，菜单底边与选区上沿间隙 24px
+    // （选区贴近内容顶部、上方放不下时改为选区下方）。坐标相对编辑面内容层，
+    // 随滚动保持贴合文字；渲染后由 useLayoutEffect 按实测高度精修 top/left
     let top = 0;
     let left = 0;
+    let anchorTop = 0;
+    let anchorBottom = 0;
+    let flipped = false;
     const sel = window.getSelection();
     const wrap = editSurfaceRef.current;
     if (sel && sel.rangeCount > 0 && wrap && scrollRef.current) {
       const rect = sel.getRangeAt(0).getBoundingClientRect();
       const wrapRect = wrap.getBoundingClientRect();
-      const BAR_H = 40;
-      const above = rect.top - wrapRect.top + scrollRef.current.scrollTop - BAR_H - 6;
-      top = above >= 0 ? above : rect.bottom - wrapRect.top + scrollRef.current.scrollTop + 6;
+      const BAR_H = 30;
+      const BAR_GAP = 24;
+      anchorTop = rect.top - wrapRect.top + scrollRef.current.scrollTop;
+      anchorBottom = rect.bottom - wrapRect.top + scrollRef.current.scrollTop;
+      flipped = anchorTop - BAR_H - BAR_GAP < 0;
+      top = flipped ? anchorBottom + BAR_GAP : anchorTop - BAR_H - BAR_GAP;
       const center = rect.left + rect.width / 2 - wrapRect.left;
       const half = Math.min(210, wrap.clientWidth / 2 - 8);
       left = Math.min(Math.max(center, half), Math.max(half, wrap.clientWidth - half));
@@ -1452,7 +1464,7 @@ export function Editor({
     setIntentBar((prev) =>
       prev && prev.s === range.s && prev.e === range.e && prev.top === top && prev.left === left
         ? prev
-        : { s: range.s, e: range.e, top, left }
+        : { s: range.s, e: range.e, top, left, anchorTop, anchorBottom, flipped }
     );
   };
 
@@ -1797,7 +1809,7 @@ export function Editor({
           {intentBar && (
             <div
               ref={intentBarRef}
-              className="absolute z-30 flex items-center gap-1 px-3 py-1.5 bg-gray-900/95 backdrop-blur text-white text-xs flex-wrap rounded-lg shadow-xl border border-white/10 max-w-[94%]"
+              className="absolute z-30 flex items-center gap-0.5 px-2 py-1 bg-gray-900/95 backdrop-blur text-white text-xs whitespace-nowrap rounded-lg shadow-xl border border-white/10 overflow-x-auto"
               style={{ top: intentBar.top, left: intentBar.left, transform: 'translateX(-50%)' }}
               onMouseDown={(e) => e.preventDefault()}
             >
@@ -1818,7 +1830,7 @@ export function Editor({
                   key={item.kind}
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => applyIntentTransform(item.kind)}
-                  className="px-2 py-0.5 rounded hover:bg-white/20 cursor-pointer whitespace-nowrap"
+                  className="px-1.5 py-0.5 rounded hover:bg-white/20 cursor-pointer whitespace-nowrap"
                 >
                   {item.label}
                 </button>
