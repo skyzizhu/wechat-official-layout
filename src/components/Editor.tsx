@@ -790,6 +790,21 @@ export function Editor({
     applyHistory(h.stack[h.index]);
   }, [onChange, rebuildDom]);
 
+  // 文档级选区监听：选区塌陷（点击空白/取消选择）或离开编辑器时，立即隐藏意图菜单。
+  // 兜底覆盖所有路径（含 React onSelect 不触发的程序化选区变化），杜绝菜单残留
+  useEffect(() => {
+    const onDocSelectionChange = () => {
+      const sel = window.getSelection();
+      const ce = ceRef.current;
+      if (!ce) return;
+      if (!sel || sel.isCollapsed || sel.rangeCount === 0 || !ce.contains(sel.anchorNode)) {
+        setIntentBar(null);
+      }
+    };
+    document.addEventListener('selectionchange', onDocSelectionChange);
+    return () => document.removeEventListener('selectionchange', onDocSelectionChange);
+  }, []);
+
   // 全局 ⌘Z / ⌘⇧Z / Ctrl+Y（拦截浏览器原生 contentEditable undo，统一走快照栈）
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
