@@ -1453,8 +1453,10 @@ export function Editor({
       const wrapRect = wrap.getBoundingClientRect();
       const BAR_H = 30;
       const BAR_GAP = 24;
-      anchorTop = rect.top - wrapRect.top + scrollRef.current.scrollTop;
-      anchorBottom = rect.bottom - wrapRect.top + scrollRef.current.scrollTop;
+      // getBoundingClientRect 已含滚动偏移：内容坐标 = 视口坐标 - 容器视口顶，
+      // 不需要再加 scrollTop（重复累加会让菜单被放到内容区下方数干像素的空白里）
+      anchorTop = rect.top - wrapRect.top;
+      anchorBottom = rect.bottom - wrapRect.top;
       flipped = anchorTop - BAR_H - BAR_GAP < 0;
       top = flipped ? anchorBottom + BAR_GAP : anchorTop - BAR_H - BAR_GAP;
       const center = rect.left + rect.width / 2 - wrapRect.left;
