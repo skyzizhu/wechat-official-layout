@@ -420,7 +420,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
       if (node?.properties?.dataRole === 'note') {
         const noteFontSize = `${Math.max(
           11,
-          parseFloat(String((theme.container?.fontSize as string) || '15.5')) - 4
+          parseFloat(String((theme.container?.fontSize as string) || '15.5')) - 3
         )}px`;
         return (
           <p
