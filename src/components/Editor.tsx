@@ -416,7 +416,7 @@ export function Editor({
   // Markdown 透镜：只读查看当前生效的排版用 Markdown 源码（与预览/下载 MD 同源）
   const [showMdSource, setShowMdSource] = useState(false);
   // 选中文本意图转换工具栏：{ 起始段落索引, 结束段落索引 }
-  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number; anchorTop: number; anchorBottom: number; flipped: boolean } | null>(null);
+  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number; anchorTop: number; anchorBottom: number; flipped: boolean; active?: { u?: boolean; dashed?: boolean; hl?: boolean } } | null>(null);
   const intentBarRef = useRef<HTMLDivElement>(null);
   // 渲染后按菜单实际宽度做左右边界收敛（translateX(-50%) 居中依赖真实宽度）
   useLayoutEffect(() => {
@@ -1482,10 +1482,38 @@ export function Editor({
       const half = Math.min(210, wrap.clientWidth / 2 - 8);
       left = Math.min(Math.max(center, half), Math.max(half, wrap.clientWidth - half));
     }
+    // 着重激活态：选区两侧任一端向上找到匹配样式的 span 即视为已应用（按钮高亮，再点取消）
+    const selNow = window.getSelection();
+    const active: { u?: boolean; dashed?: boolean; hl?: boolean } = {};
+    if (selNow && selNow.rangeCount > 0) {
+      const selRange = selNow.getRangeAt(0);
+      const matchFor = (kind: 'u' | 'dashed' | 'hl') => {
+        const isMatch = (el: HTMLElement) => {
+          const st = el.getAttribute('style') || '';
+          if (kind === 'u') return st.includes('text-decoration: underline') && !st.includes('dashed');
+          if (kind === 'dashed') return st.includes('underline dashed');
+          return st.includes('#FEF08A');
+        };
+        let n: Node | null = selRange.startContainer;
+        while (n && n !== ceRef.current) {
+          if (n.nodeName === 'SPAN' && isMatch(n as HTMLElement)) return true;
+          n = n.parentNode;
+        }
+        let m: Node | null = selRange.endContainer;
+        while (m && m !== ceRef.current) {
+          if (m.nodeName === 'SPAN' && isMatch(m as HTMLElement)) return true;
+          m = m.parentNode;
+        }
+        return false;
+      };
+      active.u = matchFor('u');
+      active.dashed = matchFor('dashed');
+      active.hl = matchFor('hl');
+    }
     setIntentBar((prev) =>
       prev && prev.s === range.s && prev.e === range.e && prev.top === top && prev.left === left
         ? prev
-        : { s: range.s, e: range.e, top, left, anchorTop, anchorBottom, flipped }
+        : { s: range.s, e: range.e, top, left, anchorTop, anchorBottom, flipped, active }
     );
   }, []);
 
@@ -1587,10 +1615,40 @@ export function Editor({
       case 'u':
       case 'dashed':
       case 'hl': {
-        // 重点样式：直接在当前选区 Range 上包裹 span（内联样式，微信保留）。
-        // 不用 innerText 重建整段——那会摧毁同段落里已应用的其他着重 span
+        // 重点样式（开关式）：直接在当前选区 Range 上包裹 span（内联样式，微信保留）。
+        // 选区命中同款着重 span → 拆包取消该格式；未命中 → 包裹应用
         const sel = window.getSelection();
         if (!sel || sel.rangeCount === 0 || sel.isCollapsed) break;
+        const isMatch = (el: HTMLElement) => {
+          const st = el.getAttribute('style') || '';
+          if (kind === 'u') return st.includes('text-decoration: underline') && !st.includes('dashed');
+          if (kind === 'dashed') return st.includes('underline dashed');
+          return st.includes('#FEF08A');
+        };
+        // 从选区两端向上找同款 span（最近的优先）
+        let toggleSpan: HTMLElement | null = null;
+        let n: Node | null = sel.getRangeAt(0).startContainer;
+        while (n && n !== ce && !toggleSpan) {
+          if (n.nodeName === 'SPAN' && isMatch(n as HTMLElement)) toggleSpan = n as HTMLElement;
+          n = n.parentNode;
+        }
+        let m: Node | null = sel.getRangeAt(0).endContainer;
+        while (m && m !== ce && !toggleSpan) {
+          if (m.nodeName === 'SPAN' && isMatch(m as HTMLElement)) toggleSpan = m as HTMLElement;
+          m = m.parentNode;
+        }
+        if (toggleSpan) {
+          // 取消格式：把 span 的子节点提升回原位
+          const parent = toggleSpan.parentElement!;
+          while (toggleSpan.firstChild) {
+            parent.insertBefore(toggleSpan.firstChild, toggleSpan);
+          }
+          toggleSpan.remove();
+          sel.removeAllRanges();
+          setIntentBar(null);
+          syncFromDom();
+          return;
+        }
         const style =
           kind === 'u'
             ? 'text-decoration: underline; text-decoration-color: currentColor; text-underline-offset: 3px;'
@@ -1901,16 +1959,25 @@ export function Editor({
                 { kind: 'indent', label: '缩进' },
                 { kind: 'outdent', label: '取消缩进' },
                 { kind: 'text', label: '正文' },
-              ].map((item) => (
-                <button
-                  key={item.kind}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => applyIntentTransform(item.kind)}
-                  className="px-1.5 py-0.5 rounded hover:bg-white/20 cursor-pointer whitespace-nowrap"
-                >
-                  {item.label}
-                </button>
-              ))}
+              ].map((item) => {
+                const isActive =
+                  !!(item.kind === 'u' && intentBar.active?.u) ||
+                  !!(item.kind === 'dashed' && intentBar.active?.dashed) ||
+                  !!(item.kind === 'hl' && intentBar.active?.hl);
+                return (
+                  <button
+                    key={item.kind}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => applyIntentTransform(item.kind)}
+                    title={isActive ? '再次点击取消该格式' : undefined}
+                    className={`px-1.5 py-0.5 rounded cursor-pointer whitespace-nowrap transition-colors ${
+                      isActive ? 'bg-indigo-500/70 font-semibold' : 'hover:bg-white/20'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
               <button
                 onClick={() => setIntentBar(null)}
                 className="ml-1 px-1.5 py-0.5 rounded hover:bg-white/20 text-gray-400 cursor-pointer"
