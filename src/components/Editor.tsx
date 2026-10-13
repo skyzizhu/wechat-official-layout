@@ -423,7 +423,7 @@ export function Editor({
   // Markdown 透镜：只读查看当前生效的排版用 Markdown 源码（与预览/下载 MD 同源）
   const [showMdSource, setShowMdSource] = useState(false);
   // 选中文本意图转换工具栏：{ 起始段落索引, 结束段落索引 }
-  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number; anchorTop: number; anchorBottom: number; flipped: boolean; active?: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean } } | null>(null);
+  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number; anchorTop: number; anchorBottom: number; flipped: boolean; active?: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean; code?: boolean } } | null>(null);
   const intentBarRef = useRef<HTMLDivElement>(null);
   // 渲染后按菜单实际宽度做左右边界收敛（translateX(-50%) 居中依赖真实宽度）
   useLayoutEffect(() => {
@@ -1493,7 +1493,7 @@ export function Editor({
     }
     // 着重激活态：选区两侧任一端向上找到匹配样式的 span 即视为已应用（按钮高亮，再点取消）
     const selNow = window.getSelection();
-    const active: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean } = {};
+    const active: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean; code?: boolean } = {};
     if (selNow && selNow.rangeCount > 0) {
       const selRange = selNow.getRangeAt(0);
       const matchFor = (kind: 'u' | 'dashed' | 'hl') => {
@@ -1528,6 +1528,7 @@ export function Editor({
         listLines.length > 0 &&
         listLines.every((l) => /^\s*[-•●·✦]\s+/.test(l));
       active.note = range.ps.every((p) => p.dataset.kind === 'note');
+      active.code = range.ps.length > 0 && range.ps.every((p) => p.dataset.kind === 'code');
     }
     setIntentBar((prev) =>
       prev && prev.s === range.s && prev.e === range.e && prev.top === top && prev.left === left
@@ -1627,9 +1628,16 @@ export function Editor({
         }
         break;
       case 'code': {
-        const selected = out.filter((l) => l.trim());
+        // 开关式：目标段已全部是代码段 → 剥掉围栏取消代码格式；
+        // 否则把选中行合并为代码段（空行丢弃，与原行为一致）
+        const allCode = targets.length > 0 && targets.every((p) => p.dataset.kind === 'code');
+        const selected = out.filter((l) => l.trim() && !/^ {0,3}(`{3,}|~{3,})/.test(l));
         out.length = 0;
-        out.push('```', ...selected, '```');
+        if (allCode) {
+          selected.forEach((l) => out.push(l));
+        } else {
+          out.push('```', ...selected, '```');
+        }
         break;
       }
       case 'caption':
@@ -1737,7 +1745,8 @@ export function Editor({
     // 代码合并为一个代码块：剥掉 out 里的围栏标记行（序列化器负责补围栏），
     // 仅内容行转为语义代码段，首段携带语言标记
     const frag = document.createDocumentFragment();
-    if (kind === 'code') {
+    const allCodeTargets = targets.length > 0 && targets.every((p) => p.dataset.kind === 'code');
+    if (kind === 'code' && !allCodeTargets) {
       const lang = targets[0]?.dataset?.lang || '';
       const body = out.filter((l) => !/^ {0,3}(`{3,}|~{3,})/.test(l));
       if (!body.length) body.push('');
@@ -1750,6 +1759,7 @@ export function Editor({
         frag.appendChild(p);
       });
     } else {
+      // 普通行 / 取消代码（out 已剥围栏）→ 逐行重建普通段落
       out.forEach((l) => frag.appendChild(buildParagraph(l)));
     }
     targets[0].replaceWith(frag);
@@ -2004,7 +2014,8 @@ export function Editor({
                   !!(item.kind === 'dashed' && intentBar.active?.dashed) ||
                   !!(item.kind === 'hl' && intentBar.active?.hl) ||
                   !!(item.kind === 'list' && intentBar.active?.list) ||
-                  !!(item.kind === 'note' && intentBar.active?.note);
+                  !!(item.kind === 'note' && intentBar.active?.note) ||
+                  !!(item.kind === 'code' && intentBar.active?.code);
                 return (
                   <button
                     key={item.kind}
