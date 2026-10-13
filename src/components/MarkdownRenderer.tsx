@@ -286,10 +286,11 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
                 userSelect: 'none',
               }}
             />
+            {/* inline 而非 inline-block：长标题可自然换行，不会整块掉到线条下方 */}
             <span
               style={{
-                display: 'inline-block',
-                verticalAlign: 'middle',
+                display: 'inline',
+                verticalAlign: 'baseline',
                 lineHeight: 1.75,
               }}
             >
@@ -379,10 +380,12 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
                 userSelect: 'none',
               }}
             />
+            {/* 文字容器用 inline 而非 inline-block：inline-block 整体不可断行，
+                长标题会整块掉到竖线下方（竖线独占一行）；inline 允许自然换行 */}
             <span
               style={{
-                display: 'inline-block',
-                verticalAlign: 'middle',
+                display: 'inline',
+                verticalAlign: 'baseline',
                 lineHeight: 1.75,
               }}
             >
@@ -412,6 +415,35 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
       const isBetweenHrs = Boolean(node?.properties?.dataBetweenHrs);
       const isBeforeHr = Boolean(node?.properties?.dataBeforeHr);
       const isAfterHr = Boolean(node?.properties?.dataAfterHr);
+
+      // (-1) 备注段落：字号比用户所选字号小 4px、灰色、不加粗不斜体
+      if (node?.properties?.dataRole === 'note') {
+        const noteFontSize = `${Math.max(
+          11,
+          parseFloat(String((theme.container?.fontSize as string) || '15.5')) - 4
+        )}px`;
+        return (
+          <p
+            data-role="note"
+            style={{
+              marginTop: 0,
+              marginBottom: '18px',
+              fontSize: noteFontSize,
+              lineHeight: 1.85,
+              color: '#999999',
+              fontWeight: 400,
+              fontStyle: 'normal',
+              letterSpacing: '0.034em',
+              textAlign: 'justify',
+              wordBreak: 'break-word',
+              boxSizing: 'border-box',
+              maxWidth: '100%',
+            }}
+          >
+            {children}
+          </p>
+        );
+      }
 
       // (0) 散文金句：居中、主题强调色、加粗、舒展留白 —— 情感类文章的点题句
       if (isGoldenLine) {

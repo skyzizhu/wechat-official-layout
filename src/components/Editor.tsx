@@ -305,6 +305,13 @@ function buildParagraph(line: string): HTMLParagraphElement {
     p.textContent = (h[2] || '').trim();
     return p;
   }
+  // 备注（HTML 行，序列化时按 字号-4px/灰色 渲染）
+  const note = t.match(/^<p data-role="note">([\s\S]*?)<\/p>$/);
+  if (note) {
+    p.dataset.kind = 'note';
+    p.innerHTML = note[1];
+    return p;
+  }
   // 引用
   const q = t.match(/^ {0,3}> ?(.*)$/);
   if (q) {
@@ -322,6 +329,22 @@ function buildParagraph(line: string): HTMLParagraphElement {
   if (t.trim() === '') {
     p.innerHTML = '<br>';
     return p;
+  }
+  // 受控行内标签白名单：着重样式 span（下划线/虚线/高亮）、strong、em——
+  // 这些标签是我们自己的意图转换生成的，属性仅限 style（无事件/链接），
+  // 按 HTML 写入以在编辑器中回显着重效果；其余内容一律按纯文本转义
+  if (/^(?:(?!<\/?[a-zA-Z])[\s\S])*<span style="[^"]*"(?:\s*<span style="[^"]*")*/.test(t) || t.includes('<span style="text-decoration') || t.includes('<span style="background-color') || t.includes('<strong>') || t.includes('<em>')) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = t;
+    // 安全校验：白名单外的一切元素/属性一律拒绝（回退为纯文本）
+    const allowed = Array.from(tpl.content.querySelectorAll('*')).every((el) => {
+      if (!['SPAN', 'STRONG', 'EM'].includes(el.tagName)) return false;
+      return Array.from(el.attributes).every((attr) => attr.name === 'style');
+    });
+    if (allowed && tpl.content.textContent.trim()) {
+      p.innerHTML = t;
+      return p;
+    }
   }
   p.textContent = t;
   return p;
@@ -400,7 +423,7 @@ export function Editor({
   // Markdown 透镜：只读查看当前生效的排版用 Markdown 源码（与预览/下载 MD 同源）
   const [showMdSource, setShowMdSource] = useState(false);
   // 选中文本意图转换工具栏：{ 起始段落索引, 结束段落索引 }
-  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number; anchorTop: number; anchorBottom: number; flipped: boolean } | null>(null);
+  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number; anchorTop: number; anchorBottom: number; flipped: boolean; active?: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean } } | null>(null);
   const intentBarRef = useRef<HTMLDivElement>(null);
   // 渲染后按菜单实际宽度做左右边界收敛（translateX(-50%) 居中依赖真实宽度）
   useLayoutEffect(() => {
@@ -468,7 +491,10 @@ export function Editor({
       }
       if (el.tagName !== 'P') return;
       const kind = el.dataset.kind || '';
-      const text = (el.innerText || '').replace(/\n$/, '');
+      // 文本行读 innerHTML：行内着重样式（下划线/虚线/高亮 span、strong/em）以受控
+      // 内联标签随值保留；空段落记为空串
+      const html = el.dataset.kind === 'code' ? (el.textContent || '') : (el.innerHTML || '');
+      const text = (html || '').replace(/\n$/, '');
       const lines = text.split('\n');
       // 编辑器中「换行即分段」：任意相邻段落之间补空行，保证预览与引擎
       // 不会把紧邻的普通段落并进上一段或上一条列表项（如独立行「专业技能」）
@@ -485,7 +511,9 @@ export function Editor({
         return;
       }
       closeCode();
-      if (/^h[1-6]$/.test(kind)) {
+      if (kind === 'note') {
+        buf.push('<p data-role="note">' + el.innerHTML.replace(/\n/g, '') + '</p>');
+      } else if (/^h[1-6]$/.test(kind)) {
         buf.push('#'.repeat(Number(kind[1])) + ' ' + text);
       } else if (kind === 'quote') {
         lines.forEach((l) => buf.push('> ' + l));
@@ -789,21 +817,6 @@ export function Editor({
     h.index += 1;
     applyHistory(h.stack[h.index]);
   }, [onChange, rebuildDom]);
-
-  // 文档级选区监听：选区塌陷（点击空白/取消选择）或离开编辑器时，立即隐藏意图菜单。
-  // 兜底覆盖所有路径（含 React onSelect 不触发的程序化选区变化），杜绝菜单残留
-  useEffect(() => {
-    const onDocSelectionChange = () => {
-      const sel = window.getSelection();
-      const ce = ceRef.current;
-      if (!ce) return;
-      if (!sel || sel.isCollapsed || sel.rangeCount === 0 || !ce.contains(sel.anchorNode)) {
-        setIntentBar(null);
-      }
-    };
-    document.addEventListener('selectionchange', onDocSelectionChange);
-    return () => document.removeEventListener('selectionchange', onDocSelectionChange);
-  }, []);
 
   // 全局 ⌘Z / ⌘⇧Z / Ctrl+Y（拦截浏览器原生 contentEditable undo，统一走快照栈）
   useEffect(() => {
@@ -1447,7 +1460,7 @@ export function Editor({
 
   // ---------- 选中 → 意图转换工具栏（悬浮层，锚定选区上方） ----------
 
-  const handleSelect = () => {
+  const handleSelect = useCallback(() => {
     const range = getSelectionParagraphRange();
     if (!range) {
       setIntentBar((prev) => (prev ? null : prev));
@@ -1478,12 +1491,72 @@ export function Editor({
       const half = Math.min(210, wrap.clientWidth / 2 - 8);
       left = Math.min(Math.max(center, half), Math.max(half, wrap.clientWidth - half));
     }
+    // 着重激活态：选区两侧任一端向上找到匹配样式的 span 即视为已应用（按钮高亮，再点取消）
+    const selNow = window.getSelection();
+    const active: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean } = {};
+    if (selNow && selNow.rangeCount > 0) {
+      const selRange = selNow.getRangeAt(0);
+      const matchFor = (kind: 'u' | 'dashed' | 'hl') => {
+        const isMatch = (el: HTMLElement) => {
+          const st = el.getAttribute('style') || '';
+          if (kind === 'u') return st.includes('text-decoration: underline') && !st.includes('dashed');
+          if (kind === 'dashed') return st.includes('underline dashed');
+          return st.includes('#FEF08A');
+        };
+        let n: Node | null = selRange.startContainer;
+        while (n && n !== ceRef.current) {
+          if (n.nodeName === 'SPAN' && isMatch(n as HTMLElement)) return true;
+          n = n.parentNode;
+        }
+        let m: Node | null = selRange.endContainer;
+        while (m && m !== ceRef.current) {
+          if (m.nodeName === 'SPAN' && isMatch(m as HTMLElement)) return true;
+          m = m.parentNode;
+        }
+        return false;
+      };
+      active.u = matchFor('u');
+      active.dashed = matchFor('dashed');
+      active.hl = matchFor('hl');
+    }
+    // 列表激活态：选中的段落里所有非空行都已是列表标记行（- • ● · ✦ 开头）
+    if (range.ps.length) {
+      const listLines = range.ps
+        .flatMap((p) => (p.innerText || '').split('\n'))
+        .filter((l) => l.trim());
+      active.list =
+        listLines.length > 0 &&
+        listLines.every((l) => /^\s*[-•●·✦]\s+/.test(l));
+      active.note = range.ps.every((p) => p.dataset.kind === 'note');
+    }
     setIntentBar((prev) =>
       prev && prev.s === range.s && prev.e === range.e && prev.top === top && prev.left === left
         ? prev
-        : { s: range.s, e: range.e, top, left, anchorTop, anchorBottom, flipped }
+        : { s: range.s, e: range.e, top, left, anchorTop, anchorBottom, flipped, active }
     );
-  };
+  }, []);
+
+  // 意图菜单显示/隐藏的唯一驱动：文档级 selectionchange。
+  // React 的 onSelect 合成事件在 contentEditable 上派发不可靠（首次双击常不触发，
+  // 这正是「第一次选中菜单异常」与「有时菜单不出现」的共同根因）——
+  // selectionchange 由浏览器原生保证：选区有效且在编辑器内 → 显示；
+  // 塌陷或离开编辑器 → 隐藏。所有路径确定性生效
+  useEffect(() => {
+    const onDocSelectionChange = () => {
+      const sel = window.getSelection();
+      const ce = ceRef.current;
+      if (!ce) return;
+      const valid =
+        !!sel && sel.rangeCount > 0 && !!sel.anchorNode && !sel.isCollapsed && ce.contains(sel.anchorNode);
+      if (valid) {
+        handleSelect();
+      } else {
+        setIntentBar(null);
+      }
+    };
+    document.addEventListener('selectionchange', onDocSelectionChange);
+    return () => document.removeEventListener('selectionchange', onDocSelectionChange);
+  }, [handleSelect]);
 
   /** 意图转换：把选中范围内的段落文本按行提取 → 行级变换 → 回写段落 */
   const applyIntentTransform = (kind: string) => {
@@ -1518,12 +1591,19 @@ export function Editor({
           if (t) out[k] = '### ' + t.replace(/^#+\s*/, '');
         }
         break;
-      case 'list':
+      case 'list': {
+        // 开关式：选中行已全部是列表标记行 → 剥掉标记恢复正文；否则加标记
+        const nonEmpty = out.filter((l) => (l || '').trim());
+        const alreadyList = nonEmpty.length > 0 && nonEmpty.every((l) => /^\s*[-•●·✦]\s+/.test(l));
         for (let k = 0; k < out.length; k++) {
           const t = (out[k] || '').trim();
-          if (t) out[k] = '- ' + t.replace(/^[-•●·✦\s]+/, '');
+          if (!t) continue;
+          out[k] = alreadyList
+            ? t.replace(/^[-•●·✦]\s+/, '')
+            : '- ' + t.replace(/^[-•●·✦\s]+/, '');
         }
         break;
+      }
       case 'table': {
         const rows: string[] = [];
         for (let k = 0; k < out.length; k++) {
@@ -1558,6 +1638,79 @@ export function Editor({
           if (t) out[k] = '*' + (t.startsWith('▲') ? t : '▲ ' + t) + '*';
         }
         break;
+      case 'note': {
+        // 备注（开关式）：应用 = 每个非空行包为 <p data-role="note"> HTML 行
+        // （序列化：字号-4px、灰色、不加粗不斜体）；取消 = 还原纯文本行
+        const allNote = targets.every((p) => p.dataset.kind === 'note');
+        const escapeHtml = (t: string) =>
+          t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        for (let k = 0; k < out.length; k++) {
+          const t = (out[k] || '').trim();
+          if (!t) continue;
+          out[k] = allNote ? t : '<p data-role="note">' + escapeHtml(t) + '</p>';
+        }
+        break;
+      }
+      case 'u':
+      case 'dashed':
+      case 'hl': {
+        // 重点样式（开关式）：直接在当前选区 Range 上包裹 span（内联样式，微信保留）。
+        // 选区命中同款着重 span → 拆包取消该格式；未命中 → 包裹应用
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0 || sel.isCollapsed) break;
+        const isMatch = (el: HTMLElement) => {
+          const st = el.getAttribute('style') || '';
+          if (kind === 'u') return st.includes('text-decoration: underline') && !st.includes('dashed');
+          if (kind === 'dashed') return st.includes('underline dashed');
+          return st.includes('#FEF08A');
+        };
+        // 从选区两端向上找同款 span（最近的优先）
+        let toggleSpan: HTMLElement | null = null;
+        let n: Node | null = sel.getRangeAt(0).startContainer;
+        while (n && n !== ce && !toggleSpan) {
+          if (n.nodeName === 'SPAN' && isMatch(n as HTMLElement)) toggleSpan = n as HTMLElement;
+          n = n.parentNode;
+        }
+        let m: Node | null = sel.getRangeAt(0).endContainer;
+        while (m && m !== ce && !toggleSpan) {
+          if (m.nodeName === 'SPAN' && isMatch(m as HTMLElement)) toggleSpan = m as HTMLElement;
+          m = m.parentNode;
+        }
+        if (toggleSpan) {
+          // 取消格式：把 span 的子节点提升回原位
+          const parent = toggleSpan.parentElement!;
+          while (toggleSpan.firstChild) {
+            parent.insertBefore(toggleSpan.firstChild, toggleSpan);
+          }
+          toggleSpan.remove();
+          sel.removeAllRanges();
+          setIntentBar(null);
+          syncFromDom();
+          return;
+        }
+        const style =
+          kind === 'u'
+            ? 'text-decoration: underline; text-decoration-color: currentColor; text-underline-offset: 3px;'
+            : kind === 'dashed'
+              ? 'text-decoration: underline dashed; text-decoration-color: currentColor; text-underline-offset: 3px;'
+              : 'background-color: #FEF08A;';
+        const range = sel.getRangeAt(0);
+        const wrapSpan = document.createElement('span');
+        wrapSpan.setAttribute('style', style);
+        try {
+          range.surroundContents(wrapSpan);
+        } catch {
+          // 跨节点选区（选区跨越已有 span 边界）：提取内容后整体包裹，
+          // 已有着重 span 会被切开但样式随拆分副本保留
+          const frag = range.extractContents();
+          wrapSpan.appendChild(frag);
+          range.insertNode(wrapSpan);
+        }
+        sel.removeAllRanges();
+        setIntentBar(null);
+        syncFromDom();
+        return;
+      }
       case 'indent':
         for (let k = 0; k < out.length; k++) {
           if ((out[k] || '').trim()) out[k] = '\u2003\u2003' + out[k];
@@ -1830,8 +1983,8 @@ export function Editor({
               style={{ top: intentBar.top, left: intentBar.left, transform: 'translateX(-50%)' }}
               onMouseDown={(e) => e.preventDefault()}
             >
-              <span className="text-gray-400 mr-1">选中 {intentBar.e - intentBar.s + 1} 段：</span>
               {[
+                { kind: 'text', label: '正文' },
                 { kind: 'h2', label: 'H2' },
                 { kind: 'h3', label: 'H3' },
                 { kind: 'list', label: '列表' },
@@ -1839,19 +1992,33 @@ export function Editor({
                 { kind: 'quote', label: '引用' },
                 { kind: 'code', label: '代码' },
                 { kind: 'caption', label: '题注' },
+                { kind: 'note', label: '备注' },
+                { kind: 'u', label: '下划线' },
+                { kind: 'dashed', label: '虚线' },
+                { kind: 'hl', label: '高亮' },
                 { kind: 'indent', label: '缩进' },
                 { kind: 'outdent', label: '取消缩进' },
-                { kind: 'text', label: '正文' },
-              ].map((item) => (
-                <button
-                  key={item.kind}
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => applyIntentTransform(item.kind)}
-                  className="px-1.5 py-0.5 rounded hover:bg-white/20 cursor-pointer whitespace-nowrap"
-                >
-                  {item.label}
-                </button>
-              ))}
+              ].map((item) => {
+                const isActive =
+                  !!(item.kind === 'u' && intentBar.active?.u) ||
+                  !!(item.kind === 'dashed' && intentBar.active?.dashed) ||
+                  !!(item.kind === 'hl' && intentBar.active?.hl) ||
+                  !!(item.kind === 'list' && intentBar.active?.list) ||
+                  !!(item.kind === 'note' && intentBar.active?.note);
+                return (
+                  <button
+                    key={item.kind}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => applyIntentTransform(item.kind)}
+                    title={isActive ? '再次点击取消该格式' : undefined}
+                    className={`px-1.5 py-0.5 rounded cursor-pointer whitespace-nowrap transition-colors ${
+                      isActive ? 'bg-indigo-500/70 font-semibold' : 'hover:bg-white/20'
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                );
+              })}
               <button
                 onClick={() => setIntentBar(null)}
                 className="ml-1 px-1.5 py-0.5 rounded hover:bg-white/20 text-gray-400 cursor-pointer"
@@ -1871,8 +2038,6 @@ export function Editor({
             onInput={() => syncFromDom()}
             onPaste={handlePaste}
             onKeyDown={handleKeyDown}
-            onSelect={handleSelect}
-            onBlur={() => setTimeout(() => setIntentBar((prev) => (prev ? null : prev)), 200)}
           />
           {showMdSource && (
             <pre className="px-4 py-4 min-h-full whitespace-pre-wrap break-words font-mono text-[13px] leading-[1.85] text-gray-700 select-text">
