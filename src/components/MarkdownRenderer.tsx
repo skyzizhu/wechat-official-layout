@@ -286,10 +286,11 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
                 userSelect: 'none',
               }}
             />
+            {/* inline 而非 inline-block：长标题可自然换行，不会整块掉到线条下方 */}
             <span
               style={{
-                display: 'inline-block',
-                verticalAlign: 'middle',
+                display: 'inline',
+                verticalAlign: 'baseline',
                 lineHeight: 1.75,
               }}
             >
@@ -379,10 +380,12 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
                 userSelect: 'none',
               }}
             />
+            {/* 文字容器用 inline 而非 inline-block：inline-block 整体不可断行，
+                长标题会整块掉到竖线下方（竖线独占一行）；inline 允许自然换行 */}
             <span
               style={{
-                display: 'inline-block',
-                verticalAlign: 'middle',
+                display: 'inline',
+                verticalAlign: 'baseline',
                 lineHeight: 1.75,
               }}
             >

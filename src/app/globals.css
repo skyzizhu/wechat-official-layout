@@ -158,3 +158,21 @@ th, td {
 .wenpai-ce *::selection {
   background: rgba(99, 102, 241, 0.18);
 }
+
+/* ===== 编辑器语义标题（data-kind）轻量提示 =====
+   编辑器内保持纯文本观感：仅加粗 + 竖线前缀与文字同行，
+   不做主题级装饰（竖线颜色/主题效果只出现在右侧预览） */
+.wenpai-ce p[data-kind="h2"] {
+  font-weight: 700;
+  border-left: 3px solid #94a3b8;
+  padding-left: 10px;
+}
+.wenpai-ce p[data-kind="h3"] {
+  font-weight: 700;
+}
+.wenpai-ce p[data-kind="h2"],
+.wenpai-ce p[data-kind="h3"] {
+  font-size: 15px;
+  line-height: 1.9;
+  margin: 4px 0 8px;
+}
