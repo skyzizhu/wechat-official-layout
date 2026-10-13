@@ -1944,8 +1944,8 @@ export function Editor({
               style={{ top: intentBar.top, left: intentBar.left, transform: 'translateX(-50%)' }}
               onMouseDown={(e) => e.preventDefault()}
             >
-              <span className="text-gray-400 mr-1">选中 {intentBar.e - intentBar.s + 1} 段：</span>
               {[
+                { kind: 'text', label: '正文' },
                 { kind: 'h2', label: 'H2' },
                 { kind: 'h3', label: 'H3' },
                 { kind: 'list', label: '列表' },
@@ -1958,7 +1958,6 @@ export function Editor({
                 { kind: 'hl', label: '高亮' },
                 { kind: 'indent', label: '缩进' },
                 { kind: 'outdent', label: '取消缩进' },
-                { kind: 'text', label: '正文' },
               ].map((item) => {
                 const isActive =
                   !!(item.kind === 'u' && intentBar.active?.u) ||
