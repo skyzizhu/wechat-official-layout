@@ -1867,7 +1867,7 @@ export function adjustFirstLineTitle(markdown: string, treatAsTitle: boolean): s
     const trimmed = lines[i].trim();
     if (!trimmed) continue;
     if (trimmed.startsWith('<!--') || trimmed.startsWith('---') || trimmed.startsWith('***')) continue;
-    if (trimmed.startsWith('![') || trimmed.startsWith('<img') || trimmed.startsWith('<section data-role="photo-card"')) {
+    if (trimmed.startsWith('![') || trimmed.startsWith('<img') || trimmed.startsWith('<section data-role="photo-card"') || trimmed.startsWith('<p data-role=')) {
       return markdown;
     }
 

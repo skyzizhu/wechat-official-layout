@@ -305,6 +305,13 @@ function buildParagraph(line: string): HTMLParagraphElement {
     p.textContent = (h[2] || '').trim();
     return p;
   }
+  // 备注（HTML 行，序列化时按 字号-4px/灰色 渲染）
+  const note = t.match(/^<p data-role="note">([\s\S]*?)<\/p>$/);
+  if (note) {
+    p.dataset.kind = 'note';
+    p.innerHTML = note[1];
+    return p;
+  }
   // 引用
   const q = t.match(/^ {0,3}> ?(.*)$/);
   if (q) {
@@ -416,7 +423,7 @@ export function Editor({
   // Markdown 透镜：只读查看当前生效的排版用 Markdown 源码（与预览/下载 MD 同源）
   const [showMdSource, setShowMdSource] = useState(false);
   // 选中文本意图转换工具栏：{ 起始段落索引, 结束段落索引 }
-  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number; anchorTop: number; anchorBottom: number; flipped: boolean; active?: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean } } | null>(null);
+  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number; anchorTop: number; anchorBottom: number; flipped: boolean; active?: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean } } | null>(null);
   const intentBarRef = useRef<HTMLDivElement>(null);
   // 渲染后按菜单实际宽度做左右边界收敛（translateX(-50%) 居中依赖真实宽度）
   useLayoutEffect(() => {
@@ -504,7 +511,9 @@ export function Editor({
         return;
       }
       closeCode();
-      if (/^h[1-6]$/.test(kind)) {
+      if (kind === 'note') {
+        buf.push('<p data-role="note">' + el.innerHTML.replace(/\n/g, '') + '</p>');
+      } else if (/^h[1-6]$/.test(kind)) {
         buf.push('#'.repeat(Number(kind[1])) + ' ' + text);
       } else if (kind === 'quote') {
         lines.forEach((l) => buf.push('> ' + l));
@@ -1484,7 +1493,7 @@ export function Editor({
     }
     // 着重激活态：选区两侧任一端向上找到匹配样式的 span 即视为已应用（按钮高亮，再点取消）
     const selNow = window.getSelection();
-    const active: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean } = {};
+    const active: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean } = {};
     if (selNow && selNow.rangeCount > 0) {
       const selRange = selNow.getRangeAt(0);
       const matchFor = (kind: 'u' | 'dashed' | 'hl') => {
@@ -1518,6 +1527,7 @@ export function Editor({
       active.list =
         listLines.length > 0 &&
         listLines.every((l) => /^\s*[-•●·✦]\s+/.test(l));
+      active.note = range.ps.every((p) => p.dataset.kind === 'note');
     }
     setIntentBar((prev) =>
       prev && prev.s === range.s && prev.e === range.e && prev.top === top && prev.left === left
@@ -1628,6 +1638,19 @@ export function Editor({
           if (t) out[k] = '*' + (t.startsWith('▲') ? t : '▲ ' + t) + '*';
         }
         break;
+      case 'note': {
+        // 备注（开关式）：应用 = 每个非空行包为 <p data-role="note"> HTML 行
+        // （序列化：字号-4px、灰色、不加粗不斜体）；取消 = 还原纯文本行
+        const allNote = targets.every((p) => p.dataset.kind === 'note');
+        const escapeHtml = (t: string) =>
+          t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        for (let k = 0; k < out.length; k++) {
+          const t = (out[k] || '').trim();
+          if (!t) continue;
+          out[k] = allNote ? t : '<p data-role="note">' + escapeHtml(t) + '</p>';
+        }
+        break;
+      }
       case 'u':
       case 'dashed':
       case 'hl': {
@@ -1969,6 +1992,7 @@ export function Editor({
                 { kind: 'quote', label: '引用' },
                 { kind: 'code', label: '代码' },
                 { kind: 'caption', label: '题注' },
+                { kind: 'note', label: '备注' },
                 { kind: 'u', label: '下划线' },
                 { kind: 'dashed', label: '虚线' },
                 { kind: 'hl', label: '高亮' },
@@ -1979,7 +2003,8 @@ export function Editor({
                   !!(item.kind === 'u' && intentBar.active?.u) ||
                   !!(item.kind === 'dashed' && intentBar.active?.dashed) ||
                   !!(item.kind === 'hl' && intentBar.active?.hl) ||
-                  !!(item.kind === 'list' && intentBar.active?.list);
+                  !!(item.kind === 'list' && intentBar.active?.list) ||
+                  !!(item.kind === 'note' && intentBar.active?.note);
                 return (
                   <button
                     key={item.kind}

@@ -731,6 +731,16 @@ export function serializeToWeChatRichText(
     const pRole = p.getAttribute('data-role');
     const pTextForGolden = p.textContent?.trim() || '';
 
+    // 1.4 备注段落：字号比用户所选字号小 4px、灰色、不加粗不斜体，与预览一致
+    if (pRole === 'note') {
+      const noteFs = Math.max(11, parseFloat(baseFontSize) - 4);
+      p.setAttribute(
+        'style',
+        `margin-top: 0; margin-bottom: 18px; font-size: ${noteFs}px; line-height: 1.85; color: #999999; font-weight: 400; font-style: normal; letter-spacing: 0.034em; text-align: justify; word-break: break-word; box-sizing: border-box; max-width: 100%;`
+      );
+      return;
+    }
+
     // 1.5 散文金句段落：居中 + 主题强调色 + 加粗，与预览一致
     if (pRole === 'golden-line') {
       p.setAttribute(
