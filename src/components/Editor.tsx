@@ -323,6 +323,22 @@ function buildParagraph(line: string): HTMLParagraphElement {
     p.innerHTML = '<br>';
     return p;
   }
+  // 受控行内标签白名单：着重样式 span（下划线/虚线/高亮）、strong、em——
+  // 这些标签是我们自己的意图转换生成的，属性仅限 style（无事件/链接），
+  // 按 HTML 写入以在编辑器中回显着重效果；其余内容一律按纯文本转义
+  if (/^(?:(?!<\/?[a-zA-Z])[\s\S])*<span style="[^"]*"(?:\s*<span style="[^"]*")*/.test(t) || t.includes('<span style="text-decoration') || t.includes('<span style="background-color') || t.includes('<strong>') || t.includes('<em>')) {
+    const tpl = document.createElement('template');
+    tpl.innerHTML = t;
+    // 安全校验：白名单外的一切元素/属性一律拒绝（回退为纯文本）
+    const allowed = Array.from(tpl.content.querySelectorAll('*')).every((el) => {
+      if (!['SPAN', 'STRONG', 'EM'].includes(el.tagName)) return false;
+      return Array.from(el.attributes).every((attr) => attr.name === 'style');
+    });
+    if (allowed && tpl.content.textContent.trim()) {
+      p.innerHTML = t;
+      return p;
+    }
+  }
   p.textContent = t;
   return p;
 }
@@ -468,7 +484,10 @@ export function Editor({
       }
       if (el.tagName !== 'P') return;
       const kind = el.dataset.kind || '';
-      const text = (el.innerText || '').replace(/\n$/, '');
+      // 文本行读 innerHTML：行内着重样式（下划线/虚线/高亮 span、strong/em）以受控
+      // 内联标签随值保留；空段落记为空串
+      const html = el.dataset.kind === 'code' ? (el.textContent || '') : (el.innerHTML || '');
+      const text = (html || '').replace(/\n$/, '');
       const lines = text.split('\n');
       // 编辑器中「换行即分段」：任意相邻段落之间补空行，保证预览与引擎
       // 不会把紧邻的普通段落并进上一段或上一条列表项（如独立行「专业技能」）
@@ -789,21 +808,6 @@ export function Editor({
     h.index += 1;
     applyHistory(h.stack[h.index]);
   }, [onChange, rebuildDom]);
-
-  // 文档级选区监听：选区塌陷（点击空白/取消选择）或离开编辑器时，立即隐藏意图菜单。
-  // 兜底覆盖所有路径（含 React onSelect 不触发的程序化选区变化），杜绝菜单残留
-  useEffect(() => {
-    const onDocSelectionChange = () => {
-      const sel = window.getSelection();
-      const ce = ceRef.current;
-      if (!ce) return;
-      if (!sel || sel.isCollapsed || sel.rangeCount === 0 || !ce.contains(sel.anchorNode)) {
-        setIntentBar(null);
-      }
-    };
-    document.addEventListener('selectionchange', onDocSelectionChange);
-    return () => document.removeEventListener('selectionchange', onDocSelectionChange);
-  }, []);
 
   // 全局 ⌘Z / ⌘⇧Z / Ctrl+Y（拦截浏览器原生 contentEditable undo，统一走快照栈）
   useEffect(() => {
@@ -1447,7 +1451,7 @@ export function Editor({
 
   // ---------- 选中 → 意图转换工具栏（悬浮层，锚定选区上方） ----------
 
-  const handleSelect = () => {
+  const handleSelect = useCallback(() => {
     const range = getSelectionParagraphRange();
     if (!range) {
       setIntentBar((prev) => (prev ? null : prev));
@@ -1483,7 +1487,29 @@ export function Editor({
         ? prev
         : { s: range.s, e: range.e, top, left, anchorTop, anchorBottom, flipped }
     );
-  };
+  }, []);
+
+  // 意图菜单显示/隐藏的唯一驱动：文档级 selectionchange。
+  // React 的 onSelect 合成事件在 contentEditable 上派发不可靠（首次双击常不触发，
+  // 这正是「第一次选中菜单异常」与「有时菜单不出现」的共同根因）——
+  // selectionchange 由浏览器原生保证：选区有效且在编辑器内 → 显示；
+  // 塌陷或离开编辑器 → 隐藏。所有路径确定性生效
+  useEffect(() => {
+    const onDocSelectionChange = () => {
+      const sel = window.getSelection();
+      const ce = ceRef.current;
+      if (!ce) return;
+      const valid =
+        !!sel && sel.rangeCount > 0 && !!sel.anchorNode && !sel.isCollapsed && ce.contains(sel.anchorNode);
+      if (valid) {
+        handleSelect();
+      } else {
+        setIntentBar(null);
+      }
+    };
+    document.addEventListener('selectionchange', onDocSelectionChange);
+    return () => document.removeEventListener('selectionchange', onDocSelectionChange);
+  }, [handleSelect]);
 
   /** 意图转换：把选中范围内的段落文本按行提取 → 行级变换 → 回写段落 */
   const applyIntentTransform = (kind: string) => {
@@ -1558,6 +1584,36 @@ export function Editor({
           if (t) out[k] = '*' + (t.startsWith('▲') ? t : '▲ ' + t) + '*';
         }
         break;
+      case 'u':
+      case 'dashed':
+      case 'hl': {
+        // 重点样式：直接在当前选区 Range 上包裹 span（内联样式，微信保留）。
+        // 不用 innerText 重建整段——那会摧毁同段落里已应用的其他着重 span
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0 || sel.isCollapsed) break;
+        const style =
+          kind === 'u'
+            ? 'text-decoration: underline; text-decoration-color: currentColor; text-underline-offset: 3px;'
+            : kind === 'dashed'
+              ? 'text-decoration: underline dashed; text-decoration-color: currentColor; text-underline-offset: 3px;'
+              : 'background-color: #FEF08A;';
+        const range = sel.getRangeAt(0);
+        const wrapSpan = document.createElement('span');
+        wrapSpan.setAttribute('style', style);
+        try {
+          range.surroundContents(wrapSpan);
+        } catch {
+          // 跨节点选区（选区跨越已有 span 边界）：提取内容后整体包裹，
+          // 已有着重 span 会被切开但样式随拆分副本保留
+          const frag = range.extractContents();
+          wrapSpan.appendChild(frag);
+          range.insertNode(wrapSpan);
+        }
+        sel.removeAllRanges();
+        setIntentBar(null);
+        syncFromDom();
+        return;
+      }
       case 'indent':
         for (let k = 0; k < out.length; k++) {
           if ((out[k] || '').trim()) out[k] = '\u2003\u2003' + out[k];
@@ -1839,6 +1895,9 @@ export function Editor({
                 { kind: 'quote', label: '引用' },
                 { kind: 'code', label: '代码' },
                 { kind: 'caption', label: '题注' },
+                { kind: 'u', label: '下划线' },
+                { kind: 'dashed', label: '虚线' },
+                { kind: 'hl', label: '高亮' },
                 { kind: 'indent', label: '缩进' },
                 { kind: 'outdent', label: '取消缩进' },
                 { kind: 'text', label: '正文' },
@@ -1871,8 +1930,6 @@ export function Editor({
             onInput={() => syncFromDom()}
             onPaste={handlePaste}
             onKeyDown={handleKeyDown}
-            onSelect={handleSelect}
-            onBlur={() => setTimeout(() => setIntentBar((prev) => (prev ? null : prev)), 200)}
           />
           {showMdSource && (
             <pre className="px-4 py-4 min-h-full whitespace-pre-wrap break-words font-mono text-[13px] leading-[1.85] text-gray-700 select-text">
