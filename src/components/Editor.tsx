@@ -295,6 +295,37 @@ function serializeEditorBlocks(blocks: EditorBlock[]): string {
  * 编辑器只显示干净文本（序列化时再注入 markdown 标记）。
  * 语义段落同样用于意图转换的回写（## x / > x / *▲ x* 自动转为对应 kind）。
  */
+/**
+ * 着重样式二级色板（意图菜单点击后下延展开）。
+ * 下划线/虚线：默认（随主题字色，兼容存量文章的取消）+ 5 个常用色；
+ * 高亮：5 个浅色底（暗色模式安全，黄色为历史默认，保证存量高亮可取消/换色）。
+ */
+const EMPHASIS_COLORS: Record<'u' | 'dashed' | 'hl', { value: string; label: string }[]> = {
+  u: [
+    { value: 'currentColor', label: '默认' },
+    { value: '#ef4444', label: '红色' },
+    { value: '#f97316', label: '橙色' },
+    { value: '#3b82f6', label: '蓝色' },
+    { value: '#22c55e', label: '绿色' },
+    { value: '#a855f7', label: '紫色' },
+  ],
+  dashed: [
+    { value: 'currentColor', label: '默认' },
+    { value: '#ef4444', label: '红色' },
+    { value: '#f97316', label: '橙色' },
+    { value: '#3b82f6', label: '蓝色' },
+    { value: '#22c55e', label: '绿色' },
+    { value: '#a855f7', label: '紫色' },
+  ],
+  hl: [
+    { value: '#FEF08A', label: '黄色' },
+    { value: '#bbf7d0', label: '绿色' },
+    { value: '#bfdbfe', label: '蓝色' },
+    { value: '#fed7aa', label: '橙色' },
+    { value: '#fbcfe8', label: '粉色' },
+  ],
+};
+
 function buildParagraph(line: string): HTMLParagraphElement {
   const p = document.createElement('p');
   const t = line;
@@ -431,7 +462,7 @@ export function Editor({
   // Markdown 透镜：只读查看当前生效的排版用 Markdown 源码（与预览/下载 MD 同源）
   const [showMdSource, setShowMdSource] = useState(false);
   // 选中文本意图转换工具栏：{ 起始段落索引, 结束段落索引 }
-  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number; anchorTop: number; anchorBottom: number; flipped: boolean; active?: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean; code?: boolean; center?: boolean; sup?: boolean; sub?: boolean } } | null>(null);
+  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number; anchorTop: number; anchorBottom: number; flipped: boolean; active?: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean; code?: boolean; center?: boolean; sup?: boolean; sub?: boolean }; activeColors?: { u?: string; dashed?: string; hl?: string }; submenu?: 'u' | 'dashed' | 'hl' | null; submenuPos?: { top: number; left: number } } | null>(null);
   const intentBarRef = useRef<HTMLDivElement>(null);
   // 渲染后按菜单实际宽度做左右边界收敛（translateX(-50%) 居中依赖真实宽度）
   useLayoutEffect(() => {
@@ -1504,26 +1535,35 @@ export function Editor({
     // 着重激活态：选区两侧任一端向上找到匹配样式的 span 即视为已应用（按钮高亮，再点取消）
     const selNow = window.getSelection();
     const active: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean; code?: boolean; center?: boolean; sup?: boolean; sub?: boolean } = {};
+    const activeColors: { u?: string; dashed?: string; hl?: string } = {};
     if (selNow && selNow.rangeCount > 0) {
       const selRange = selNow.getRangeAt(0);
-      const matchFor = (kind: 'u' | 'dashed' | 'hl') => {
+      // 着重样式激活态：返回命中 span 携带的颜色（无则 null），
+      // 二级色板用它在对应色点上显示选中环
+      const matchEmphasis = (kind: 'u' | 'dashed' | 'hl'): string | null => {
         const isMatch = (el: HTMLElement) => {
           const st = el.getAttribute('style') || '';
           if (kind === 'u') return st.includes('text-decoration: underline') && !st.includes('dashed');
           if (kind === 'dashed') return st.includes('underline dashed');
-          return st.includes('#FEF08A');
+          return st.includes('background-color');
         };
+        const colorOf = (el: HTMLElement): string => {
+          const st = el.getAttribute('style') || '';
+          if (kind === 'hl') return (st.match(/background-color:\s*([^;]+);?/i) || [])[1]?.trim() || '';
+          return (st.match(/text-decoration-color:\s*([^;]+);?/i) || [])[1]?.trim() || 'currentColor';
+        };
+        let found: HTMLElement | null = null;
         let n: Node | null = selRange.startContainer;
-        while (n && n !== ceRef.current) {
-          if (n.nodeName === 'SPAN' && isMatch(n as HTMLElement)) return true;
+        while (n && n !== ceRef.current && !found) {
+          if (n.nodeName === 'SPAN' && isMatch(n as HTMLElement)) found = n as HTMLElement;
           n = n.parentNode;
         }
         let m: Node | null = selRange.endContainer;
-        while (m && m !== ceRef.current) {
-          if (m.nodeName === 'SPAN' && isMatch(m as HTMLElement)) return true;
+        while (m && m !== ceRef.current && !found) {
+          if (m.nodeName === 'SPAN' && isMatch(m as HTMLElement)) found = m as HTMLElement;
           m = m.parentNode;
         }
-        return false;
+        return found ? colorOf(found) : null;
       };
       // 上标/下标激活态：选区两端任一端的祖先链上存在 sup/sub 即视为激活
       const matchTag = (tag: 'SUP' | 'SUB') => {
@@ -1537,9 +1577,15 @@ export function Editor({
         };
         return has(selRange.startContainer) || has(selRange.endContainer);
       };
-      active.u = matchFor('u');
-      active.dashed = matchFor('dashed');
-      active.hl = matchFor('hl');
+      const uColor = matchEmphasis('u');
+      const dashedColor = matchEmphasis('dashed');
+      const hlColor = matchEmphasis('hl');
+      active.u = !!uColor;
+      active.dashed = !!dashedColor;
+      active.hl = !!hlColor;
+      activeColors.u = uColor || undefined;
+      activeColors.dashed = dashedColor || undefined;
+      activeColors.hl = hlColor || undefined;
       active.sup = matchTag('SUP');
       active.sub = matchTag('SUB');
     }
@@ -1558,7 +1604,7 @@ export function Editor({
     setIntentBar((prev) =>
       prev && prev.s === range.s && prev.e === range.e && prev.top === top && prev.left === left
         ? prev
-        : { s: range.s, e: range.e, top, left, anchorTop, anchorBottom, flipped, active }
+        : { s: range.s, e: range.e, top, left, anchorTop, anchorBottom, flipped, active, activeColors }
     );
   }, []);
 
@@ -1584,8 +1630,9 @@ export function Editor({
     return () => document.removeEventListener('selectionchange', onDocSelectionChange);
   }, [handleSelect]);
 
-  /** 意图转换：把选中范围内的段落文本按行提取 → 行级变换 → 回写段落 */
-  const applyIntentTransform = (kind: string) => {
+  /** 意图转换：把选中范围内的段落文本按行提取 → 行级变换 → 回写段落。
+   *  color：着重样式（下划线/虚线/高亮）的目标颜色，同色再点 = 取消 */
+  const applyIntentTransform = (kind: string, color?: string) => {
     if (!intentBar) return;
     const ce = ceRef.current;
     if (!ce) return;
@@ -1701,17 +1748,24 @@ export function Editor({
       case 'u':
       case 'dashed':
       case 'hl': {
-        // 重点样式（开关式）：直接在当前选区 Range 上包裹 span（内联样式，微信保留）。
-        // 选区命中同款着重 span → 拆包取消该格式；未命中 → 包裹应用
+        // 重点样式（开关式，带颜色）：直接在当前选区 Range 上包裹 span（内联样式，微信保留）。
+        // 同款同色 span 命中 → 拆包取消；同款不同色且选区完整覆盖 → 原地换色；否则包裹应用
         const sel = window.getSelection();
         if (!sel || sel.rangeCount === 0 || sel.isCollapsed) break;
-        const isMatch = (el: HTMLElement) => {
+        const colorVal = color || 'currentColor';
+        const hasKind = (el: HTMLElement) => {
           const st = el.getAttribute('style') || '';
           if (kind === 'u') return st.includes('text-decoration: underline') && !st.includes('dashed');
           if (kind === 'dashed') return st.includes('underline dashed');
-          return st.includes('#FEF08A');
+          return st.includes('background-color');
         };
-        // 从选区两端向上找同款 span（最近的优先）
+        const colorProp = kind === 'hl' ? 'background-color' : 'text-decoration-color';
+        const isMatch = (el: HTMLElement) => {
+          if (!hasKind(el)) return false;
+          const st = el.getAttribute('style') || '';
+          return st.toLowerCase().includes(`${colorProp}: ${colorVal}`.toLowerCase());
+        };
+        // 从选区两端向上找同款同色 span（最近的优先）→ 命中即取消
         let toggleSpan: HTMLElement | null = null;
         let n: Node | null = sel.getRangeAt(0).startContainer;
         while (n && n !== ce && !toggleSpan) {
@@ -1735,13 +1789,37 @@ export function Editor({
           syncFromDom();
           return;
         }
+        // 同款不同色且选区完整覆盖该 span → 原地换色，避免产生嵌套壳
+        let kindAncestor: HTMLElement | null = null;
+        let k: Node | null = sel.getRangeAt(0).startContainer;
+        while (k && k !== ce && !kindAncestor) {
+          if (k.nodeName === 'SPAN' && hasKind(k as HTMLElement)) kindAncestor = k as HTMLElement;
+          k = k.parentNode;
+        }
+        let k2: Node | null = sel.getRangeAt(0).endContainer;
+        while (k2 && k2 !== ce && !kindAncestor) {
+          if (k2.nodeName === 'SPAN' && hasKind(k2 as HTMLElement)) kindAncestor = k2 as HTMLElement;
+          k2 = k2.parentNode;
+        }
+        const selRange = sel.getRangeAt(0);
+        if (kindAncestor && kindAncestor.textContent && selRange.toString() === kindAncestor.textContent) {
+          const st = kindAncestor.getAttribute('style') || '';
+          const re = kind === 'hl'
+            ? new RegExp(`background-color:\\s*[^;]+;`, 'i')
+            : new RegExp(`text-decoration-color:\\s*[^;]+;`, 'i');
+          kindAncestor.setAttribute('style', st.replace(re, `${colorProp}: ${colorVal};`));
+          sel.removeAllRanges();
+          setIntentBar(null);
+          syncFromDom();
+          return;
+        }
         const style =
           kind === 'u'
-            ? 'text-decoration: underline; text-decoration-color: currentColor; text-underline-offset: 3px;'
+            ? `text-decoration: underline; text-decoration-color: ${colorVal}; text-underline-offset: 3px;`
             : kind === 'dashed'
-              ? 'text-decoration: underline dashed; text-decoration-color: currentColor; text-underline-offset: 3px;'
-              : 'background-color: #FEF08A;';
-        const range = sel.getRangeAt(0);
+              ? `text-decoration: underline dashed; text-decoration-color: ${colorVal}; text-underline-offset: 3px;`
+              : `background-color: ${colorVal};`;
+        const range = selRange;
         const wrapSpan = document.createElement('span');
         wrapSpan.setAttribute('style', style);
         try {
@@ -2190,23 +2268,88 @@ export function Editor({
                   !!(item.kind === 'note' && intentBar.active?.note) ||
                   !!(item.kind === 'center' && intentBar.active?.center) ||
                   !!(item.kind === 'code' && intentBar.active?.code);
+                // 着重三键：点击弹出/收起下延色板；其余按钮直接应用
+                const hasColorMenu = item.kind === 'u' || item.kind === 'dashed' || item.kind === 'hl';
+                const submenuOpen = intentBar.submenu === item.kind;
                 return (
                   <button
                     key={item.kind}
+                    data-kind={item.kind}
                     onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => applyIntentTransform(item.kind)}
-                    title={isActive ? '再次点击取消该格式' : undefined}
+                    onClick={() => {
+                      if (!hasColorMenu) {
+                        applyIntentTransform(item.kind);
+                        return;
+                      }
+                      const barEl = intentBarRef.current;
+                      const btnEl = barEl?.querySelector(`[data-kind="${item.kind}"]`);
+                      const surface = editSurfaceRef.current;
+                      if (barEl && btnEl && surface) {
+                        const bRect = btnEl.getBoundingClientRect();
+                        const barRect = barEl.getBoundingClientRect();
+                        const sRect = surface.getBoundingClientRect();
+                        setIntentBar(
+                          intentBar.submenu === item.kind
+                            ? { ...intentBar, submenu: null }
+                            : {
+                                ...intentBar,
+                                submenu: item.kind as 'u' | 'dashed' | 'hl',
+                                submenuPos: {
+                                  top: barRect.bottom - sRect.top + 6,
+                                  left: bRect.left - sRect.left + bRect.width / 2,
+                                },
+                              }
+                        );
+                      }
+                    }}
+                    title={hasColorMenu ? '选择颜色' : isActive ? '再次点击取消该格式' : undefined}
                     className={`px-1.5 py-0.5 rounded cursor-pointer whitespace-nowrap transition-colors ${
-                      isActive ? 'bg-indigo-500/70 font-semibold' : 'hover:bg-white/20'
+                      submenuOpen || isActive ? 'bg-indigo-500/70 font-semibold' : 'hover:bg-white/20'
                     }`}
                   >
                     {item.label}
+                    {hasColorMenu && <span className="ml-0.5 text-[9px] text-white/50">▾</span>}
                   </button>
                 );
               })}
               <button
                 onClick={() => setIntentBar(null)}
                 className="ml-1 px-1.5 py-0.5 rounded hover:bg-white/20 text-gray-400 cursor-pointer"
+              >
+                ×
+              </button>
+            </div>
+          )}
+          {/* 着重色板二级面板：下延于对应按钮下方，点色应用（同色再点取消） */}
+          {intentBar?.submenu && intentBar.submenuPos && (
+            <div
+              className="absolute z-30 flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-900/95 backdrop-blur rounded-lg shadow-xl border border-white/10"
+              style={{ top: intentBar.submenuPos.top, left: intentBar.submenuPos.left, transform: 'translateX(-50%)' }}
+              onMouseDown={(e) => e.preventDefault()}
+            >
+              {EMPHASIS_COLORS[intentBar.submenu].map((c) => {
+                const activeColor = intentBar.activeColors?.[intentBar.submenu as 'u' | 'dashed' | 'hl'] || '';
+                const colorHit = activeColor.toLowerCase() === c.value.toLowerCase();
+                return (
+                  <button
+                    key={c.value}
+                    title={c.label}
+                    onClick={() => applyIntentTransform(intentBar.submenu!, c.value)}
+                    className={`w-5 h-5 rounded-full cursor-pointer transition-transform hover:scale-110 ${
+                      colorHit ? 'ring-2 ring-white ring-offset-1 ring-offset-gray-900' : 'border border-white/30'
+                    }`}
+                    style={
+                      c.value === 'currentColor'
+                        ? { background: 'linear-gradient(135deg, #f3f4f6 50%, #9ca3af 50%)' }
+                        : { backgroundColor: c.value }
+                    }
+                  />
+                );
+              })}
+              <button
+                title="收起"
+                onClick={() => setIntentBar((prev) => (prev ? { ...prev, submenu: null } : prev))}
+                className="ml-0.5 text-gray-400 hover:text-white text-xs cursor-pointer px-0.5"
               >
                 ×
               </button>

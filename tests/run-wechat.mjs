@@ -335,5 +335,18 @@ run(
   }
 );
 
+run(
+  '彩色着重（下划线/虚线/高亮 颜色变体，v2.6.4 二级色板）',
+  `<p><span style="text-decoration: underline; text-decoration-color: #ef4444; text-underline-offset: 3px;">红下划线</span>与<span style="text-decoration: underline dashed; text-decoration-color: #3b82f6; text-underline-offset: 3px;">蓝虚线</span>与<span style="background-color: #bbf7d0;">绿高亮</span></p>`,
+  (html) => {
+    const p = [];
+    if (!html.includes('text-decoration-color: #ef4444')) p.push('下划线颜色 #ef4444 丢失');
+    if (!html.includes('text-decoration-color: #3b82f6')) p.push('虚线颜色 #3b82f6 丢失');
+    if (!html.includes('background-color: #bbf7d0')) p.push('高亮底色 #bbf7d0 丢失');
+    if (!html.includes('红下划线') || !html.includes('蓝虚线') || !html.includes('绿高亮')) p.push('彩色着重文本丢失');
+    return p;
+  }
+);
+
 console.log('\n===== 微信合规校验: ' + passCount + ' 通过 / ' + failCount + ' 失败 / ' + infoCount + ' 信息 =====');
 process.exit(failCount === 0 ? 0 : 1);
