@@ -326,6 +326,38 @@ const EMPHASIS_COLORS: Record<'u' | 'dashed' | 'hl', { value: string; label: str
   ],
 };
 
+/**
+ * 把普通段落内的软换行 <br>（Shift+Enter 产生）拆分为多个独立段落。
+ * 「回车即分段」模型下序列化副本不允许出现 <br>——否则刷新重建时，
+ * 无法被行内标签白名单识别的 <br> 会整行按纯文本显示成标签代码。
+ */
+function splitParagraphAtBrs(p: HTMLParagraphElement) {
+  const segFrags: DocumentFragment[] = [];
+  while (p.innerHTML.trim() !== '<br>') {
+    const br = p.querySelector('br');
+    if (!br) break;
+    const r = document.createRange();
+    r.setStart(p, 0);
+    r.setEndBefore(br);
+    segFrags.push(r.extractContents());
+    br.remove();
+  }
+  if (!segFrags.length) return;
+  const rest = document.createRange();
+  rest.selectNodeContents(p);
+  segFrags.push(rest.extractContents());
+  const newPs = segFrags.map((frag) => {
+    const np = document.createElement('p');
+    if (!frag.firstChild || (!frag.textContent?.trim() && !frag.querySelector('img'))) {
+      np.innerHTML = '<br>';
+    } else {
+      np.appendChild(frag);
+    }
+    return np;
+  });
+  p.replaceWith(...newPs);
+}
+
 function buildParagraph(line: string): HTMLParagraphElement {
   const p = document.createElement('p');
   const t = line;
@@ -365,6 +397,12 @@ function buildParagraph(line: string): HTMLParagraphElement {
     return p;
   }
   if (t.trim() === '') {
+    p.innerHTML = '<br>';
+    return p;
+  }
+  // 纯标签行兜底：剥掉所有标签后无任何可见文字（如历史草稿残留的 '<br>'、
+  // '<span ...><br></span>'）→ 渲染为空段落，绝不把标签当文本显示给用户
+  if (!t.replace(/<[^>]*>/g, '').trim()) {
     p.innerHTML = '<br>';
     return p;
   }
@@ -530,6 +568,14 @@ export function Editor({
       }
       if (el.tagName !== 'P') return;
       const kind = el.dataset.kind || '';
+      // 空段落（含仅剩 <br> 空段标记、或删空文字后遗留的着重空壳）序列化为空行——
+      // 若按 innerHTML 写出 '<br>' / '<span ...><br></span>'，刷新重建时无法被
+      // buildParagraph 识别，会整行按纯文本显示成用户看不懂的标签代码
+      if (kind !== 'code' && !(el.textContent || '').trim() && !el.querySelector('img')) {
+        closeCode();
+        buf.push('');
+        return;
+      }
       // 文本行读 innerHTML：行内着重样式（下划线/虚线/高亮 span、strong/em）以受控
       // 内联标签随值保留；空段落记为空串
       const html = el.dataset.kind === 'code' ? (el.textContent || '') : (el.innerHTML || '');
@@ -591,6 +637,14 @@ export function Editor({
       } else if (node.nodeType === Node.TEXT_NODE) {
         ce.removeChild(node);
       }
+    });
+    // 软换行收敛：普通段落内的 <br>（Shift+Enter 产生）拆为独立段落；
+    // 语义段落（备注/居中等走 HTML 行）与代码段不受影响
+    Array.from(ce.children).forEach((child) => {
+      const el = child as HTMLParagraphElement;
+      if (el.tagName !== 'P' || el.dataset.kind || el.dataset.role) return;
+      if (el.innerHTML.trim() === '<br>' || !el.querySelector('br')) return;
+      splitParagraphAtBrs(el);
     });
     if (ce.children.length === 0) {
       ce.appendChild(buildParagraph(''));
