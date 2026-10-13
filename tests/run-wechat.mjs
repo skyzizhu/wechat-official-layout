@@ -317,5 +317,23 @@ run(
   }
 );
 
+run(
+  '居中段落（意图菜单 data-role="center"）',
+  `<p>普通正文段落保持两端对齐的默认排版。</p>
+   <p data-role="center">这一句需要居中呈现</p>
+   <p>后续段落不受影响。</p>`,
+  (html) => {
+    const p = [];
+    const centered = html.match(/<p[^>]*data-role="center"[^>]*style="([^"]*)"/);
+    if (!centered) p.push('居中段落样式丢失（data-role="center" 未保留）');
+    else {
+      if (!/text-align:\s*center/.test(centered[1])) p.push('居中段落未输出 text-align: center（规范 2.6 允许 center）');
+      if (/text-align:\s*(start|end)/.test(centered[1])) p.push('出现禁用的 start/end 对齐（规范 2.6）');
+      if (!/font-size:\s*\d/.test(centered[1])) p.push('居中段落缺少正文字号');
+    }
+    return p;
+  }
+);
+
 console.log('\n===== 微信合规校验: ' + passCount + ' 通过 / ' + failCount + ' 失败 / ' + infoCount + ' 信息 =====');
 process.exit(failCount === 0 ? 0 : 1);

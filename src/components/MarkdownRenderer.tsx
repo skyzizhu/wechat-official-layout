@@ -37,6 +37,15 @@ const ListDepthContext = React.createContext<ListRenderContextValue>({
 /** 顶层有序列表项编号（0 表示当前项不在顶层有序列表内） */
 const OlItemIndexContext = React.createContext(0);
 
+/** 递归取 React 子树的纯文本（用于判断 sup 内容是否为脚注角标 [N]） */
+function flattenText(node: React.ReactNode): string {
+  if (node === null || node === undefined || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (React.isValidElement(node)) return flattenText((node.props as { children?: React.ReactNode }).children);
+  if (Array.isArray(node)) return node.map(flattenText).join('');
+  return '';
+}
+
 /**
  * 松散列表（li 内容被包裹为 p 等块级元素）时，把标记（徽章/圆点）注入首个块级元素内部——
  * 否则行内标记后面紧跟块级元素，标记会独占一行，与内容换行分离
@@ -435,6 +444,26 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
               fontStyle: 'normal',
               letterSpacing: '0.034em',
               textAlign: 'justify',
+              wordBreak: 'break-word',
+              boxSizing: 'border-box',
+              maxWidth: '100%',
+            }}
+          >
+            {children}
+          </p>
+        );
+      }
+
+      // (-0.5) 居中段落：意图菜单「居中」显式设置，整段水平居中，字号字色行高沿用主题正文
+      if (node?.properties?.dataRole === 'center') {
+        return (
+          <p
+            data-role="center"
+            style={{
+              ...elements.p,
+              marginTop: 0,
+              marginBottom: elements.p.marginBottom ?? '18px',
+              textAlign: 'center',
               wordBreak: 'break-word',
               boxSizing: 'border-box',
               maxWidth: '100%',
@@ -965,23 +994,54 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
       return <td style={{ ...elements.td, ...getCellAlignStyle(incomingAlign, node), lineHeight: 1.75 }}>{children}</td>;
     },
 
-    // 微信角标/脚注引用上标（规范 1.3: 继承行高，使用 baseline + relative 位移）
-    sup: ({ children }) => (
-      <sup
+    // 上标：脚注引用角标 [N]（外链转文末生成）用主题强调色小字号；
+    // 用户手动上标（意图菜单生成）用中性样式，与微信序列化输出保持一致
+    // （规范 1.3: 继承行高，使用 baseline + relative 位移）
+    sup: ({ children }) => {
+      const text = flattenText(children).trim();
+      const isFootnoteRef = /^\[\d+\]$/.test(text);
+      return (
+        <sup
+          style={
+            isFootnoteRef
+              ? {
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: (elements.a.color as string) || '#2563eb',
+                  marginLeft: '2px',
+                  padding: '0 1px',
+                  verticalAlign: 'baseline',
+                  position: 'relative',
+                  top: '-0.35em',
+                  lineHeight: 'inherit',
+                }
+              : {
+                  fontSize: '0.75em',
+                  verticalAlign: 'baseline',
+                  position: 'relative',
+                  top: '-0.35em',
+                  lineHeight: 'inherit',
+                }
+          }
+        >
+          {children}
+        </sup>
+      );
+    },
+
+    // 下标（意图菜单生成）：中性样式，与微信序列化输出保持一致
+    sub: ({ children }) => (
+      <sub
         style={{
-          fontSize: '11px',
-          fontWeight: 700,
-          color: (elements.a.color as string) || '#2563eb',
-          marginLeft: '2px',
-          padding: '0 1px',
+          fontSize: '0.75em',
           verticalAlign: 'baseline',
           position: 'relative',
-          top: '-0.35em',
+          bottom: '-0.25em',
           lineHeight: 'inherit',
         }}
       >
         {children}
-      </sup>
+      </sub>
     ),
   };
 

@@ -1261,7 +1261,10 @@ export function convertPlainTextToMarkdown(
         // 首行开启 HTML 块：上报低置信度决策（原始 HTML 可能是「要渲染的卡片」或「要展示的代码」，
         // 引擎无法判定意图，默认按卡片渲染，由用户在提示条一键切换）
         const isKnownCard = /data-role="photo-card"/.test(trimmed);
-        if (!isKnownCard) {
+        // 本工具自研的语义行（备注/居中，编辑后随副本回灌）不是用户贴入的外部 HTML，
+        // 意图确定，跳过低置信度提示
+        const isOwnRoleLine = /^<p data-role="(note|center)">/.test(trimmed);
+        if (!isKnownCard && !isOwnRoleLine) {
           noteDecision('HTML代码块', 0.5, trimmed.slice(0, 20));
         }
       }

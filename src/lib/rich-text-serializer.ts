@@ -741,6 +741,16 @@ export function serializeToWeChatRichText(
       return;
     }
 
+    // 1.4b 居中段落（意图菜单「居中」生成）：字号字色行高随主题正文，仅整段水平居中
+    // （规范 2.6 允许 center；与备注同级早退，不参与分割线邻接的边距补偿）
+    if (pRole === 'center') {
+      p.setAttribute(
+        'style',
+        `margin-top: 0; margin-bottom: 18px; font-size: ${pFontSize}; line-height: ${pLineHeight}; letter-spacing: 0.034em; color: ${pColor}; text-align: center; word-break: break-word; box-sizing: border-box; max-width: 100%;`
+      );
+      return;
+    }
+
     // 1.5 散文金句段落：居中 + 主题强调色 + 加粗，与预览一致
     if (pRole === 'golden-line') {
       p.setAttribute(
@@ -1004,11 +1014,29 @@ export function serializeToWeChatRichText(
     );
   });
 
-  // (12.5) 处理角标/脚注引用上标 sup（规范 1.3: 绝对不用 line-height: 0 或 1，改用 baseline + relative 位移 + line-height: inherit）
+  // (12.5) 处理上标 sup（规范 1.3: 绝对不用 line-height: 0 或 1，改用 baseline + relative 位移 + line-height: inherit）。
+  // 脚注引用角标 <sup>[N]</sup>（外链转文末生成）用主题强调色小字号；
+  // 用户手动上标（意图菜单生成）用中性样式：继承字色字重，仅缩小 + 上移
   clone.querySelectorAll('sup').forEach((sup) => {
-    sup.setAttribute(
+    const isFootnoteRef = /^\[\d+\]$/.test((sup.textContent || '').trim());
+    if (isFootnoteRef) {
+      sup.setAttribute(
+        'style',
+        `font-size: 11px; font-weight: 700; color: ${accentColor}; margin-left: 2px; padding: 0 1px; vertical-align: baseline; position: relative; top: -0.35em; line-height: inherit; box-sizing: border-box;`
+      );
+    } else {
+      sup.setAttribute(
+        'style',
+        'font-size: 0.75em; vertical-align: baseline; position: relative; top: -0.35em; line-height: inherit; box-sizing: border-box;'
+      );
+    }
+  });
+
+  // (12.5b) 处理下标 sub（意图菜单生成）：中性样式，缩小 + 下移
+  clone.querySelectorAll('sub').forEach((sub) => {
+    sub.setAttribute(
       'style',
-      `font-size: 11px; font-weight: 700; color: ${accentColor}; margin-left: 2px; padding: 0 1px; vertical-align: baseline; position: relative; top: -0.35em; line-height: inherit; box-sizing: border-box;`
+      'font-size: 0.75em; vertical-align: baseline; position: relative; bottom: -0.25em; line-height: inherit; box-sizing: border-box;'
     );
   });
 

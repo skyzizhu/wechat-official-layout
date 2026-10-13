@@ -312,6 +312,13 @@ function buildParagraph(line: string): HTMLParagraphElement {
     p.innerHTML = note[1];
     return p;
   }
+  // 居中（HTML 行，意图菜单「居中」生成；预览/微信输出整段水平居中）
+  const center = t.match(/^<p data-role="center">([\s\S]*?)<\/p>$/);
+  if (center) {
+    p.dataset.kind = 'center';
+    p.innerHTML = center[1];
+    return p;
+  }
   // 引用
   const q = t.match(/^ {0,3}> ?(.*)$/);
   if (q) {
@@ -330,15 +337,16 @@ function buildParagraph(line: string): HTMLParagraphElement {
     p.innerHTML = '<br>';
     return p;
   }
-  // 受控行内标签白名单：着重样式 span（下划线/虚线/高亮）、strong、em——
-  // 这些标签是我们自己的意图转换生成的，属性仅限 style（无事件/链接），
+  // 受控行内标签白名单：着重样式 span（下划线/虚线/高亮）、strong、em、
+  // sup/sub（上标/下标，含外链脚注角标 <sup>[N]</sup>）——
+  // 这些标签是我们自己的意图转换或脚注转换生成的，属性仅限 style（无事件/链接），
   // 按 HTML 写入以在编辑器中回显着重效果；其余内容一律按纯文本转义
-  if (/^(?:(?!<\/?[a-zA-Z])[\s\S])*<span style="[^"]*"(?:\s*<span style="[^"]*")*/.test(t) || t.includes('<span style="text-decoration') || t.includes('<span style="background-color') || t.includes('<strong>') || t.includes('<em>')) {
+  if (/^(?:(?!<\/?[a-zA-Z])[\s\S])*<span style="[^"]*"(?:\s*<span style="[^"]*")*/.test(t) || t.includes('<span style="text-decoration') || t.includes('<span style="background-color') || t.includes('<strong>') || t.includes('<em>') || t.includes('<sup>') || t.includes('<sub>')) {
     const tpl = document.createElement('template');
     tpl.innerHTML = t;
     // 安全校验：白名单外的一切元素/属性一律拒绝（回退为纯文本）
     const allowed = Array.from(tpl.content.querySelectorAll('*')).every((el) => {
-      if (!['SPAN', 'STRONG', 'EM'].includes(el.tagName)) return false;
+      if (!['SPAN', 'STRONG', 'EM', 'SUP', 'SUB'].includes(el.tagName)) return false;
       return Array.from(el.attributes).every((attr) => attr.name === 'style');
     });
     if (allowed && tpl.content.textContent.trim()) {
@@ -423,7 +431,7 @@ export function Editor({
   // Markdown 透镜：只读查看当前生效的排版用 Markdown 源码（与预览/下载 MD 同源）
   const [showMdSource, setShowMdSource] = useState(false);
   // 选中文本意图转换工具栏：{ 起始段落索引, 结束段落索引 }
-  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number; anchorTop: number; anchorBottom: number; flipped: boolean; active?: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean; code?: boolean } } | null>(null);
+  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number; anchorTop: number; anchorBottom: number; flipped: boolean; active?: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean; code?: boolean; center?: boolean; sup?: boolean; sub?: boolean } } | null>(null);
   const intentBarRef = useRef<HTMLDivElement>(null);
   // 渲染后按菜单实际宽度做左右边界收敛（translateX(-50%) 居中依赖真实宽度）
   useLayoutEffect(() => {
@@ -513,6 +521,8 @@ export function Editor({
       closeCode();
       if (kind === 'note') {
         buf.push('<p data-role="note">' + el.innerHTML.replace(/\n/g, '') + '</p>');
+      } else if (kind === 'center') {
+        buf.push('<p data-role="center">' + el.innerHTML.replace(/\n/g, '') + '</p>');
       } else if (/^h[1-6]$/.test(kind)) {
         buf.push('#'.repeat(Number(kind[1])) + ' ' + text);
       } else if (kind === 'quote') {
@@ -1493,7 +1503,7 @@ export function Editor({
     }
     // 着重激活态：选区两侧任一端向上找到匹配样式的 span 即视为已应用（按钮高亮，再点取消）
     const selNow = window.getSelection();
-    const active: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean; code?: boolean } = {};
+    const active: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean; code?: boolean; center?: boolean; sup?: boolean; sub?: boolean } = {};
     if (selNow && selNow.rangeCount > 0) {
       const selRange = selNow.getRangeAt(0);
       const matchFor = (kind: 'u' | 'dashed' | 'hl') => {
@@ -1515,9 +1525,23 @@ export function Editor({
         }
         return false;
       };
+      // 上标/下标激活态：选区两端任一端的祖先链上存在 sup/sub 即视为激活
+      const matchTag = (tag: 'SUP' | 'SUB') => {
+        const has = (from: Node | null) => {
+          let n: Node | null = from;
+          while (n && n !== ceRef.current) {
+            if (n.nodeName === tag) return true;
+            n = n.parentNode;
+          }
+          return false;
+        };
+        return has(selRange.startContainer) || has(selRange.endContainer);
+      };
       active.u = matchFor('u');
       active.dashed = matchFor('dashed');
       active.hl = matchFor('hl');
+      active.sup = matchTag('SUP');
+      active.sub = matchTag('SUB');
     }
     // 列表激活态：选中的段落里所有非空行都已是列表标记行（- • ● · ✦ 开头）
     if (range.ps.length) {
@@ -1528,6 +1552,7 @@ export function Editor({
         listLines.length > 0 &&
         listLines.every((l) => /^\s*[-•●·✦]\s+/.test(l));
       active.note = range.ps.every((p) => p.dataset.kind === 'note');
+      active.center = range.ps.length > 0 && range.ps.every((p) => p.dataset.kind === 'center');
       active.code = range.ps.length > 0 && range.ps.every((p) => p.dataset.kind === 'code');
     }
     setIntentBar((prev) =>
@@ -1659,6 +1684,20 @@ export function Editor({
         }
         break;
       }
+      case 'center': {
+        // 居中（开关式）：应用 = 每个非空行包为 <p data-role="center"> HTML 行
+        // （序列化：随主题正文字号字色，仅整段居中）；取消 = 还原纯文本行。
+        // 与备注同一套开关机制
+        const allCenter = targets.every((p) => p.dataset.kind === 'center');
+        const escapeHtml = (t: string) =>
+          t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        for (let k = 0; k < out.length; k++) {
+          const t = (out[k] || '').trim();
+          if (!t) continue;
+          out[k] = allCenter ? t : '<p data-role="center">' + escapeHtml(t) + '</p>';
+        }
+        break;
+      }
       case 'u':
       case 'dashed':
       case 'hl': {
@@ -1713,6 +1752,134 @@ export function Editor({
           const frag = range.extractContents();
           wrapSpan.appendChild(frag);
           range.insertNode(wrapSpan);
+        }
+        sel.removeAllRanges();
+        setIntentBar(null);
+        syncFromDom();
+        return;
+      }
+      case 'sup':
+      case 'sub': {
+        // 上标/下标（开关式）：选区命中同款 sup/sub → 拆包取消；否则包裹应用。
+        // 无样式属性，序列化时由渲染器/序列化器补微信安全样式
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0 || sel.isCollapsed) break;
+        const tag = kind === 'sup' ? 'SUP' : 'SUB';
+        let toggleEl: HTMLElement | null = null;
+        let n: Node | null = sel.getRangeAt(0).startContainer;
+        while (n && n !== ce && !toggleEl) {
+          if (n.nodeName === tag) toggleEl = n as HTMLElement;
+          n = n.parentNode;
+        }
+        let m: Node | null = sel.getRangeAt(0).endContainer;
+        while (m && m !== ce && !toggleEl) {
+          if (m.nodeName === tag) toggleEl = m as HTMLElement;
+          m = m.parentNode;
+        }
+        if (toggleEl) {
+          const parent = toggleEl.parentElement!;
+          while (toggleEl.firstChild) {
+            parent.insertBefore(toggleEl.firstChild, toggleEl);
+          }
+          toggleEl.remove();
+          sel.removeAllRanges();
+          setIntentBar(null);
+          syncFromDom();
+          return;
+        }
+        const range = sel.getRangeAt(0);
+        const wrapEl = document.createElement(kind === 'sup' ? 'sup' : 'sub');
+        try {
+          range.surroundContents(wrapEl);
+        } catch {
+          // 跨节点选区：提取内容后整体包裹
+          const frag = range.extractContents();
+          wrapEl.appendChild(frag);
+          range.insertNode(wrapEl);
+        }
+        sel.removeAllRanges();
+        setIntentBar(null);
+        syncFromDom();
+        return;
+      }
+      case 'clear': {
+        // 清除格式：把选区内所有行内格式标签（着重 span/加粗/斜体/上下标/删除线）
+        // 拆包为纯文本；结构格式（标题/引用/备注/代码等）不动，交给「正文」处理。
+        // extract → 拆包 → 原位插回 → 逐层拆壳，段落结构不破坏
+        const sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0 || sel.isCollapsed) break;
+        const range = sel.getRangeAt(0);
+        const FORMAT_TAGS = new Set(['SPAN', 'STRONG', 'EM', 'SUP', 'SUB', 'I', 'B', 'U', 'DEL', 'S', 'STRIKE']);
+        const frag = range.extractContents();
+        let changed = true;
+        while (changed) {
+          changed = false;
+          frag.querySelectorAll('*').forEach((el) => {
+            if (FORMAT_TAGS.has(el.tagName)) {
+              // 必须用 parentNode：碎片顶层元素的 parentElement 为 null
+              // （DocumentFragment 不是 Element），optional chaining 会跳过搬移，
+              // while (el.firstChild) 永不结束 → 整页卡死
+              while (el.firstChild) {
+                el.parentNode?.insertBefore(el.firstChild, el);
+              }
+              el.remove();
+              changed = true;
+            }
+          });
+        }
+        // 记录插入位置：选区边界落在格式标签内部时，插回的内容会落回原壳内，
+        // 局部清除会「看起来没生效」——插回后把沿途格式壳在插入块处逐层拆开
+        const insertParent = range.startContainer;
+        const insertOffset = range.startOffset;
+        const blockLen = frag.childNodes.length;
+        range.insertNode(frag);
+        let first: Node | null = null;
+        let last: Node | null = null;
+        if (blockLen) {
+          const kids = Array.from(
+            (insertParent.nodeType === Node.ELEMENT_NODE
+              ? (insertParent as Element).childNodes
+              : insertParent.parentNode?.childNodes || []) as Node[]
+          );
+          const idx =
+            insertParent.nodeType === Node.ELEMENT_NODE
+              ? insertOffset
+              : Array.prototype.indexOf.call(kids, insertParent) + 1;
+          const block = kids.slice(idx, idx + blockLen);
+          first = block[0] || null;
+          last = block[block.length - 1] || null;
+        }
+        while (first && last && first.parentNode && first.parentNode !== ce) {
+          const shell = first.parentNode as HTMLElement;
+          if (shell.nodeType !== Node.ELEMENT_NODE || !FORMAT_TAGS.has(shell.tagName)) break;
+          // 壳在插入块处一分为二：后半（含未选中文字）进克隆壳排到后面，
+          // 插入块提升到壳外层，前半留在原壳
+          const clone = shell.cloneNode(false) as HTMLElement;
+          let seenBlock = false;
+          const after: Node[] = [];
+          Array.from(shell.childNodes).forEach((c) => {
+            if (seenBlock) after.push(c);
+            if (c === last) seenBlock = true;
+          });
+          const parent = shell.parentNode!;
+          parent.insertBefore(clone, shell.nextSibling);
+          after.forEach((c) => clone.appendChild(c));
+          const moving: Node[] = [];
+          for (let n: Node | null = first; n; n = n.nextSibling) {
+            moving.push(n);
+            if (n === last) break;
+          }
+          let anchor: Node = clone;
+          moving.forEach((n) => {
+            parent.insertBefore(n, anchor);
+            anchor = n;
+          });
+          if (!shell.firstChild) shell.remove();
+          // 选区恰好覆盖壳的全部内容时后半为空，空克隆壳一并移除，
+          // 否则残留空样式标签（内容看似清除、格式仍在）
+          if (!clone.firstChild) clone.remove();
+          first = moving[0];
+          last = moving[moving.length - 1];
         }
         sel.removeAllRanges();
         setIntentBar(null);
@@ -2003,18 +2170,25 @@ export function Editor({
                 { kind: 'code', label: '代码' },
                 { kind: 'caption', label: '题注' },
                 { kind: 'note', label: '备注' },
+                { kind: 'center', label: '居中' },
                 { kind: 'u', label: '下划线' },
                 { kind: 'dashed', label: '虚线' },
                 { kind: 'hl', label: '高亮' },
+                { kind: 'sup', label: '上标' },
+                { kind: 'sub', label: '下标' },
                 { kind: 'indent', label: '缩进' },
                 { kind: 'outdent', label: '取消缩进' },
+                { kind: 'clear', label: '清除' },
               ].map((item) => {
                 const isActive =
                   !!(item.kind === 'u' && intentBar.active?.u) ||
                   !!(item.kind === 'dashed' && intentBar.active?.dashed) ||
                   !!(item.kind === 'hl' && intentBar.active?.hl) ||
+                  !!(item.kind === 'sup' && intentBar.active?.sup) ||
+                  !!(item.kind === 'sub' && intentBar.active?.sub) ||
                   !!(item.kind === 'list' && intentBar.active?.list) ||
                   !!(item.kind === 'note' && intentBar.active?.note) ||
+                  !!(item.kind === 'center' && intentBar.active?.center) ||
                   !!(item.kind === 'code' && intentBar.active?.code);
                 return (
                   <button
