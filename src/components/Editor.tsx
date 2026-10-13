@@ -416,7 +416,7 @@ export function Editor({
   // Markdown 透镜：只读查看当前生效的排版用 Markdown 源码（与预览/下载 MD 同源）
   const [showMdSource, setShowMdSource] = useState(false);
   // 选中文本意图转换工具栏：{ 起始段落索引, 结束段落索引 }
-  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number; anchorTop: number; anchorBottom: number; flipped: boolean; active?: { u?: boolean; dashed?: boolean; hl?: boolean } } | null>(null);
+  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number; anchorTop: number; anchorBottom: number; flipped: boolean; active?: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean } } | null>(null);
   const intentBarRef = useRef<HTMLDivElement>(null);
   // 渲染后按菜单实际宽度做左右边界收敛（translateX(-50%) 居中依赖真实宽度）
   useLayoutEffect(() => {
@@ -1484,7 +1484,7 @@ export function Editor({
     }
     // 着重激活态：选区两侧任一端向上找到匹配样式的 span 即视为已应用（按钮高亮，再点取消）
     const selNow = window.getSelection();
-    const active: { u?: boolean; dashed?: boolean; hl?: boolean } = {};
+    const active: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean } = {};
     if (selNow && selNow.rangeCount > 0) {
       const selRange = selNow.getRangeAt(0);
       const matchFor = (kind: 'u' | 'dashed' | 'hl') => {
@@ -1509,6 +1509,15 @@ export function Editor({
       active.u = matchFor('u');
       active.dashed = matchFor('dashed');
       active.hl = matchFor('hl');
+    }
+    // 列表激活态：选中的段落里所有非空行都已是列表标记行（- • ● · ✦ 开头）
+    if (range.ps.length) {
+      const listLines = range.ps
+        .flatMap((p) => (p.innerText || '').split('\n'))
+        .filter((l) => l.trim());
+      active.list =
+        listLines.length > 0 &&
+        listLines.every((l) => /^\s*[-•●·✦]\s+/.test(l));
     }
     setIntentBar((prev) =>
       prev && prev.s === range.s && prev.e === range.e && prev.top === top && prev.left === left
@@ -1572,12 +1581,19 @@ export function Editor({
           if (t) out[k] = '### ' + t.replace(/^#+\s*/, '');
         }
         break;
-      case 'list':
+      case 'list': {
+        // 开关式：选中行已全部是列表标记行 → 剥掉标记恢复正文；否则加标记
+        const nonEmpty = out.filter((l) => (l || '').trim());
+        const alreadyList = nonEmpty.length > 0 && nonEmpty.every((l) => /^\s*[-•●·✦]\s+/.test(l));
         for (let k = 0; k < out.length; k++) {
           const t = (out[k] || '').trim();
-          if (t) out[k] = '- ' + t.replace(/^[-•●·✦\s]+/, '');
+          if (!t) continue;
+          out[k] = alreadyList
+            ? t.replace(/^[-•●·✦]\s+/, '')
+            : '- ' + t.replace(/^[-•●·✦\s]+/, '');
         }
         break;
+      }
       case 'table': {
         const rows: string[] = [];
         for (let k = 0; k < out.length; k++) {
@@ -1962,7 +1978,8 @@ export function Editor({
                 const isActive =
                   !!(item.kind === 'u' && intentBar.active?.u) ||
                   !!(item.kind === 'dashed' && intentBar.active?.dashed) ||
-                  !!(item.kind === 'hl' && intentBar.active?.hl);
+                  !!(item.kind === 'hl' && intentBar.active?.hl) ||
+                  !!(item.kind === 'list' && intentBar.active?.list);
                 return (
                   <button
                     key={item.kind}
