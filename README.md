@@ -6,6 +6,8 @@
 
 <div align="center">
 
+<img src="public/icon-192.png" width="96" alt="文排 Logo" />
+
 ### **👉 [https://wol.yourtools.xyz/](https://wol.yourtools.xyz/)**
 
 **免费 · 免注册 · 打开即用**
