@@ -66,8 +66,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "文排 - 免费微信公众号文章排版工具",
-    description: "纯文本智能识别，16 款主题一键美化，本地离线处理零上传，格式完美兼容微信公众号后台。",
+    title: "文排 - 免费在线微信公众号文章排版工具",
+    description:
+      "在线免注册即用：粘贴纯文本智能识别章节、表格与清单，16 款主题一键美化，复制即发公众号。本地离线处理，文章隐私零上传。",
     images: [{ url: "/og-image.png", alt: "文排 - 微信公众号文章智能排版工具" }],
   },
   icons: {
