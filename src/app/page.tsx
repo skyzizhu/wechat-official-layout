@@ -21,7 +21,36 @@ import { AppPromoBadge } from '@/components/AppPromoBadge';
 import { SiteFooter } from '@/components/SiteFooter';
 import { convertLinksToFootnotes } from '@/lib/link-footnotes';
 import { extractAndTokenizeDataUrls } from '@/lib/image-store';
+import * as draftStore from '@/lib/draft-store';
+import type { DraftEntry } from '@/lib/draft-store';
 import { PenLine, Eye } from 'lucide-react';
+
+/** 载入前的草稿净化：旧外链图升级、缺括号修复、base64 内联图迁入图片库（初始化与切换草稿共用） */
+function normalizeLoadedDraft(text: string): string {
+  let updated = (text || '')
+    .replace(/https:\/\/images\.unsplash\.com\/photo-1512820790803-83ca734da794[^\s)"'<>]+/g, '/images/sample/sample-1.jpg')
+    .replace(/https:\/\/images\.unsplash\.com\/photo-1544716278-ca5e3f4abd8c[^\s)"'<>]+/g, '/images/sample/sample-2.jpg')
+    .replace(/https:\/\/images\.unsplash\.com\/photo-1499750310107-5fef28a66643[^\s)"'<>]+/g, '/images/sample/sample-3.jpg')
+    .replace(/https:\/\/images\.unsplash\.com\/photo-1455390582262-044cdead277a[^\s)"'<>]+/g, '/images/sample/sample-4.jpg')
+    .replace(/https:\/\/images\.unsplash\.com\/photo-1542744094-3a31f272c490[^\s)"'<>]+/g, '/images/sample/sample-5.jpg')
+    .replace(/https:\/\/images\.unsplash\.com\/photo-1460925895917-afdab827c52f[^\s)"'<>]+/g, '/images/sample/sample-6.jpg')
+    .replace(/https:\/\/images\.unsplash\.com\/photo-1497633762265-9d179a990aa6[^\s)"'<>]+/g, '/images/sample/sample-7.jpg');
+
+  // 强力修复因历史正则导致缺失右括号的图片语法: ![alt](/images/sample/sample-X.jpg -> ![alt](/images/sample/sample-X.jpg)
+  updated = updated.replace(/(!\[[^\]]*\]\(\/images\/sample\/sample-\d+\.jpg)(?!\))/g, '$1)');
+
+  // 内联 base64 图片迁移为图片库令牌：编辑框不再被巨型源码淹没（幂等，已有令牌的草稿不受影响）
+  const tokenized = extractAndTokenizeDataUrls(updated);
+  if (tokenized.count > 0) {
+    updated = tokenized.markdown;
+  }
+
+  // 若草稿是系统范文但仍有外链遗留，直接对齐最新的示例范文
+  if (updated.includes('排版之美') && updated.includes('unsplash.com')) {
+    updated = SAMPLE_PLAIN_TEXT;
+  }
+  return updated;
+}
 
 /** 桌面端（lg 断点）判定：桌面与移动端各自只挂载所需的编辑器/预览，杜绝隐藏面板的重复渲染 */
 function useIsDesktop(): boolean {
@@ -58,6 +87,9 @@ function MainLayout() {
   const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('preview');
   const [draftStatus, setDraftStatus] = useState<string>('草稿就绪');
   const [isLoaded, setIsLoaded] = useState(false);
+  // 本地多草稿：全部草稿列表 + 当前激活 id（内容明细在 draft-store/localStorage）
+  const [drafts, setDrafts] = useState<DraftEntry[]>([]);
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   // 第二阶段：用户纠偏的识别决策（抑制键持久化；已确认保留的会话内隐藏）
   const [suppressedKeys, setSuppressedKeys] = useState<string[]>([]);
   const [dismissedKeys, setDismissedKeys] = useState<string[]>([]);
@@ -104,54 +136,30 @@ function MainLayout() {
     }
   }, []);
 
-  // 1. 初始化从浏览器 LocalStorage 恢复草稿与用户偏好
+  // 1. 初始化：迁移旧版单草稿 → 多草稿库，恢复激活草稿与用户偏好
   useEffect(() => {
     try {
-      let savedDraft = localStorage.getItem('radiant_article_draft');
-      if (savedDraft !== null) {
-        if (savedDraft.trim() === '') {
-          importedRef.current = null;
-          setMarkdown('');
+      draftStore.migrateLegacy();
+      const list = draftStore.listDrafts();
+      const activeId = draftStore.getActiveId() || list[0]?.id || null;
+      setDrafts(list);
+      setActiveDraftId(activeId);
+
+      const entry = list.find((d) => d.id === activeId);
+      const rawPlain = entry?.plain ?? '';
+      if (rawPlain.trim() !== '') {
+        let loaded = normalizeLoadedDraft(rawPlain);
+        // 双副本恢复：优先用持久化的「排版用 markdown」副本重建快照（编辑器仍展示纯文本）；
+        // 旧版本草稿若是 Markdown 源码，现场降级为纯文本展示并登记排版副本
+        if (entry?.md && stripMarkdownToPlainText(entry.md) === loaded) {
+          importedRef.current = { plain: loaded, md: entry.md };
         } else {
-          // 自动平滑升级旧草稿中不稳定的外网图片为本地高可靠静态图片，避免吞噬末尾的括号或管道符
-          let updated = savedDraft
-            .replace(/https:\/\/images\.unsplash\.com\/photo-1512820790803-83ca734da794[^\s)"'<>]+/g, '/images/sample/sample-1.jpg')
-            .replace(/https:\/\/images\.unsplash\.com\/photo-1544716278-ca5e3f4abd8c[^\s)"'<>]+/g, '/images/sample/sample-2.jpg')
-            .replace(/https:\/\/images\.unsplash\.com\/photo-1499750310107-5fef28a66643[^\s)"'<>]+/g, '/images/sample/sample-3.jpg')
-            .replace(/https:\/\/images\.unsplash\.com\/photo-1455390582262-044cdead277a[^\s)"'<>]+/g, '/images/sample/sample-4.jpg')
-            .replace(/https:\/\/images\.unsplash\.com\/photo-1542744094-3a31f272c490[^\s)"'<>]+/g, '/images/sample/sample-5.jpg')
-            .replace(/https:\/\/images\.unsplash\.com\/photo-1460925895917-afdab827c52f[^\s)"'<>]+/g, '/images/sample/sample-6.jpg')
-            .replace(/https:\/\/images\.unsplash\.com\/photo-1497633762265-9d179a990aa6[^\s)"'<>]+/g, '/images/sample/sample-7.jpg');
-
-          // 强力修复因历史正则导致缺失右括号的图片语法: ![alt](/images/sample/sample-X.jpg -> ![alt](/images/sample/sample-X.jpg)
-          updated = updated.replace(/(!\[[^\]]*\]\(\/images\/sample\/sample-\d+\.jpg)(?!\))/g, '$1)');
-
-          // 内联 base64 图片迁移为图片库令牌：编辑框不再被巨型源码淹没（幂等，已有令牌的草稿不受影响）
-          const tokenized = extractAndTokenizeDataUrls(updated);
-          if (tokenized.count > 0) {
-            updated = tokenized.markdown;
-          }
-
-          // 若草稿是系统范文但仍有外链遗留，直接对齐最新的示例范文
-          if (updated.includes('排版之美') && updated.includes('unsplash.com')) {
-            updated = SAMPLE_PLAIN_TEXT;
-          }
-
-          savedDraft = updated;
-          try {
-            localStorage.setItem('radiant_article_draft', savedDraft);
-          } catch {}
-          // 双副本恢复：优先用持久化的「排版用 markdown」副本重建快照（编辑器仍展示纯文本）；
-          // 旧版本草稿若是 Markdown 源码，现场降级为纯文本展示并登记排版副本
-          const savedSource = localStorage.getItem('radiant_article_source_md');
-          if (savedSource && stripMarkdownToPlainText(savedSource) === savedDraft) {
-            importedRef.current = { plain: savedDraft, md: savedSource };
-          } else {
-            const imported = importContent(savedDraft);
-            savedDraft = imported;
-          }
-          setMarkdown(savedDraft);
+          loaded = importContent(loaded);
         }
+        setMarkdown(loaded);
+      } else {
+        importedRef.current = null;
+        setMarkdown('');
       }
 
       const savedTheme = localStorage.getItem('radiant_theme_id');
@@ -196,11 +204,12 @@ function MainLayout() {
 
     const timer = setTimeout(() => {
       try {
-        localStorage.setItem('radiant_article_draft', markdown);
-        // 排版用 markdown 副本：仅在用户未编辑（快照新鲜）时持久化，否则留空
-        const snapshot = importedRef.current;
-        const freshSource = snapshot && markdown === snapshot.plain ? snapshot.md : '';
-        localStorage.setItem('radiant_article_source_md', freshSource);
+        // 内容写入当前激活草稿（多草稿库）；排版用 markdown 副本仅在快照新鲜时持久化
+        if (activeDraftId) {
+          const snapshot = importedRef.current;
+          const freshSource = snapshot && markdown === snapshot.plain ? snapshot.md : '';
+          setDrafts(draftStore.saveDraft(activeDraftId, markdown, freshSource));
+        }
         localStorage.setItem('radiant_theme_id', themeId);
         localStorage.setItem('radiant_custom_color', customColor);
         localStorage.setItem('radiant_font_size', String(fontSize));
@@ -214,20 +223,101 @@ function MainLayout() {
           .padStart(2, '0')}`;
         setDraftStatus(`已自动保存 ${timeStr}`);
       } catch (err) {
+        // 配额不足等写入失败必须在 UI 明示——「以为存了其实没存」比不保存更糟
         console.warn('LocalStorage save failed', err);
+        setDraftStatus('⚠️ 保存失败：浏览器存储空间不足，请删除旧草稿或导出 MD 备份');
       }
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [markdown, themeId, customColor, fontSize, linkFootnotes, firstLineAsTitle, isLoaded]);
+  }, [markdown, themeId, customColor, fontSize, linkFootnotes, firstLineAsTitle, isLoaded, activeDraftId]);
+
+  // ===== 本地多草稿：切换 / 新建 / 重命名 / 删除 =====
+
+  /** 把草稿内容载入编辑面（净化 + 双副本快照重建），供初始化与切换共用 */
+  const loadDraftContent = useCallback((entry: DraftEntry | undefined) => {
+    const rawPlain = entry?.plain ?? '';
+    if (rawPlain.trim() !== '') {
+      let loaded = normalizeLoadedDraft(rawPlain);
+      if (entry?.md && stripMarkdownToPlainText(entry.md) === loaded) {
+        importedRef.current = { plain: loaded, md: entry.md };
+      } else {
+        loaded = importContent(loaded);
+      }
+      setMarkdown(loaded);
+    } else {
+      importedRef.current = null;
+      setMarkdown('');
+    }
+  }, []);
+
+  const handleSwitchDraft = (id: string) => {
+    if (id === activeDraftId) return;
+    try {
+      if (activeDraftId) {
+        const snapshot = importedRef.current;
+        const freshSource = snapshot && markdown === snapshot.plain ? snapshot.md : '';
+        draftStore.saveDraft(activeDraftId, markdown, freshSource);
+      }
+      draftStore.setActiveId(id);
+      loadDraftContent(draftStore.listDrafts().find((d) => d.id === id));
+      setActiveDraftId(id);
+      setDrafts(draftStore.listDrafts());
+      setDraftStatus('已切换草稿');
+      showToast('📄 已切换草稿');
+    } catch {
+      showToast('❌ 切换草稿失败，请重试');
+    }
+  };
+
+  const handleNewDraft = () => {
+    try {
+      if (activeDraftId) {
+        const snapshot = importedRef.current;
+        const freshSource = snapshot && markdown === snapshot.plain ? snapshot.md : '';
+        draftStore.saveDraft(activeDraftId, markdown, freshSource);
+      }
+      const entry = draftStore.createDraft('', '');
+      importedRef.current = null;
+      setMarkdown('');
+      setActiveDraftId(entry.id);
+      setDrafts(draftStore.listDrafts());
+      setDraftStatus('新草稿已创建');
+      showToast('✨ 已新建草稿');
+    } catch {
+      showToast('❌ 新建草稿失败，请重试');
+    }
+  };
+
+  const handleRenameDraft = (id: string, title: string) => {
+    setDrafts(draftStore.renameDraft(id, title));
+    setDraftStatus('草稿已重命名');
+  };
+
+  const handleDeleteDraft = (id: string) => {
+    try {
+      const nextId = draftStore.deleteDraft(id);
+      const nextList = draftStore.listDrafts();
+      setDrafts(nextList);
+      if (id === activeDraftId) {
+        setActiveDraftId(nextId);
+        loadDraftContent(nextList.find((d) => d.id === nextId));
+      }
+      setDraftStatus('草稿已删除');
+      showToast('🗑️ 草稿已删除');
+    } catch {
+      showToast('❌ 删除失败，请重试');
+    }
+  };
 
   // 3. 一键清空处理
   const handleClear = () => {
     importedRef.current = null;
     setMarkdown('');
     try {
-      localStorage.setItem('radiant_article_draft', '');
-      localStorage.setItem('radiant_article_source_md', '');
+      if (activeDraftId) {
+        setDrafts(draftStore.saveDraft(activeDraftId, '', ''));
+      }
     } catch {}
     setDraftStatus('内容已清空');
     showToast('🗑️ 输入框内容已清空');
@@ -238,7 +328,9 @@ function MainLayout() {
     const editorText = importContent(SAMPLE_PLAIN_TEXT);
     setMarkdown(editorText);
     try {
-      localStorage.setItem('radiant_article_draft', editorText);
+      if (activeDraftId) {
+        setDrafts(draftStore.saveDraft(activeDraftId, editorText, ''));
+      }
     } catch {}
     setDraftStatus('范文已载入');
     showToast('📄 已载入示例范文');
@@ -247,7 +339,11 @@ function MainLayout() {
   // ⌘S 手动保存草稿（平时 500ms 自动防抖已覆盖，这里提供即时保存反馈）
   const handleSaveDraftNow = () => {
     try {
-      localStorage.setItem('radiant_article_draft', markdown);
+      if (activeDraftId) {
+        const snapshot = importedRef.current;
+        const freshSource = snapshot && markdown === snapshot.plain ? snapshot.md : '';
+        draftStore.saveDraft(activeDraftId, markdown, freshSource);
+      }
       localStorage.setItem('radiant_theme_id', themeId);
       setDraftStatus('已手动保存草稿');
       showToast('💾 草稿已保存');
@@ -451,6 +547,12 @@ function MainLayout() {
               onClear={handleClear}
               onRestoreSample={handleRestoreSample}
               draftStatus={draftStatus}
+              drafts={drafts}
+              activeDraftId={activeDraftId}
+              onSwitchDraft={handleSwitchDraft}
+              onNewDraft={handleNewDraft}
+              onRenameDraft={handleRenameDraft}
+              onDeleteDraft={handleDeleteDraft}
               firstLineAsTitle={firstLineAsTitle}
               onToggleFirstLineAsTitle={handleToggleFirstLineAsTitle}
               lowConfidenceDecisions={lowConfidenceDecisions}
@@ -496,6 +598,12 @@ function MainLayout() {
                   onClear={handleClear}
                   onRestoreSample={handleRestoreSample}
                   draftStatus={draftStatus}
+                  drafts={drafts}
+                  activeDraftId={activeDraftId}
+                  onSwitchDraft={handleSwitchDraft}
+                  onNewDraft={handleNewDraft}
+                  onRenameDraft={handleRenameDraft}
+                  onDeleteDraft={handleDeleteDraft}
                   firstLineAsTitle={firstLineAsTitle}
                   onToggleFirstLineAsTitle={handleToggleFirstLineAsTitle}
                   lowConfidenceDecisions={lowConfidenceDecisions}

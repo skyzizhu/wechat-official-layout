@@ -360,7 +360,10 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
         );
       }
 
-      // 经典微胶囊小彩条（微信、新中式、商务、暗色极客等：空 span 纯背景色块，零文本内容）
+      // 经典微胶囊小彩条（微信、新中式、商务、暗色极客等）
+      // 与微信序列化产物同构：竖线 = 文字容器自身的 border-left——
+      // 独立色条元素在公众号编辑器会被归一化为块级，长标题折行时分离成独立一行；
+      // border 属于块本身，单行标题呈短竖条，多行标题通栏而下，预览与微信端形态一致
       if (
         h2Decoration === 'wechat-badge' ||
         h2Decoration === 'report-pill' ||
@@ -376,26 +379,21 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
       ) {
         const accent = (elements.h2.color as string) || (elements.h1.color as string) || '#2563eb';
         return (
-          <h2 style={{ ...elements.h2, textAlign: 'left', lineHeight: 1.75 }}>
+          <h2 style={{ ...elements.h2, textAlign: 'left', lineHeight: 1.75, borderLeft: 'none' }}>
             <span
               style={{
                 display: 'inline-block',
                 verticalAlign: 'middle',
-                width: '4.5px',
-                height: '18px',
-                backgroundColor: accent,
-                borderRadius: '2px',
-                marginRight: '9px',
-                userSelect: 'none',
-              }}
-            />
-            {/* 文字容器用 inline 而非 inline-block：inline-block 整体不可断行，
-                长标题会整块掉到竖线下方（竖线独占一行）；inline 允许自然换行 */}
-            <span
-              style={{
-                display: 'inline',
-                verticalAlign: 'baseline',
+                fontWeight: 700,
+                color: accent,
                 lineHeight: 1.75,
+                letterSpacing: '0.5px',
+                borderLeft: `4.5px solid ${accent}`,
+                borderRadius: '2px',
+                paddingLeft: '9px',
+                maxWidth: '100%',
+                wordBreak: 'break-word',
+                boxSizing: 'border-box',
               }}
             >
               {children}

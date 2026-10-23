@@ -348,5 +348,22 @@ run(
   }
 );
 
+run(
+  'H2 竖线徽标：长标题换行时色条不与文字分离（v2.6.6 border-left 方案）',
+  `<h2><span style="display: inline-block; width: 4.5px; height: 18px; background-color: #10b981; border-radius: 2px; margin-right: 9px;"></span><span style="display: inline;">二、枷锁一：搜索思维 —— 它始终把 AI 当 "让搜索更好的工具"，而不是 "替代搜索的产品"，这一行足够长，在公众号编辑器里必然折行到第二行</span></h2>`,
+  (html) => {
+    const p = [];
+    // 色条必须是文字 span 自身的 border-left，而不是独立的 inline-block section
+    if (!/border-left:\s*4\.5px\s+solid/.test(html)) p.push('竖线未以 border-left 形式输出（仍可能被微信拆行）');
+    if (/<section[^>]*display:\s*inline-block/.test(html)) p.push('仍存在 inline-block 的 section 装饰元素（微信会归一化为块级导致换行分离）');
+    if (!html.includes('枷锁一')) p.push('标题文字丢失');
+    // 标题文字与竖线必须同处一个元素（同生共死，不会拆行分离）
+    const m = html.match(/<span[^>]*border-left[^>]*>([^<]*)/);
+    if (!m || !m[1].includes('枷锁一')) p.push('文字不在带竖线的同一 span 内');
+    return p;
+  },
+  { h2Decoration: 'wechat-badge', elements: { h2: { color: '#10b981', fontSize: '18px' } } }
+);
+
 console.log('\n===== 微信合规校验: ' + passCount + ' 通过 / ' + failCount + ' 失败 / ' + infoCount + ' 信息 =====');
 process.exit(failCount === 0 ? 0 : 1);

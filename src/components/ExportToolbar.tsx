@@ -107,23 +107,23 @@ export function ExportToolbar({
 
   return (
     <>
-      <div className="relative z-30 h-12 border-b border-black/[0.05] bg-white/70 backdrop-blur-xl [saturate:1.6] flex items-center justify-between px-3 sm:px-4 flex-shrink-0 gap-2">
+      <div className="relative z-30 h-11 border-b border-black/[0.05] bg-white/70 backdrop-blur-xl [saturate:1.6] flex items-center justify-between px-3 sm:px-4 flex-shrink-0 gap-2">
         {/* 左侧：排版预设选择按钮 + 风格主色调节 + 字号大小微调器 + 外链转脚注开关 + 首句标题开关 */}
         <div className="flex items-center gap-1 sm:gap-1.5 xl:gap-2 overflow-x-auto no-scrollbar py-1 min-w-0">
           <button
             onClick={onOpenThemeSelector}
-            className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs sm:text-sm font-semibold transition-all cursor-pointer border border-indigo-200 shadow-2xs flex-shrink-0"
+            className="flex items-center gap-1 px-2 h-7 rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 text-xs font-semibold transition-all cursor-pointer border border-indigo-200 shadow-2xs flex-shrink-0"
             title="点击切换 16 款个性排版风格"
           >
-            <Palette className="w-4 h-4 text-indigo-600" />
+            <Palette className="w-3.5 h-3.5 text-indigo-600" />
             <span>{theme.name}</span>
-            <ChevronDown className="w-3.5 h-3.5 text-indigo-500" />
+            <ChevronDown className="w-3 h-3 text-indigo-500" />
           </button>
 
           {/* 智能主色搭配选项 */}
           <button
             onClick={() => setIsColorPickerOpen(true)}
-            className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-xs text-gray-700 font-medium transition-all cursor-pointer border border-gray-200 shadow-2xs flex-shrink-0"
+            className="flex items-center gap-1 px-2 py-1 h-7 rounded-md bg-gray-50 hover:bg-gray-100 text-xs text-gray-700 font-medium transition-all cursor-pointer border border-gray-200 shadow-2xs flex-shrink-0"
             title="自选主色，系统自动智能搭配全套排版色彩"
           >
             <span
@@ -148,7 +148,7 @@ export function ExportToolbar({
               setFontSizeOpen((v) => !v);
             }}
             title="正文字号（12~24px）"
-            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all border cursor-pointer flex-shrink-0 ${
+            className={`flex items-center gap-1 px-2 h-7 rounded-md text-xs font-medium transition-all border cursor-pointer flex-shrink-0 ${
               fontSizeOpen
                 ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
                 : 'bg-gray-50 text-gray-500 border-black/[0.04] hover:bg-gray-100'
@@ -161,7 +161,7 @@ export function ExportToolbar({
           {/* 外链转文末脚注开关 */}
           <button
             onClick={() => onToggleFootnotes(!linkFootnotes)}
-            className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer shadow-2xs flex-shrink-0 ${
+            className={`flex items-center gap-1 px-2 h-7 rounded-md text-xs font-medium border transition-all cursor-pointer shadow-2xs flex-shrink-0 ${
               linkFootnotes
                 ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
                 : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
@@ -183,7 +183,7 @@ export function ExportToolbar({
           {onToggleFirstLineAsTitle && (
             <button
               onClick={() => onToggleFirstLineAsTitle(!firstLineAsTitle)}
-              className={`flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium border transition-all cursor-pointer shadow-2xs flex-shrink-0 ${
+              className={`flex items-center gap-1 px-2 h-7 rounded-md text-xs font-medium border transition-all cursor-pointer shadow-2xs flex-shrink-0 ${
                 firstLineAsTitle
                   ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
                   : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
@@ -208,20 +208,20 @@ export function ExportToolbar({
           <div className="w-px h-6 bg-gray-200 mx-0.5" aria-hidden />
           <button
             onClick={handleCopyRichText}
-            className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-sm text-white font-semibold transition-colors cursor-pointer shadow-sm"
+            className="flex items-center gap-1 px-2.5 h-7 rounded-md bg-indigo-600 hover:bg-indigo-700 text-xs text-white font-semibold transition-colors cursor-pointer shadow-sm border border-indigo-600 hover:border-indigo-700"
             title="复制带完整内联样式的富文本，支持原封不动粘贴到微信公众号后台"
           >
-            <Copy className="w-4 h-4" />
+            <Copy className="w-3.5 h-3.5" />
             <span>一键复制</span>
           </button>
 
           <button
             onClick={handleExportImage}
             disabled={exporting}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-sm text-gray-700 font-medium transition-colors border border-gray-200 cursor-pointer shadow-2xs disabled:opacity-50"
+            className="flex items-center gap-1 px-2 h-7 rounded-md bg-gray-50 hover:bg-gray-100 text-xs text-gray-700 font-medium transition-colors border border-gray-200 cursor-pointer shadow-2xs disabled:opacity-50"
             title="导出整篇排版长图为 2x 高清 PNG"
           >
-            <ImageDown className="w-4 h-4 text-gray-600" />
+            <ImageDown className="w-3.5 h-3.5 text-gray-600" />
             <span className="hidden md:inline">{exporting ? '导出中...' : '导出长图'}</span>
             <span className="md:hidden">长图</span>
           </button>
@@ -229,10 +229,10 @@ export function ExportToolbar({
           <button
             onClick={handleDownloadMd}
             disabled={!markdown.trim()}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-50 hover:bg-gray-100 text-sm text-gray-700 font-medium transition-colors border border-gray-200 cursor-pointer shadow-2xs disabled:opacity-50"
+            className="flex items-center gap-1 px-2 h-7 rounded-md bg-gray-50 hover:bg-gray-100 text-xs text-gray-700 font-medium transition-colors border border-gray-200 cursor-pointer shadow-2xs disabled:opacity-50"
             title="下载当前内容的 Markdown 源文件（.md），可导入其他编辑器"
           >
-            <FileDown className="w-4 h-4 text-gray-600" />
+            <FileDown className="w-3.5 h-3.5 text-gray-600" />
             <span className="hidden xl:inline">下载 MD</span>
           </button>
         </div>

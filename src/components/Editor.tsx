@@ -8,8 +8,13 @@ import {
   Image as ImageIcon,
   Code2,
   Loader2,
+  FolderOpen,
+  FilePlus2,
+  Pencil,
+  X as XIcon,
 } from 'lucide-react';
 import { detectContentFormat } from '@/lib/smart-parser';
+import type { DraftEntry } from '@/lib/draft-store';
 
 import { compressAndEncodeImage } from '@/lib/image-utils';
 import { putImageDataUrl, resolveImageSrc } from '@/lib/image-store';
@@ -40,6 +45,13 @@ interface EditorProps {
   onScrollRatio?: (ratio: number) => void;
   /** ⌘S 手动保存草稿 */
   onSaveDraft?: () => void;
+  /** 本地多草稿：列表与当前激活 id，及切换/新建/重命名/删除回调 */
+  drafts?: import('@/lib/draft-store').DraftEntry[];
+  activeDraftId?: string | null;
+  onSwitchDraft?: (id: string) => void;
+  onNewDraft?: () => void;
+  onRenameDraft?: (id: string, title: string) => void;
+  onDeleteDraft?: (id: string) => void;
 }
 
 interface ImageItem {
@@ -493,14 +505,37 @@ export function Editor({
     onKeepAllDecisions,
     onScrollRatio,
     onSaveDraft,
+    drafts,
+    activeDraftId,
+    onSwitchDraft,
+    onNewDraft,
+    onRenameDraft,
+    onDeleteDraft,
   }: EditorProps) {
   const charCount = value.replace(/\s/g, '').length;
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  // 草稿箱面板：开关 / 行内重命中的草稿 id / 草稿名输入草稿
+  const [draftsOpen, setDraftsOpen] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+  const draftsPanelRef = useRef<HTMLDivElement>(null);
+  // 点击面板外部关闭
+  useEffect(() => {
+    if (!draftsOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (draftsPanelRef.current && !draftsPanelRef.current.contains(e.target as Node)) {
+        setDraftsOpen(false);
+        setRenamingId(null);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [draftsOpen]);
   // Markdown 透镜：只读查看当前生效的排版用 Markdown 源码（与预览/下载 MD 同源）
   const [showMdSource, setShowMdSource] = useState(false);
   // 选中文本意图转换工具栏：{ 起始段落索引, 结束段落索引 }
-  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number; anchorTop: number; anchorBottom: number; flipped: boolean; active?: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean; code?: boolean; center?: boolean; sup?: boolean; sub?: boolean }; activeColors?: { u?: string; dashed?: string; hl?: string }; submenu?: 'u' | 'dashed' | 'hl' | null; submenuPos?: { top: number; left: number } } | null>(null);
+  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number; anchorTop: number; anchorBottom: number; flipped: boolean; active?: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean; code?: boolean; center?: boolean; sup?: boolean; sub?: boolean; h2?: boolean; h3?: boolean }; activeColors?: { u?: string; dashed?: string; hl?: string }; submenu?: 'u' | 'dashed' | 'hl' | null; submenuPos?: { top: number; left: number } } | null>(null);
   const intentBarRef = useRef<HTMLDivElement>(null);
   // 渲染后按菜单实际宽度做左右边界收敛（translateX(-50%) 居中依赖真实宽度）
   useLayoutEffect(() => {
@@ -1588,7 +1623,7 @@ export function Editor({
     }
     // 着重激活态：选区两侧任一端向上找到匹配样式的 span 即视为已应用（按钮高亮，再点取消）
     const selNow = window.getSelection();
-    const active: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean; code?: boolean; center?: boolean; sup?: boolean; sub?: boolean } = {};
+    const active: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean; code?: boolean; center?: boolean; sup?: boolean; sub?: boolean; h2?: boolean; h3?: boolean } = {};
     const activeColors: { u?: string; dashed?: string; hl?: string } = {};
     if (selNow && selNow.rangeCount > 0) {
       const selRange = selNow.getRangeAt(0);
@@ -1654,6 +1689,8 @@ export function Editor({
       active.note = range.ps.every((p) => p.dataset.kind === 'note');
       active.center = range.ps.length > 0 && range.ps.every((p) => p.dataset.kind === 'center');
       active.code = range.ps.length > 0 && range.ps.every((p) => p.dataset.kind === 'code');
+      active.h2 = range.ps.length > 0 && range.ps.every((p) => p.dataset.kind === 'h2');
+      active.h3 = range.ps.length > 0 && range.ps.every((p) => p.dataset.kind === 'h3');
     }
     setIntentBar((prev) =>
       prev && prev.s === range.s && prev.e === range.e && prev.top === top && prev.left === left
@@ -1707,17 +1744,19 @@ export function Editor({
     const out: string[] = [...lines];
     switch (kind) {
       case 'h2':
+      case 'h3': {
+        // 标题（开关式）：选中段落已全部是该级标题 → 剥掉标题标记恢复正文；
+        // 否则加标记（已在其他级标题的会先剥旧标记再升级/降级）
+        const level = kind === 'h2' ? 2 : 3;
+        const allKind = targets.length > 0 && targets.every((p) => p.dataset.kind === 'h' + level);
         for (let k = 0; k < out.length; k++) {
           const t = (out[k] || '').trim();
-          if (t) out[k] = '## ' + t.replace(/^#+\s*/, '');
+          if (!t) continue;
+          const bare = t.replace(/^#{1,6}[ \t]+/, '').replace(/^#{1,6}(?=[\u4e00-\u9fff])/, '');
+          out[k] = allKind ? bare : '#'.repeat(level) + ' ' + bare;
         }
         break;
-      case 'h3':
-        for (let k = 0; k < out.length; k++) {
-          const t = (out[k] || '').trim();
-          if (t) out[k] = '### ' + t.replace(/^#+\s*/, '');
-        }
-        break;
+      }
       case 'list': {
         // 开关式：选中行已全部是列表标记行 → 剥掉标记恢复正文；否则加标记
         const nonEmpty = out.filter((l) => (l || '').trim());
@@ -2164,7 +2203,7 @@ export function Editor({
             onClick={() => historyRef.current.index > 0 && undo()}
             disabled={!histState.canUndo}
             title="撤销 (⌘Z)"
-            className={`p-1.5 rounded-md transition-colors ${
+            className={`h-7 w-7 flex items-center justify-center rounded-md transition-colors ${
               histState.canUndo ? 'text-gray-500 hover:text-gray-900 hover:bg-gray-100 cursor-pointer' : 'text-gray-200 cursor-not-allowed'
             }`}
           >
@@ -2174,7 +2213,7 @@ export function Editor({
             onClick={() => historyRef.current.index < historyRef.current.stack.length - 1 && redo()}
             disabled={!histState.canRedo}
             title="重做 (⌘⇧Z)"
-            className={`p-1.5 rounded-md transition-colors ${
+            className={`h-7 w-7 flex items-center justify-center rounded-md transition-colors ${
               histState.canRedo ? 'text-gray-500 hover:text-gray-900 hover:bg-gray-100 cursor-pointer' : 'text-gray-200 cursor-not-allowed'
             }`}
           >
@@ -2185,7 +2224,7 @@ export function Editor({
           <button
             onClick={() => triggerImagePicker()}
             disabled={isUploading}
-            className="px-2 py-1 rounded-md text-xs text-indigo-700 bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200 transition-all flex items-center gap-1 cursor-pointer font-medium"
+            className="h-7 px-2 rounded-md text-xs text-indigo-700 bg-indigo-50 hover:bg-indigo-100/80 border border-indigo-200 transition-all flex items-center gap-1 cursor-pointer font-medium"
             title="选择本地图片，或直接在编辑区 Cmd+V / Ctrl+V 粘贴截屏"
           >
             {isUploading ? (
@@ -2219,10 +2258,154 @@ export function Editor({
             <span className="hidden md:inline">范文</span>
           </button>
 
+          {/* 本地多草稿箱：列表 / 切换 / 新建 / 重命名 / 删除 */}
+          {drafts && onSwitchDraft && onNewDraft && onRenameDraft && onDeleteDraft && (
+            <div className="relative flex-shrink-0" ref={draftsPanelRef}>
+              <button
+                onClick={() => {
+                  setDraftsOpen((v) => !v);
+                  setRenamingId(null);
+                }}
+                className={`h-7 px-2 rounded-md text-xs flex items-center gap-1 cursor-pointer font-medium border transition-all ${
+                  draftsOpen
+                    ? 'text-indigo-700 bg-indigo-50 border-indigo-200'
+                    : 'text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 border-gray-200'
+                }`}
+                title="多草稿箱：每篇文章独立保存，可随时切换"
+              >
+                <FolderOpen className="w-3 h-3 text-indigo-500" />
+                <span className="hidden md:inline">草稿</span>
+                {drafts.length > 0 && (
+                  <span className="text-[10px] leading-none px-1 py-0.5 rounded bg-gray-100 text-gray-500 border border-gray-200">
+                    {drafts.length}
+                  </span>
+                )}
+              </button>
+
+              {draftsOpen && (
+                <div className="absolute left-0 top-9 z-50 w-80 max-w-[85vw] bg-white rounded-lg shadow-xl border border-black/[0.08] overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-black/[0.05] bg-gray-50/70">
+                    <span className="text-xs font-semibold text-gray-700">草稿箱（{drafts.length}）</span>
+                    <button
+                      onClick={() => {
+                        onNewDraft();
+                        setDraftsOpen(false);
+                      }}
+                      className="flex items-center gap-1 h-6 px-1.5 rounded text-[11px] text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 cursor-pointer font-medium"
+                      title="新建一份空白草稿（当前内容自动保存）"
+                    >
+                      <FilePlus2 className="w-3 h-3" />
+                      新建
+                    </button>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto custom-scrollbar">
+                    {drafts.length === 0 && (
+                      <div className="px-3 py-6 text-center text-xs text-gray-400">暂无草稿，点击「新建」开始</div>
+                    )}
+                    {drafts.map((d) => {
+                      const isActive = d.id === activeDraftId;
+                      const isRenaming = renamingId === d.id;
+                      const when = new Date(d.updatedAt);
+                      const today = new Date();
+                      const timeText =
+                        when.toDateString() === today.toDateString()
+                          ? `${when.getHours().toString().padStart(2, '0')}:${when.getMinutes().toString().padStart(2, '0')}`
+                          : `${when.getMonth() + 1}/${when.getDate()}`;
+                      const words = d.plain.replace(/\s/g, '').length;
+                      return (
+                        <div
+                          key={d.id}
+                          className={`group flex items-center gap-2 px-3 py-2 border-b border-black/[0.04] last:border-b-0 cursor-pointer transition-colors ${
+                            isActive ? 'bg-indigo-50/70' : 'hover:bg-gray-50'
+                          }`}
+                          onClick={() => {
+                            if (!isRenaming) {
+                              onSwitchDraft(d.id);
+                              setDraftsOpen(false);
+                            }
+                          }}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${isActive ? 'bg-indigo-500' : 'bg-gray-200'}`}
+                            title={isActive ? '当前草稿' : undefined}
+                          />
+                          <div className="flex-1 min-w-0">
+                            {isRenaming ? (
+                              <input
+                                autoFocus
+                                value={renameValue}
+                                onChange={(e) => setRenameValue(e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    onRenameDraft(d.id, renameValue);
+                                    setRenamingId(null);
+                                  } else if (e.key === 'Escape') {
+                                    setRenamingId(null);
+                                  }
+                                }}
+                                className="w-full h-6 px-1.5 text-xs border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                placeholder="草稿名称（留空恢复自动标题）"
+                              />
+                            ) : (
+                              <div className={`text-xs font-medium truncate ${isActive ? 'text-indigo-700' : 'text-gray-700'}`}>
+                                {d.title}
+                              </div>
+                            )}
+                            <div className="text-[10px] text-gray-400 mt-0.5">
+                              {timeText} · {words} 字{isActive ? ' · 当前' : ''}
+                            </div>
+                          </div>
+                          {!isRenaming && (
+                            <div className="flex items-center gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                title="重命名"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setRenamingId(d.id);
+                                  setRenameValue(d.customTitle ? d.title : '');
+                                }}
+                                className="p-1 rounded text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 cursor-pointer"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                              <button
+                                title="删除草稿"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDeleteDraft(d.id);
+                                }}
+                                className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 cursor-pointer"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
+                          {isRenaming && (
+                            <button
+                              title="收起"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRenamingId(null);
+                              }}
+                              className="p-1 rounded text-gray-400 hover:text-gray-600 cursor-pointer flex-shrink-0"
+                            >
+                              <XIcon className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* 一键清空 */}
           <button
             onClick={onClear}
-            className="px-2 py-1 rounded-md text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 transition-all flex items-center gap-1 cursor-pointer font-medium border border-gray-200 hover:border-red-200"
+            className="h-7 px-2 rounded-md text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 transition-all flex items-center gap-1 cursor-pointer font-medium border border-gray-200 hover:border-red-200"
             title="一键清空输入框所有内容"
           >
             <Trash2 className="w-3 h-3 text-gray-400 group-hover:text-red-500" />
@@ -2321,7 +2504,9 @@ export function Editor({
                   !!(item.kind === 'list' && intentBar.active?.list) ||
                   !!(item.kind === 'note' && intentBar.active?.note) ||
                   !!(item.kind === 'center' && intentBar.active?.center) ||
-                  !!(item.kind === 'code' && intentBar.active?.code);
+                  !!(item.kind === 'code' && intentBar.active?.code) ||
+                  !!(item.kind === 'h2' && intentBar.active?.h2) ||
+                  !!(item.kind === 'h3' && intentBar.active?.h3);
                 // 着重三键：点击弹出/收起下延色板；其余按钮直接应用
                 const hasColorMenu = item.kind === 'u' || item.kind === 'dashed' || item.kind === 'hl';
                 const submenuOpen = intentBar.submenu === item.kind;

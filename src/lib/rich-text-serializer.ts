@@ -248,9 +248,9 @@ export function serializeToWeChatRichText(
       const textHtml = textSpan ? textSpan.innerHTML : h2.innerHTML;
 
       section.innerHTML = `
-        <section style="display: inline-block; vertical-align: middle; width: 36px; height: 1.5px; background-color: ${accentColor}; opacity: 0.4; margin-right: 12px; box-sizing: border-box;"></section>
+        <span style="display: inline-block; vertical-align: middle; width: 36px; height: 1.5px; background-color: ${accentColor}; opacity: 0.4; margin-right: 12px; box-sizing: border-box;"></span>
         <span style="display: inline-block; vertical-align: middle; font-size: ${h2FontSize}; font-weight: 700; color: ${h2Color}; line-height: 1.75; letter-spacing: 1px; max-width: 80%; word-break: break-word; box-sizing: border-box;">${textHtml}</span>
-        <section style="display: inline-block; vertical-align: middle; width: 36px; height: 1.5px; background-color: ${accentColor}; opacity: 0.4; margin-left: 12px; box-sizing: border-box;"></section>
+        <span style="display: inline-block; vertical-align: middle; width: 36px; height: 1.5px; background-color: ${accentColor}; opacity: 0.4; margin-left: 12px; box-sizing: border-box;"></span>
       `.trim();
     }
     // Case B: 波普立体硬阴影徽章风格
@@ -296,15 +296,20 @@ export function serializeToWeChatRichText(
         'margin-top: 38px; margin-bottom: 20px; text-align: left; line-height: 1.75; max-width: 100%; box-sizing: border-box;'
       );
 
-      // 提取标题文字
+      // 提取标题文字：新预览 DOM 为单 span（竖线已收编为文字容器的 border-left），
+      // 兼容旧双 span 结构（[色条, 文字]）
       const spans = Array.from(h2.querySelectorAll('span'));
-      const textSpan = spans.length >= 2 ? spans[1] : null;
+      const textSpan = spans.length >= 2 ? spans[1] : spans.length === 1 ? spans[0] : null;
       const textHtml = textSpan ? textSpan.innerHTML : h2.innerHTML;
 
-      // 纯 CSS 实体色块，display: inline-block + vertical-align: middle，在微信编辑器永不换行、垂直完美居中
+      // 竖线徽标：不用独立元素承载——微信编辑器会把 display:inline-block 的
+      // section 归一化为块级，长标题换行时色条会被拆到独立一行。
+      // 改为文字 span 自身的 border-left（与预览端同构）：边框属于块本身，
+      // 结构上不可能与文字分离；单行标题呈短竖条，多行标题通栏而下。
+      // 主题若在 elements.h2 配置了 borderLeft 则优先沿用（模板设计保真）
+      const h2BorderLeft = (themeElements?.h2?.borderLeft as string) || `4.5px solid ${accentColor}`;
       section.innerHTML = `
-        <section style="display: inline-block; vertical-align: middle; width: 4.5px; height: 18px; background-color: ${accentColor}; border-radius: 2px; margin-right: 9px; box-sizing: border-box;"></section>
-        <span style="display: inline-block; vertical-align: middle; font-size: ${h2FontSize}; font-weight: 700; color: ${h2Color}; line-height: 1.75; letter-spacing: 0.5px; max-width: calc(100% - 20px); word-break: break-word; box-sizing: border-box;">${textHtml}</span>
+        <span style="display: inline-block; vertical-align: middle; font-size: ${h2FontSize}; font-weight: 700; color: ${h2Color}; line-height: 1.75; letter-spacing: 0.5px; border-left: ${h2BorderLeft}; border-radius: 2px; padding-left: 9px; max-width: 100%; word-break: break-word; box-sizing: border-box;">${textHtml}</span>
       `.trim();
     }
     // Case D: 复古报纸或其他常规样式
