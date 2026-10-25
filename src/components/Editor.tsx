@@ -537,19 +537,23 @@ export function Editor({
   // 选中文本意图转换工具栏：{ 起始段落索引, 结束段落索引 }
   const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number; anchorTop: number; anchorBottom: number; flipped: boolean; active?: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean; code?: boolean; center?: boolean; sup?: boolean; sub?: boolean; h2?: boolean; h3?: boolean }; activeColors?: { u?: string; dashed?: string; hl?: string }; submenu?: 'u' | 'dashed' | 'hl' | null; submenuPos?: { top: number; left: number } } | null>(null);
   const intentBarRef = useRef<HTMLDivElement>(null);
-  // 渲染后按菜单实际宽度做左右边界收敛（translateX(-50%) 居中依赖真实宽度）
+  // 渲染后按菜单实际宽高做边界收敛（translateX(-50%) 居中依赖真实宽度；
+  // 菜单换行后高度会变，上方是否放得下必须按实测高度 + 当前滚动可视区重判）
   useLayoutEffect(() => {
     if (!intentBar || !intentBarRef.current || !editSurfaceRef.current) return;
     const bar = intentBarRef.current;
     const w = bar.offsetWidth;
     const h = bar.offsetHeight;
-    // 垂直：实测高度精确保证「菜单底边与选区上沿间隙 24px」（上方放不下翻到下方时间隙同为 24px）
-    const top = intentBar.flipped ? intentBar.anchorBottom + 18 : intentBar.anchorTop - h - 18;
+    // 垂直：菜单底边与选区上沿间隙 18px；上方放不下（会顶出滚动可视区）翻到选区下方
+    const visibleTop = scrollRef.current?.scrollTop ?? 0;
+    const above = intentBar.anchorTop - h - 18;
+    const flipped = above < visibleTop;
+    const top = flipped ? intentBar.anchorBottom + 18 : above;
     // 水平：按实测宽度居中并夹在面板内
     const half = w / 2 + 8;
     const clamped = Math.min(Math.max(intentBar.left, half), Math.max(half, editSurfaceRef.current.clientWidth - half));
-    if (top !== intentBar.top || clamped !== intentBar.left) {
-      setIntentBar((prev) => (prev ? { ...prev, top, left: clamped } : prev));
+    if (top !== intentBar.top || clamped !== intentBar.left || flipped !== intentBar.flipped) {
+      setIntentBar((prev) => (prev ? { ...prev, top, left: clamped, flipped } : prev));
     }
   }, [intentBar]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -2283,7 +2287,7 @@ export function Editor({
               </button>
 
               {draftsOpen && (
-                <div className="absolute left-0 top-9 z-50 w-80 max-w-[85vw] bg-white rounded-lg shadow-xl border border-black/[0.08] overflow-hidden">
+                <div className="z-50 bg-white rounded-lg shadow-xl border border-black/[0.08] overflow-hidden fixed left-1/2 -translate-x-1/2 top-36 w-[92vw] sm:absolute sm:left-0 sm:translate-x-0 sm:top-9 sm:w-80">
                   <div className="flex items-center justify-between px-3 py-2 border-b border-black/[0.05] bg-gray-50/70">
                     <span className="text-xs font-semibold text-gray-700">草稿箱（{drafts.length}）</span>
                     <button
@@ -2471,7 +2475,7 @@ export function Editor({
           {intentBar && (
             <div
               ref={intentBarRef}
-              className="absolute z-30 flex items-center gap-0.5 px-2 py-1 bg-gray-900/95 backdrop-blur text-white text-xs whitespace-nowrap rounded-lg shadow-xl border border-white/10 overflow-x-auto"
+              className="absolute z-30 flex flex-wrap items-center justify-center gap-0.5 px-2 py-1 bg-gray-900/95 backdrop-blur text-white text-xs rounded-lg shadow-xl border border-white/10 w-max max-w-[calc(100%-16px)]"
               style={{ top: intentBar.top, left: intentBar.left, transform: 'translateX(-50%)' }}
               onMouseDown={(e) => e.preventDefault()}
             >
