@@ -140,7 +140,13 @@ function MainLayout() {
   useEffect(() => {
     try {
       draftStore.migrateLegacy();
-      const list = draftStore.listDrafts();
+      let list = draftStore.listDrafts();
+      // 全新用户（无任何草稿、也无旧版草稿）：以范文建立第一份草稿——
+      // 既保留「首次打开即见范文」的体验，也保证自动保存始终有落点
+      if (list.length === 0) {
+        draftStore.createDraft(SAMPLE_PLAIN_TEXT, '');
+        list = draftStore.listDrafts();
+      }
       const activeId = draftStore.getActiveId() || list[0]?.id || null;
       setDrafts(list);
       setActiveDraftId(activeId);
@@ -296,7 +302,11 @@ function MainLayout() {
 
   const handleDeleteDraft = (id: string) => {
     try {
-      const nextId = draftStore.deleteDraft(id);
+      let nextId = draftStore.deleteDraft(id);
+      // 删到一份不剩：立即补一份空草稿，自动保存永远有落点（否则后续编辑刷新即丢）
+      if (!nextId) {
+        nextId = draftStore.createDraft('', '').id;
+      }
       const nextList = draftStore.listDrafts();
       setDrafts(nextList);
       if (id === activeDraftId) {
