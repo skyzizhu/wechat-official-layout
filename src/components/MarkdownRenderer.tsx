@@ -630,16 +630,157 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
       );
     },
 
-    // 引用块：纯净排版格式，绝对不注入任何多余文字或冒名引号
+    // 引用块：基础样式遵循主题 elements.blockquote；配置了 quoteStyle 的主题
+    // 叠加结构性形态（与微信序列化器同构）——便签/硬阴影/大引号/终端/剪报/摘要框/卷轴
     blockquote: ({ children }) => {
+      const bqBase: CSSProperties = { ...elements.blockquote, boxSizing: 'border-box' };
+      const bqAccent = (elements.h2.color as string) || accentColor;
+      let bqStyle: CSSProperties = bqBase;
+      let prefix: React.ReactNode = null;
+      let suffix: React.ReactNode = null;
+      switch (theme.quoteStyle) {
+        case 'post-it':
+          bqStyle = {
+            ...bqBase,
+            border: `1px dashed ${bqAccent}`,
+            borderRadius: 10,
+            background: hexToRgba(bqAccent, 0.06),
+          };
+          break;
+        case 'pop-shadow':
+          bqStyle = {
+            ...bqBase,
+            background: '#ffffff',
+            color: '#111111',
+            border: '3px solid #18181b',
+            borderRadius: 0,
+            boxShadow: '5px 5px 0 #18181b',
+          };
+          break;
+        case 'pull-quote':
+          bqStyle = {
+            ...bqBase,
+            background: 'transparent',
+            borderLeft: 'none',
+            borderRadius: 0,
+            textAlign: 'center',
+            fontSize: '16.5px',
+            fontStyle: 'italic',
+            padding: '10px 24px',
+          };
+          prefix = <span style={{ color: bqAccent, fontSize: '20px', fontWeight: 700 }}>“</span>;
+          suffix = <span style={{ color: bqAccent, fontSize: '20px', fontWeight: 700 }}>”</span>;
+          break;
+        case 'terminal-box':
+          bqStyle = {
+            ...bqBase,
+            background: '#0b1220',
+            color: '#93c5fd',
+            border: '1px solid #1e3a5f',
+            borderRadius: 6,
+            fontFamily: "'Consolas', Monaco, Menlo, monospace",
+          };
+          prefix = <span style={{ color: '#34d399', fontFamily: "'Consolas', Monaco, monospace" }}>$ </span>;
+          break;
+        case 'newspaper-clip':
+          bqStyle = {
+            ...bqBase,
+            border: '3px double #78716c',
+            borderRadius: 0,
+            background: 'rgba(120, 113, 108, 0.05)',
+          };
+          break;
+        case 'academic-abstract':
+          bqStyle = {
+            ...bqBase,
+            border: '1px solid #a8a29e',
+            borderRadius: 0,
+            background: '#fafaf9',
+            padding: '16px 22px',
+          };
+          break;
+        case 'chinese-scroll':
+          bqStyle = {
+            ...bqBase,
+            borderTop: `2px solid ${bqAccent}`,
+            borderBottom: `2px solid ${bqAccent}`,
+            borderLeft: 'none',
+            borderRight: 'none',
+            borderRadius: 0,
+            background: hexToRgba(bqAccent, 0.04),
+          };
+          break;
+        case 'wechat-bubble':
+          bqStyle = { ...bqBase, borderLeft: 'none', borderRadius: 12 };
+          break;
+        case 'report-takeaway':
+          bqStyle = {
+            ...bqBase,
+            background: '#eff6ff',
+            borderLeft: '4px solid #1e3a8a',
+            borderRadius: '0 8px 8px 0',
+            fontWeight: 500,
+          };
+          break;
+        case 'gallery-clean':
+          bqStyle = {
+            ...bqBase,
+            background: '#ffffff',
+            border: '1px solid #e7e5e4',
+            borderLeft: 'none',
+            borderRadius: 8,
+          };
+          break;
+        case 'mint-bubble':
+          bqStyle = {
+            ...bqBase,
+            background: 'rgba(20, 184, 166, 0.08)',
+            borderLeft: 'none',
+            borderRadius: 16,
+          };
+          break;
+        case 'literary-minimal':
+          bqStyle = {
+            ...bqBase,
+            background: 'transparent',
+            border: 'none',
+            borderRadius: 0,
+            padding: '6px 8px',
+            fontStyle: 'italic',
+          };
+          break;
+        case 'morandi-card':
+          bqStyle = {
+            ...bqBase,
+            background: 'rgba(120, 113, 108, 0.08)',
+            borderLeft: 'none',
+            borderRadius: 12,
+          };
+          break;
+        case 'cyber-card':
+          bqStyle = {
+            ...bqBase,
+            background: 'rgba(15, 23, 42, 0.55)',
+            color: '#e2e8f0',
+            border: '1px solid rgba(56, 189, 248, 0.4)',
+            borderRadius: 8,
+          };
+          break;
+        case 'latte-card':
+          bqStyle = {
+            ...bqBase,
+            background: '#fdf6ec',
+            border: '1px solid #e7d8c0',
+            borderLeft: 'none',
+            borderRadius: 12,
+          };
+          break;
+      }
       return (
-        <blockquote
-          style={{
-            ...elements.blockquote,
-            boxSizing: 'border-box',
-          }}
-        >
+        <blockquote style={bqStyle}>
+          {prefix}
           {children}
+          {suffix}
         </blockquote>
       );
     },

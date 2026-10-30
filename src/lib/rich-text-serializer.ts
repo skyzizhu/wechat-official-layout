@@ -449,21 +449,87 @@ export function serializeToWeChatRichText(
     // 在微信粘贴后被不可预测地重置
     const section = document.createElement('section');
     section.setAttribute('data-role', 'blockquote');
+
+    // quoteStyle 结构性形态（与预览端同构）：便签/硬阴影/大引号/终端/剪报/摘要框/卷轴
+    const hexToRgba = (hex: string, alpha: number): string => {
+      let h = (hex || '').replace('#', '');
+      if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+      const n = parseInt(h, 16);
+      if (Number.isNaN(n)) return hex;
+      return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+    };
+    const bqAccent = (themeElements?.h2?.color as string) || accentColor;
+    let styleOverride = '';
+    let innerPrefix = '';
+    let innerSuffix = '';
+    switch (theme?.quoteStyle) {
+      case 'post-it':
+        styleOverride = `background-color: ${hexToRgba(bqAccent, 0.06)}; border: 1px dashed ${bqAccent}; border-radius: 10px;`;
+        break;
+      case 'pop-shadow':
+        styleOverride = 'background-color: #ffffff; color: #111111; border: 3px solid #18181b; border-radius: 0; box-shadow: 5px 5px 0 #18181b;';
+        break;
+      case 'pull-quote':
+        styleOverride = 'background-color: transparent; border-left: none; border-radius: 0; text-align: center; font-size: 16.5px; font-style: italic; padding: 10px 24px;';
+        innerPrefix = `<span style="color: ${bqAccent}; font-size: 20px; font-weight: 700;">“</span>`;
+        innerSuffix = `<span style="color: ${bqAccent}; font-size: 20px; font-weight: 700;">”</span>`;
+        break;
+      case 'terminal-box':
+        styleOverride = 'background-color: #0b1220; color: #93c5fd; border: 1px solid #1e3a5f; border-radius: 6px;';
+        innerPrefix = '<span style="color: #34d399; font-family: \'Consolas\', Monaco, Menlo, monospace;">$ </span>';
+        break;
+      case 'newspaper-clip':
+        styleOverride = 'border: 3px double #78716c; border-radius: 0; background-color: rgba(120, 113, 108, 0.05); border-left: none;';
+        break;
+      case 'academic-abstract':
+        styleOverride = 'border: 1px solid #a8a29e; border-radius: 0; background-color: #fafaf9; border-left: none; padding: 16px 22px;';
+        break;
+      case 'chinese-scroll':
+        styleOverride = `border-top: 2px solid ${bqAccent}; border-bottom: 2px solid ${bqAccent}; border-radius: 0; background-color: ${hexToRgba(bqAccent, 0.04)}; border-left: none;`;
+        break;
+      case 'wechat-bubble':
+        styleOverride = 'border-left: none; border-radius: 12px;';
+        break;
+      case 'report-takeaway':
+        styleOverride = 'border: none; background-color: #eff6ff; border-left: 4px solid #1e3a8a; border-radius: 0 8px 8px 0;';
+        break;
+      case 'gallery-clean':
+        styleOverride = 'background-color: #ffffff; border: 1px solid #e7e5e4; border-left: none; border-radius: 8px;';
+        break;
+      case 'mint-bubble':
+        styleOverride = 'background-color: rgba(20, 184, 166, 0.08); border-left: none; border-radius: 16px;';
+        break;
+      case 'literary-minimal':
+        styleOverride = 'background-color: transparent; border: none; border-radius: 0; padding: 6px 8px;';
+        break;
+      case 'morandi-card':
+        styleOverride = 'background-color: rgba(120, 113, 108, 0.08); border-left: none; border-radius: 12px;';
+        break;
+      case 'cyber-card':
+        styleOverride = 'background-color: rgba(15, 23, 42, 0.55); color: #e2e8f0; border: 1px solid rgba(56, 189, 248, 0.4); border-radius: 8px;';
+        break;
+      case 'latte-card':
+        styleOverride = 'background-color: #fdf6ec; border: 1px solid #e7d8c0; border-left: none; border-radius: 12px;';
+        break;
+    }
+
     section.setAttribute(
       'style',
-      `margin: 0 0 20px; padding: ${quotePadding}; background-color: ${quoteBg}; ${fullBorder} ${borderLeftStyle} border-radius: ${quoteRadius}; ${quoteBoxShadow} color: ${quoteColor}; font-size: ${quoteFontSize}; line-height: 1.85; max-width: 100%; box-sizing: border-box; word-break: break-word;`
+      `margin: 0 0 20px; padding: ${quotePadding}; background-color: ${quoteBg}; ${fullBorder} ${borderLeftStyle} border-radius: ${quoteRadius}; ${quoteBoxShadow} color: ${quoteColor}; font-size: ${quoteFontSize}; line-height: 1.85; max-width: 100%; box-sizing: border-box; word-break: break-word;${styleOverride ? ' ' + styleOverride : ''}`
     );
 
     // 格式化引用块内部的所有子段落，移除多余外边距
     quote.querySelectorAll('p').forEach((p, idx, arr) => {
       const isLast = idx === arr.length - 1;
+      const monoFont = theme?.quoteStyle === 'terminal-box' ? "font-family: 'Consolas', Monaco, Menlo, monospace;" : '';
+      const italicFont = theme?.quoteStyle === 'pull-quote' ? 'font-style: italic;' : '';
       p.setAttribute(
         'style',
-        `margin: 0 0 ${isLast ? '0' : '10px'} 0; padding: 0; font-size: ${quoteFontSize}; line-height: 1.85; color: inherit; letter-spacing: 0.034em; box-sizing: border-box;`
+        `margin: 0 0 ${isLast ? '0' : '10px'} 0; padding: 0; font-size: ${quoteFontSize}; line-height: 1.85; color: inherit; letter-spacing: 0.034em; box-sizing: border-box; ${monoFont} ${italicFont}`
       );
     });
 
-    section.innerHTML = quote.innerHTML;
+    section.innerHTML = innerPrefix + quote.innerHTML + innerSuffix;
     parent.replaceChild(section, quote);
   });
 

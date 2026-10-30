@@ -145,6 +145,32 @@ for (const theme of allThemes) {
     } else if (family === 'banner') {
       if (!/border-top/.test(html)) problems.push('横幅族：上下横线丢失');
     }
+
+    // 引用块 quoteStyle 形态断言（16 款主题各自的引用形态签名）
+    const quoteSigs = {
+      'post-it': /border:\s*1px\s+dashed/,
+      'pop-shadow': /box-shadow:\s*5px 5px 0 #18181b/,
+      'pull-quote': /font-style:\s*italic/,
+      'terminal-box': /background-color:\s*#0b1220/,
+      'newspaper-clip': /border:\s*3px double/,
+      'academic-abstract': /border:\s*1px solid #a8a29e/,
+      'chinese-scroll': /border-top:\s*2px solid/,
+      'wechat-bubble': /border-radius:\s*12px/,
+      'report-takeaway': /border-left:\s*4px solid #1e3a8a/,
+      'gallery-clean': /border:\s*1px solid #e7e5e4/,
+      'mint-bubble': /border-radius:\s*16px/,
+      'literary-minimal': /background-color:\s*transparent/,
+      'morandi-card': /border-radius:\s*12px/,
+      'cyber-card': /rgba\(15, 23, 42, 0\.55\)/,
+      'latte-card': /border:\s*1px solid #e7d8c0/,
+    };
+    if (theme.quoteStyle && quoteSigs[theme.quoteStyle]) {
+      const blockquoteSec = (html.match(/<section[^>]*data-role="blockquote"[^>]*>[\s\S]{0,400}?<\/section>/) || [''])[0];
+      if (!blockquoteSec) problems.push('引用块：section[data-role=blockquote] 丢失');
+      else if (!quoteSigs[theme.quoteStyle].test(blockquoteSec)) {
+        problems.push(`引用形态 ${theme.quoteStyle}：签名样式缺失`);
+      }
+    }
   }
 
   if (problems.length) {
