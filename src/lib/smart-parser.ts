@@ -1580,16 +1580,14 @@ export function convertPlainTextToMarkdown(
     if (isCaptionPattern) {
       const cleanCap = trimmed.replace(/^[*_]+|[*_]+$/g, '').trim();
       const formattedCap = cleanCap.startsWith('▲') ? cleanCap : `▲ ${cleanCap}`;
-      // 置信度：紧随图片且无显式标记的短行判定为题注的把握中等（可能是普通正文），提示用户确认
+      // 邻接题注（图后短行，无显式标记）：只建议、不自动套用——
+      // 图后短行是正文的概率不低（如「放到整个行业：所有巨头都……」），
+      // 自动套题注两次误伤用户后改为提示条确认；显式题注（▲/图N/注：）仍然直接套用
       if (adjacencyCaption && !explicitCaption) {
-        if (!isSuppressed('题注', cleanCap)) {
-          noteDecision('题注', 0.68, cleanCap);
-        } else {
-          // 用户已纠偏为正文：去除斜体与题注标记，按普通文本输出
-          processedLines.push(addPanguSpacing(formatBareUrls(cleanCap)));
-          lastNonEmptyWasImage = false;
-          continue;
-        }
+        noteDecision('题注', 0.68, cleanCap);
+        processedLines.push(addPanguSpacing(formatBareUrls(trimmed)));
+        lastNonEmptyWasImage = false;
+        continue;
       }
       processedLines.push(`*${formattedCap}*`);
       lastNonEmptyWasImage = false;

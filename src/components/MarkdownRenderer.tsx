@@ -218,8 +218,9 @@ function rehypeLayoutEnhancer() {
             prev.properties?.dataImageParagraph === 'true' ||
             prev.properties?.dataImageTable === 'true');
         const textContent = getNodeText(curr).trim();
-        // 整段斜体（em 为唯一可见子节点）才是题注惯例；段落里夹一个斜体词
-        // 就判题注会误伤正文（如「这个方法*非常*有效。」），与序列化器规则保持一致
+        // 题注只认显式形态（▲/图N/注：前缀、整段斜体）——「图后短行无句号就猜题注」
+        // 的启发式会反复误伤正文（用户两次报告），已与引擎、序列化器一并对齐：
+        // 拿不准的保持正文，由纠偏提示条建议转为题注
         const visibleKids = (curr.children || []).filter(
           (c: any) => c.type !== 'text' || Boolean(c.value?.trim())
         );
@@ -228,10 +229,7 @@ function rehypeLayoutEnhancer() {
           /^(?:▲\s*|\[)?(?:图|表|Figure|阶段)\s*[\dA-Za-z\-]+/i.test(textContent) ||
           textContent.startsWith('▲') ||
           /^(?:注|注\d+|※)[：:]/.test(textContent) ||
-          (isPrevImg && (
-            (soleEmChild && textContent.length < 140) ||
-            (textContent.length > 0 && textContent.length < 120 && !/[。！？]$/.test(textContent))
-          ));
+          (isPrevImg && soleEmChild && textContent.length < 140);
 
         if (isPrevImg && isCaptionText) {
           curr.properties.dataImageCaption = 'true';

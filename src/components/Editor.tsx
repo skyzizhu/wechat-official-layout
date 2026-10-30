@@ -2418,6 +2418,56 @@ export function Editor({
         </div>
       </div>
 
+      {/* 低置信度识别纠偏提示条：引擎拿不准的形态（题注/金句/HTML块）在此确认，
+          采纳 = 按建议转换；保留 = 维持正文。不展示则用户永远不知道引擎做了什么猜测 */}
+      {lowConfidenceDecisions && lowConfidenceDecisions.length > 0 && onResolveDecision && onKeepDecision && (
+        <div className="px-4 py-1.5 bg-amber-50/90 border-b border-amber-100 flex flex-col gap-1 flex-shrink-0">
+          {lowConfidenceDecisions.slice(0, 3).map((d) => (
+            <div key={`${d.type}:${d.snippet}`} className="flex items-center gap-2 text-xs text-amber-900 min-w-0">
+              <span className="flex-shrink-0 font-medium">可能识别为「{d.type}」</span>
+              <span className="truncate flex-1 text-amber-700" title={d.snippet}>「{d.snippet}」</span>
+              <button
+                onClick={() => onResolveDecision(d)}
+                className="flex-shrink-0 px-2 py-0.5 rounded text-[11px] font-medium text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 cursor-pointer transition-colors"
+              >
+                {d.type === '金句' ? '转为金句' : d.type === 'HTML代码块' ? '转为代码块' : '转为题注'}
+              </button>
+              <button
+                onClick={() => onKeepDecision(d)}
+                className="flex-shrink-0 px-2 py-0.5 rounded text-[11px] text-gray-500 hover:text-gray-800 hover:bg-gray-100 border border-gray-200 cursor-pointer transition-colors"
+              >
+                保留正文
+              </button>
+            </div>
+          ))}
+          {lowConfidenceDecisions.length > 1 && (
+            <div className="flex items-center gap-2 text-[11px] text-amber-700">
+              <button
+                onClick={() => onResolveAllDecisions?.(lowConfidenceDecisions)}
+                className="px-1.5 py-0.5 rounded border border-amber-300 hover:bg-amber-100 cursor-pointer"
+              >
+                采纳全部建议
+              </button>
+              <button
+                onClick={() => onKeepAllDecisions?.(lowConfidenceDecisions)}
+                className="px-1.5 py-0.5 rounded border border-gray-200 hover:bg-gray-100 cursor-pointer text-gray-500"
+              >
+                全部保留原文
+              </button>
+              {onExportFeedback && (
+                <button
+                  onClick={onExportFeedback}
+                  className="ml-auto text-gray-400 hover:text-gray-600 cursor-pointer"
+                  title="导出识别纠偏反馈日志（JSON）"
+                >
+                  导出反馈 ↓
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 智能检测状态提示浮条 */}
       <div className="px-4 py-1.5 bg-slate-50/80 border-b border-black/[0.04] flex items-center justify-between text-xs text-gray-500 flex-shrink-0">
         <span className="hidden xl:inline text-[11px] text-gray-400 whitespace-nowrap overflow-hidden text-ellipsis flex-shrink min-w-0" title="选中文字后可使用快捷键与悬浮工具栏">选中文字可转格式 · ⌘B 加粗 · ⌘1/2/3 标题 · ⌘S 保存</span>

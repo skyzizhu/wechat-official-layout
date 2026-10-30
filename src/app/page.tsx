@@ -433,7 +433,9 @@ function MainLayout() {
 
   const handleResolveDecision = (d: ConversionDecision) => {
     const key = `${d.type}:${d.snippet}`;
-    logFeedback(d, d.type === '金句' ? '转为金句' : '改为正文');
+    const actionLabel =
+      d.type === '金句' ? '转为金句' : d.type === '题注' ? '转为题注' : d.type === 'HTML代码块' ? '转为代码块' : '改为正文';
+    logFeedback(d, actionLabel);
 
     // HTML 代码块：将草稿中对应原始 HTML 块用 ```html 围栏包裹（切换为源码展示）
     if (d.type === 'HTML代码块') {
@@ -447,6 +449,20 @@ function MainLayout() {
         return [...lines.slice(0, startIdx), '```html', ...block, '```', ...lines.slice(endIdx + 1)].join('\n');
       });
       setDraftStatus('已将 HTML 块切换为源码展示');
+      return;
+    }
+
+    // 题注：邻接题注已是「建议不套用」——此处按建议把对应行包装为题注约定行
+    if (d.type === '题注') {
+      setMarkdown((prev) => {
+        const lines = prev.split('\n');
+        const idx = lines.findIndex((l) => l.trim().includes(d.snippet));
+        if (idx < 0) return prev;
+        const clean = lines[idx].trim();
+        lines[idx] = `*${clean.startsWith('▲') ? clean : '▲ ' + clean}*`;
+        return lines.join('\n');
+      });
+      setDraftStatus(`已将「${d.snippet}」转为题注`);
       return;
     }
 

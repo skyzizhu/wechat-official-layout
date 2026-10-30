@@ -786,11 +786,9 @@ export function serializeToWeChatRichText(
       /^(?:▲\s*|\[)?(?:图|表|Figure|阶段)\s*[\dA-Za-z\-]+/i.test(pText) ||
       pText.startsWith('▲') ||
       /^(?:注|注\d+|※)[：:]/.test(pText) ||
-      (isPrevImgBlock && (
-        // 整段斜体（唯一元素子节点为 em）是题注惯例，不 受句末标点限制；与预览端规则一致
-        (p.children.length === 1 && p.children[0].tagName === 'EM' && pText.length > 0 && pText.length < 140) ||
-        (pText.length > 0 && pText.length < 120 && !/[。！？]$/.test(pText))
-      ));
+      // 整段斜体（唯一元素子节点为 em）是题注惯例；「图后短行无句号就猜题注」的
+      // 启发式已与预览端、引擎一并对齐移除——拿不准的保持正文（防误伤正文）
+      (isPrevImgBlock && p.children.length === 1 && p.children[0].tagName === 'EM' && pText.length > 0 && pText.length < 140);
 
     if (isCaption) {
       // 与预览一致：主题强调色 + 斜体小字居中（em 解构后斜体以内联样式补回，
