@@ -11,7 +11,7 @@ export function AppPromoBadge() {
   const [imgOk, setImgOk] = useState(true);
   return (
     <a
-      href="https://www.yourtools.xyz/"
+      href="https://www.yourtools.xyz/index_hans.html"
       target="_blank"
       rel="noopener noreferrer"
       title="前往 XTools 官网，下载 App 体验更多功能"
