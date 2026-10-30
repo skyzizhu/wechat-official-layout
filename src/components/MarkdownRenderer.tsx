@@ -218,12 +218,18 @@ function rehypeLayoutEnhancer() {
             prev.properties?.dataImageParagraph === 'true' ||
             prev.properties?.dataImageTable === 'true');
         const textContent = getNodeText(curr).trim();
+        // 整段斜体（em 为唯一可见子节点）才是题注惯例；段落里夹一个斜体词
+        // 就判题注会误伤正文（如「这个方法*非常*有效。」），与序列化器规则保持一致
+        const visibleKids = (curr.children || []).filter(
+          (c: any) => c.type !== 'text' || Boolean(c.value?.trim())
+        );
+        const soleEmChild = visibleKids.length === 1 && visibleKids[0].tagName === 'em';
         const isCaptionText =
           /^(?:▲\s*|\[)?(?:图|表|Figure|阶段)\s*[\dA-Za-z\-]+/i.test(textContent) ||
           textContent.startsWith('▲') ||
           /^(?:注|注\d+|※)[：:]/.test(textContent) ||
           (isPrevImg && (
-            (curr.children?.some((c: any) => c.tagName === 'em') && textContent.length < 140) ||
+            (soleEmChild && textContent.length < 140) ||
             (textContent.length > 0 && textContent.length < 120 && !/[。！？]$/.test(textContent))
           ));
 

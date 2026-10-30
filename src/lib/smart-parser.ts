@@ -1562,13 +1562,13 @@ export function convertPlainTextToMarkdown(
       /^[（(][一二三四五六七八九十百千万]+[）)]/.test(trimmed) ||
       /^[一二三四五六七八九十百千万]+[、.．]/.test(trimmed) ||
       /^#{1,6}\s/.test(trimmed);
-    const explicitCaption =
-      /^\*?(?:▲\s*|\[)?(?:图|表|Figure|阶段)\s*[\dA-Za-z\-]+/i.test(trimmed) ||
-      /^\*?▲\s*.+$/i.test(trimmed) ||
-      /^\*?注[：:]/.test(trimmed);
-    // 邻接题注的守卫必须基于「可见文本」：行内标签（如高亮 span）会让原始行
-    // 以 </span> 收尾，句号藏在标签内，直接测行尾会漏掉句末标点致误判为题注
+    // 可见文本（剥行内标签）：题注判定用——行首/行尾锚点若测原始行，
+    // 会被高亮 span 等标签致盲（▲ 藏在 <span> 后、句号藏在 </span> 后）
     const visibleText = trimmed.replace(/<[^>]*>/g, '').trim();
+    const explicitCaption =
+      /^\*?(?:▲\s*|\[)?(?:图|表|Figure|阶段)\s*[\dA-Za-z\-]+/i.test(visibleText) ||
+      /^\*?▲\s*.+$/i.test(visibleText) ||
+      /^\*?注[：:]/.test(visibleText);
     const adjacencyCaption =
       lastNonEmptyWasImage &&
       visibleText.length > 0 &&
