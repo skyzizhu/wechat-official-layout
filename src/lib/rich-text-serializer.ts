@@ -654,10 +654,16 @@ export function serializeToWeChatRichText(
     parent.replaceChild(wrapper, hr);
   });
 
-  // (8) 处理正文段落 p（保证两端对齐、黄金行距 1.85 与自适应字距，重点保证双分割线夹持文本绝对垂直居中，图片包装与题注紧凑对齐）
+  // (8) 处理正文段落 p（行高/段距/对齐/字间距/首行缩进全部遵循主题 elements.p 定义——
+  // 各主题在预设里已做了差异化的书写质感设计，序列化必须忠实还原，不得压平成全局常量；
+  // 图片包装与题注紧凑对齐、双分割线夹持文本绝对垂直居中仍特殊保证）
   const pColor = (themeElements?.p?.color as string) || '#374151';
   const pFontSize = (themeElements?.p?.fontSize as string) || baseFontSize;
-  const pLineHeight = '1.85';
+  const pLineHeight = (themeElements?.p?.lineHeight as string) || '1.85';
+  const pGap = (themeElements?.p?.marginBottom as string) || '18px';
+  const pLetterSpacing = (themeElements?.p?.letterSpacing as string) || '0.034em';
+  // 主题默认首行缩进（经典学术/文艺清新/新中式等书卷系为 2em）；用户手敲的 em 空格缩进优先
+  const themeTextIndent = (themeElements?.p?.textIndent as string) || '';
 
   clone.querySelectorAll('p').forEach((p) => {
     // 若在 blockquote 内部已处理过，跳过
@@ -813,7 +819,7 @@ export function serializeToWeChatRichText(
     const isBeforeHr = next?.tagName === 'HR' || next?.getAttribute('data-role') === 'divider';
 
     let pMarginTop = '0';
-    let pMarginBottom = '18px';
+    let pMarginBottom = pGap;
 
     if (isAfterHr && isBeforeHr) {
       // 双分割线夹持文本（题记/金句/引言）：上下边距归零；分割线下方 padding
@@ -844,9 +850,14 @@ export function serializeToWeChatRichText(
       }
     }
 
+    // 对齐遵循主题（规范 1.6：严禁 start/end，统一转为 left/right）
+    let pAlign = (themeElements?.p?.textAlign as string) || 'justify';
+    if (pAlign === 'start') pAlign = 'left';
+    if (pAlign === 'end') pAlign = 'right';
+
     p.setAttribute(
       'style',
-      `margin-top: ${pMarginTop}; margin-bottom: ${pMarginBottom}; font-size: ${pFontSize}; line-height: ${pLineHeight}; letter-spacing: 0.034em; color: ${pColor}; text-align: justify;${indentEm > 0 ? ` text-indent: ${indentEm}em;` : ''} word-break: break-word; box-sizing: border-box; max-width: 100%;`
+      `margin-top: ${pMarginTop}; margin-bottom: ${pMarginBottom}; font-size: ${pFontSize}; line-height: ${pLineHeight}; letter-spacing: ${pLetterSpacing}; color: ${pColor}; text-align: ${pAlign};${indentEm > 0 ? ` text-indent: ${indentEm}em;` : themeTextIndent ? ` text-indent: ${themeTextIndent};` : ''} word-break: break-word; box-sizing: border-box; max-width: 100%;`
     );
   });
 
@@ -1237,7 +1248,7 @@ export function serializeToWeChatRichText(
   const bgStyle = isWhiteBg ? '' : `background-color: ${rawBgColor};`;
   const radiusStyle = cRadius ? cRadius : (isWhiteBg && !hasContainerFrame ? '' : 'border-radius: 8px;');
 
-  const outerContainerStyle = `max-width: 100%; margin: 0 auto; box-sizing: border-box; font-family: ${WECHAT_OFFICIAL_FONT_FAMILY}; font-size: ${baseFontSize}; letter-spacing: 0.034em; line-height: 1.85; color: ${mainTextColor}; text-align: justify; word-break: break-word; ${bgStyle} ${cBorder} ${radiusStyle} ${cShadow} ${containerPadding}`.trim();
+  const outerContainerStyle = `max-width: 100%; margin: 0 auto; box-sizing: border-box; font-family: ${WECHAT_OFFICIAL_FONT_FAMILY}; font-size: ${baseFontSize}; letter-spacing: ${pLetterSpacing}; line-height: ${pLineHeight}; color: ${mainTextColor}; text-align: justify; word-break: break-word; ${bgStyle} ${cBorder} ${radiusStyle} ${cShadow} ${containerPadding}`.trim();
 
   // 杜绝任何双引号破坏 style="..." 属性结构
   const safeOuterStyle = outerContainerStyle.replace(/"/g, "'");
