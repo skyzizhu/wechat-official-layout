@@ -380,6 +380,13 @@ function buildParagraph(line: string): HTMLParagraphElement {
     p.innerHTML = note[1];
     return p;
   }
+  // 金句（HTML 行，意图菜单「金句」生成；智能引擎引号金句同款约定）
+  const golden = t.match(/^<p data-role="golden-line">([\s\S]*?)<\/p>$/);
+  if (golden) {
+    p.dataset.kind = 'golden';
+    p.innerHTML = golden[1];
+    return p;
+  }
   // 居中（HTML 行，意图菜单「居中」生成；预览/微信输出整段水平居中）
   const center = t.match(/^<p data-role="center">([\s\S]*?)<\/p>$/);
   if (center) {
@@ -522,7 +529,7 @@ export function Editor({
   // Markdown 透镜：只读查看当前生效的排版用 Markdown 源码（与预览/下载 MD 同源）
   const [showMdSource, setShowMdSource] = useState(false);
   // 选中文本意图转换工具栏：{ 起始段落索引, 结束段落索引 }
-  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number; anchorTop: number; anchorBottom: number; flipped: boolean; active?: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean; code?: boolean; center?: boolean; sup?: boolean; sub?: boolean; h2?: boolean; h3?: boolean }; activeColors?: { u?: string; dashed?: string; hl?: string }; submenu?: 'u' | 'dashed' | 'hl' | null; submenuPos?: { top: number; left: number } } | null>(null);
+  const [intentBar, setIntentBar] = useState<{ s: number; e: number; top: number; left: number; anchorTop: number; anchorBottom: number; flipped: boolean; active?: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean; code?: boolean; center?: boolean; golden?: boolean; sup?: boolean; sub?: boolean; h2?: boolean; h3?: boolean }; activeColors?: { u?: string; dashed?: string; hl?: string }; submenu?: 'u' | 'dashed' | 'hl' | null; submenuPos?: { top: number; left: number } } | null>(null);
   const intentBarRef = useRef<HTMLDivElement>(null);
   // 渲染后按菜单实际宽高做边界收敛（translateX(-50%) 居中依赖真实宽度；
   // 菜单换行后高度会变，上方是否放得下必须按实测高度 + 当前滚动可视区重判）
@@ -626,6 +633,8 @@ export function Editor({
         buf.push('<p data-role="note">' + el.innerHTML.replace(/\n/g, '') + '</p>');
       } else if (kind === 'center') {
         buf.push('<p data-role="center">' + el.innerHTML.replace(/\n/g, '') + '</p>');
+      } else if (kind === 'golden') {
+        buf.push('<p data-role="golden-line">' + el.innerHTML.replace(/\n/g, '') + '</p>');
       } else if (/^h[1-6]$/.test(kind)) {
         buf.push('#'.repeat(Number(kind[1])) + ' ' + text);
       } else if (kind === 'quote') {
@@ -1614,7 +1623,7 @@ export function Editor({
     }
     // 着重激活态：选区两侧任一端向上找到匹配样式的 span 即视为已应用（按钮高亮，再点取消）
     const selNow = window.getSelection();
-    const active: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean; code?: boolean; center?: boolean; sup?: boolean; sub?: boolean; h2?: boolean; h3?: boolean } = {};
+    const active: { u?: boolean; dashed?: boolean; hl?: boolean; list?: boolean; note?: boolean; code?: boolean; center?: boolean; golden?: boolean; sup?: boolean; sub?: boolean; h2?: boolean; h3?: boolean } = {};
     const activeColors: { u?: string; dashed?: string; hl?: string } = {};
     if (selNow && selNow.rangeCount > 0) {
       const selRange = selNow.getRangeAt(0);
@@ -1679,6 +1688,7 @@ export function Editor({
         listLines.every((l) => /^\s*[-•●·✦]\s+/.test(l));
       active.note = range.ps.every((p) => p.dataset.kind === 'note');
       active.center = range.ps.length > 0 && range.ps.every((p) => p.dataset.kind === 'center');
+      active.golden = range.ps.length > 0 && range.ps.every((p) => p.dataset.kind === 'golden');
       active.code = range.ps.length > 0 && range.ps.every((p) => p.dataset.kind === 'code');
       active.h2 = range.ps.length > 0 && range.ps.every((p) => p.dataset.kind === 'h2');
       active.h3 = range.ps.length > 0 && range.ps.every((p) => p.dataset.kind === 'h3');
@@ -1796,12 +1806,6 @@ export function Editor({
         }
         break;
       }
-      case 'caption':
-        for (let k = 0; k < out.length; k++) {
-          const t = (out[k] || '').trim().replace(/^[*_]+|[*_]+$/g, '');
-          if (t) out[k] = '*' + (t.startsWith('▲') ? t : '▲ ' + t) + '*';
-        }
-        break;
       case 'note': {
         // 备注（开关式）：应用 = 每个非空行包为 <p data-role="note"> HTML 行
         // （序列化：字号-4px、灰色、不加粗不斜体）；取消 = 还原纯文本行
@@ -1826,6 +1830,17 @@ export function Editor({
           const t = (out[k] || '').trim();
           if (!t) continue;
           out[k] = allCenter ? t : '<p data-role="center">' + escapeHtml(t) + '</p>';
+        }
+        break;
+      }
+      case 'golden': {
+        // 金句（开关式）：已全部是金句段 → 还原正文；否则每行包装为金句段
+        // （<p data-role="golden-line"> 与智能引擎引号金句同款约定，预览/微信按主题强调色居中渲染）
+        const allGolden = targets.length > 0 && targets.every((p) => p.dataset.kind === 'golden');
+        for (let k = 0; k < out.length; k++) {
+          const t = (out[k] || '').trim();
+          if (!t) continue;
+          out[k] = allGolden ? t : `<p data-role="golden-line">${t}</p>`;
         }
         break;
       }
@@ -2474,7 +2489,7 @@ export function Editor({
                 { kind: 'table', label: '表格' },
                 { kind: 'quote', label: '引用' },
                 { kind: 'code', label: '代码' },
-                { kind: 'caption', label: '题注' },
+                { kind: 'golden', label: '金句' },
                 { kind: 'note', label: '备注' },
                 { kind: 'center', label: '居中' },
                 { kind: 'u', label: '下划线' },
@@ -2495,6 +2510,7 @@ export function Editor({
                   !!(item.kind === 'list' && intentBar.active?.list) ||
                   !!(item.kind === 'note' && intentBar.active?.note) ||
                   !!(item.kind === 'center' && intentBar.active?.center) ||
+                  !!(item.kind === 'golden' && intentBar.active?.golden) ||
                   !!(item.kind === 'code' && intentBar.active?.code) ||
                   !!(item.kind === 'h2' && intentBar.active?.h2) ||
                   !!(item.kind === 'h3' && intentBar.active?.h3);
