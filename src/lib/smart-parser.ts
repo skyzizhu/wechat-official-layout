@@ -1597,8 +1597,9 @@ export function convertPlainTextToMarkdown(
     lastNonEmptyWasImage = false;
 
     // 3.12.5 散文金句识别：独立成段的短句（观点句/点题句）→ 居中强调段（预览按主题强调色渲染）。
-    // 约束：非首段；前后皆为空行；长度 8~48 字；以句号/感叹/问号/引号收尾；中英文逗号分号合计不超过 2 个。
-    // 满足全部条件才判定为金句，最大限度避免把普通叙述段误判为金句。
+    // 约束：非首段；前后皆为空行；长度 8~48 字；以句号/感叹/问号/引号收尾；逗号分号 ≤2；
+    // 且必须被引号完整包裹（“……”/「……」）——引号是金句的经典书写信号。
+    // 裸句一律不自动判定（普通写作中大量短段会被误伤），识别必须准确才自动呈现。
     {
       const prevBlank = idx === 0 || !blockProcessedLines[idx - 1].trim();
       const nextBlank = idx === blockProcessedLines.length - 1 || !blockProcessedLines[idx + 1].trim();
@@ -1609,11 +1610,12 @@ export function convertPlainTextToMarkdown(
         nextBlank &&
         trimmed.length >= 8 &&
         trimmed.length <= 48 &&
+        /^[“"『「].+[”"』」]$/.test(trimmed) &&
         /[。！？”]$/.test(trimmed) &&
         commaCount <= 2;
       if (isGoldenLine) {
-        // 默认保持普通正文；作为低置信度决策（68%）提示用户，可在提示条一键「转为金句」
-        noteDecision('金句', 0.68, trimmed);
+        // 识别即呈现：引号包裹的独立短句直接按金句格式渲染
+        processedLines.push(`<p data-role="golden-line">${trimmed}</p>`);
       }
     }
 

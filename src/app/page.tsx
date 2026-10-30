@@ -15,7 +15,7 @@ import {
   FontSizeOption,
 } from '@/themes';
 import { SAMPLE_PLAIN_TEXT } from '@/lib/sample-markdown';
-import { detectContentFormat, processContentByMode, ConversionDecision } from '@/lib/smart-parser';
+import { detectContentFormat, processContentByMode } from '@/lib/smart-parser';
 import { stripMarkdownToPlainText } from '@/lib/markdown-plain';
 import { AppPromoBadge } from '@/components/AppPromoBadge';
 import { SiteFooter } from '@/components/SiteFooter';
@@ -91,8 +91,6 @@ function MainLayout() {
   const [drafts, setDrafts] = useState<DraftEntry[]>([]);
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   // 第二阶段：用户纠偏的识别决策（抑制键持久化；已确认保留的会话内隐藏）
-  const [suppressedKeys, setSuppressedKeys] = useState<string[]>([]);
-  const [dismissedKeys, setDismissedKeys] = useState<string[]>([]);
   // 第三阶段：AI 增强识别
 
   const previewRef = useRef<HTMLDivElement>(null);
@@ -182,14 +180,6 @@ function MainLayout() {
       const savedFootnotes = localStorage.getItem('radiant_link_footnotes');
       if (savedFootnotes !== null) {
         setLinkFootnotes(savedFootnotes === 'true');
-      }
-
-      const savedSuppressed = localStorage.getItem('radiant_suppressed_decisions');
-      if (savedSuppressed) {
-        try {
-          const parsed = JSON.parse(savedSuppressed);
-          if (Array.isArray(parsed)) setSuppressedKeys(parsed);
-        } catch {}
       }
 
       const savedFirstLine = localStorage.getItem('radiant_first_line_title');
@@ -404,11 +394,11 @@ function MainLayout() {
   const exportSource = snapshot && markdown === snapshot.plain ? snapshot.md : markdown;
   const sourceIsMarkdown = !!snapshot && markdown === snapshot.plain;
 
-  // 智能区分与预处理输入内容，并根据开关自动执行外链转文末脚注与首句标题识别
+  // 智能区分与预处理输入内容，并根据开关自动执行外链转文末脚注与首句标题识别。
+  // 识别结果直接呈现（金句/代码块/题注按置信规则自动套用，图后短行保持正文）
   const processed = useMemo(() => {
     const rawResult = processContentByMode(renderSource, 'auto', {
       treatFirstLineAsTitle: firstLineAsTitle,
-      suppressedDecisions: suppressedKeys,
     });
     const withFootnotes = convertLinksToFootnotes(rawResult.renderedMarkdown, linkFootnotes);
     return {
@@ -416,144 +406,7 @@ function MainLayout() {
       renderedMarkdown: withFootnotes.content,
       footnotes: withFootnotes.footnotes,
     };
-  }, [renderSource, linkFootnotes, firstLineAsTitle, suppressedKeys]);
-
-  // 第二阶段：低置信度识别决策的纠偏与反馈
-  const lowConfidenceDecisions = (processed.decisions || []).filter(
-    (d) => d.confidence < 0.75 && !dismissedKeys.includes(`${d.type}:${d.snippet}`)
-  );
-
-  const logFeedback = (d: ConversionDecision, action: string) => {
-    try {
-      const log = JSON.parse(localStorage.getItem('radiant_feedback_log') || '[]');
-      log.push({ ts: new Date().toISOString(), action, type: d.type, confidence: d.confidence, snippet: d.snippet });
-      localStorage.setItem('radiant_feedback_log', JSON.stringify(log.slice(-200)));
-    } catch {}
-  };
-
-  const handleResolveDecision = (d: ConversionDecision) => {
-    const key = `${d.type}:${d.snippet}`;
-    const actionLabel =
-      d.type === '金句' ? '转为金句' : d.type === '题注' ? '转为题注' : d.type === 'HTML代码块' ? '转为代码块' : '改为正文';
-    logFeedback(d, actionLabel);
-
-    // HTML 代码块：将草稿中对应原始 HTML 块用 ```html 围栏包裹（切换为源码展示）
-    if (d.type === 'HTML代码块') {
-      setMarkdown((prev) => {
-        const lines = prev.split('\n');
-        const startIdx = lines.findIndex((l) => l.trim().startsWith('<') && l.includes(d.snippet.slice(0, 10)));
-        if (startIdx < 0) return prev;
-        let endIdx = startIdx;
-        while (endIdx + 1 < lines.length && lines[endIdx + 1].trim() !== '') endIdx++;
-        const block = lines.slice(startIdx, endIdx + 1);
-        return [...lines.slice(0, startIdx), '```html', ...block, '```', ...lines.slice(endIdx + 1)].join('\n');
-      });
-      setDraftStatus('已将 HTML 块切换为源码展示');
-      return;
-    }
-
-    // 题注：邻接题注已是「建议不套用」——此处按建议把对应行包装为题注约定行
-    if (d.type === '题注') {
-      setMarkdown((prev) => {
-        const lines = prev.split('\n');
-        const idx = lines.findIndex((l) => l.trim().includes(d.snippet));
-        if (idx < 0) return prev;
-        const clean = lines[idx].trim();
-        lines[idx] = `*${clean.startsWith('▲') ? clean : '▲ ' + clean}*`;
-        return lines.join('\n');
-      });
-      setDraftStatus(`已将「${d.snippet}」转为题注`);
-      return;
-    }
-
-    // 金句：将草稿中对应段落包装为居中金句段（升级而非抑制）
-    if (d.type === '金句') {
-      setMarkdown((prev) => {
-        const lines = prev.split('\n');
-        const idx = lines.findIndex((l) => l.trim() === d.snippet || l.trim().includes(d.snippet));
-        if (idx >= 0) lines[idx] = `<p data-role="golden-line">${lines[idx].trim()}</p>`;
-        return lines.join('\n');
-      });
-      setDraftStatus(`已将「${d.snippet}」转为金句`);
-      return;
-    }
-
-    // 其他类型：抑制该识别决策（恢复普通正文渲染）
-    setSuppressedKeys((prev) => {
-      const next = prev.includes(key) ? prev : [...prev, key];
-      try {
-        localStorage.setItem('radiant_suppressed_decisions', JSON.stringify(next));
-      } catch {}
-      return next;
-    });
-    setDraftStatus(`已将「${d.snippet}」改为正文`);
-  };
-
-  const handleKeepDecision = (d: ConversionDecision) => {
-    const key = `${d.type}:${d.snippet}`;
-    setDismissedKeys((prev) => (prev.includes(key) ? prev : [...prev, key]));
-    logFeedback(d, '保留');
-  };
-
-  // 批量：全部按建议处理（金句 → 转为金句；HTML 块 → 围栏为代码卡；其余 → 维持识别形态）
-  const handleResolveAllDecisions = (ds: ConversionDecision[]) => {
-    if (!ds.length) return;
-    ds.forEach((d) => logFeedback(d, d.type === '金句' ? '转为金句' : d.type === 'HTML代码块' ? '转为代码块' : '保留识别'));
-
-    const golden = ds.filter((d) => d.type === '金句');
-    if (golden.length) {
-      setMarkdown((prev) => {
-        const lines = prev.split('\n');
-        for (const d of golden) {
-          const idx = lines.findIndex((l) => l.trim() === d.snippet || l.trim().includes(d.snippet));
-          if (idx >= 0) lines[idx] = `<p data-role="golden-line">${lines[idx].trim()}</p>`;
-        }
-        return lines.join('\n');
-      });
-    }
-
-    const htmlBlocks = ds.filter((d) => d.type === 'HTML代码块');
-    if (htmlBlocks.length) {
-      setMarkdown((prev) => {
-        const lines = prev.split('\n');
-        for (const d of htmlBlocks) {
-          const startIdx = lines.findIndex((l) => l.trim().startsWith('<') && l.includes(d.snippet.slice(0, 10)));
-          if (startIdx < 0) continue;
-          let endIdx = startIdx;
-          while (endIdx + 1 < lines.length && lines[endIdx + 1].trim() !== '') endIdx++;
-          const block = lines.slice(startIdx, endIdx + 1);
-          lines.splice(startIdx, endIdx - startIdx + 1, '```html', ...block, '```');
-        }
-        return lines.join('\n');
-      });
-    }
-
-    setDraftStatus(`已批量采纳 ${ds.length} 处识别建议`);
-  };
-
-  // 批量：全部保留原文（维持识别形态，仅清除提示）
-  const handleKeepAllDecisions = (ds: ConversionDecision[]) => {
-    if (!ds.length) return;
-    setDismissedKeys((prev) => {
-      const keys = ds.map((d) => `${d.type}:${d.snippet}`);
-      return Array.from(new Set([...prev, ...keys]));
-    });
-    ds.forEach((d) => logFeedback(d, '保留'));
-    setDraftStatus('已保留全部识别内容');
-  };
-
-  const handleExportFeedback = () => {
-    try {
-      const log = localStorage.getItem('radiant_feedback_log') || '[]';
-      const blob = new Blob([log], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `wenpai-feedback-${Date.now()}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {}
-  };
+  }, [renderSource, linkFootnotes, firstLineAsTitle]);
 
   return (
     <div className="flex flex-col h-screen bg-transparent">
@@ -581,12 +434,6 @@ function MainLayout() {
               onDeleteDraft={handleDeleteDraft}
               firstLineAsTitle={firstLineAsTitle}
               onToggleFirstLineAsTitle={handleToggleFirstLineAsTitle}
-              lowConfidenceDecisions={lowConfidenceDecisions}
-              onResolveDecision={handleResolveDecision}
-              onKeepDecision={handleKeepDecision}
-              onResolveAllDecisions={handleResolveAllDecisions}
-              onKeepAllDecisions={handleKeepAllDecisions}
-              onExportFeedback={handleExportFeedback}
               onScrollRatio={handleEditorScroll}
               onSaveDraft={handleSaveDraftNow}
             />
@@ -632,12 +479,6 @@ function MainLayout() {
                   onDeleteDraft={handleDeleteDraft}
                   firstLineAsTitle={firstLineAsTitle}
                   onToggleFirstLineAsTitle={handleToggleFirstLineAsTitle}
-                  lowConfidenceDecisions={lowConfidenceDecisions}
-                  onResolveDecision={handleResolveDecision}
-                  onKeepDecision={handleKeepDecision}
-                  onExportFeedback={handleExportFeedback}
-                  onResolveAllDecisions={handleResolveAllDecisions}
-                  onKeepAllDecisions={handleKeepAllDecisions}
                   onScrollRatio={handleEditorScroll}
                   onSaveDraft={handleSaveDraftNow}
                 />
