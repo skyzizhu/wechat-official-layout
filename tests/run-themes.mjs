@@ -71,6 +71,9 @@ function sampleDoc(theme) {
     <p>正文段落，包含<strong>加粗强调</strong>与普通文字，验证各主题下的基础排版稳定性。</p>
     <blockquote><p>这是一段引用块，验证左右边距与内边距。</p></blockquote>
     <ul><li>列表项一：第一点</li><li>列表项二：第二点</li></ul>
+    <p data-role="note">这是一段备注说明，验证备注与主题节奏的一致性。</p>
+    <p data-role="center">这是一段居中文字。</p>
+    <p>“排版是内容的呼吸，密度即是节奏。”</p>
     <p>结尾段落。</p>
   </div>`;
 }
@@ -164,6 +167,27 @@ for (const theme of allThemes) {
       'cyber-card': /rgba\(15, 23, 42, 0\.55\)/,
       'latte-card': /border:\s*1px solid #e7d8c0/,
     };
+    // 排版密度一致性：正文/备注/居中的行高、段距、字距必须忠实还原主题定义
+    const pl = theme.elements.p;
+    const expLH = String(pl.lineHeight || '1.85');
+    const expGap = String(pl.marginBottom || '18px');
+    const expLS = String(pl.letterSpacing || '0.034em');
+    const bodyP = (html.match(/<p[^>]*style="([^"]*)"[^>]*>正文段落/) || html.match(/<p[^>]*style="([^"]*)"[^>]*>[^<]*加粗强调/) || []);
+    if (!bodyP[1]) problems.push('密度：正文段落样式未捕获');
+    else {
+      const lh = (bodyP[1].match(/line-height:\s*([^;]+);/) || [])[1]?.trim();
+      if (lh !== expLH) problems.push(`密度：正文行高 ${lh} ≠ 主题定义 ${expLH}`);
+      const mb = (bodyP[1].match(/margin-bottom:\s*([^;]+);/) || [])[1]?.trim();
+      if (mb !== expGap) problems.push(`密度：正文段距 ${mb} ≠ 主题定义 ${expGap}`);
+      const ls = (bodyP[1].match(/letter-spacing:\s*([^;]+);/) || [])[1]?.trim();
+      if (ls !== expLS) problems.push(`密度：正文字距 ${ls} ≠ 主题定义 ${expLS}`);
+    }
+    const noteP = html.match(/<p[^>]*data-role="note"[^>]*style="([^"]*)"/);
+    if (noteP) {
+      const nlh = (noteP[1].match(/line-height:\s*([^;]+);/) || [])[1]?.trim();
+      if (nlh !== expLH) problems.push(`密度：备注行高 ${nlh} ≠ 主题定义 ${expLH}`);
+    }
+
     if (theme.quoteStyle && quoteSigs[theme.quoteStyle]) {
       const blockquoteSec = (html.match(/<section[^>]*data-role="blockquote"[^>]*>[\s\S]{0,400}?<\/section>/) || [''])[0];
       if (!blockquoteSec) problems.push('引用块：section[data-role=blockquote] 丢失');

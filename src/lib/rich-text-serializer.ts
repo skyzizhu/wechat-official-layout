@@ -219,6 +219,18 @@ export function serializeToWeChatRichText(
     parent.replaceChild(section, h1);
   });
 
+  const pColor = (themeElements?.p?.color as string) || '#374151';
+  const pFontSize = (themeElements?.p?.fontSize as string) || baseFontSize;
+  const pLineHeight = (themeElements?.p?.lineHeight as string) || '1.85';
+  const pGap = (themeElements?.p?.marginBottom as string) || '18px';
+  const pLetterSpacing = (themeElements?.p?.letterSpacing as string) || '0.034em';
+  // 主题默认首行缩进（经典学术/文艺清新/新中式等书卷系为 2em）；用户手敲的 em 空格缩进优先
+  const themeTextIndent = (themeElements?.p?.textIndent as string) || '';
+  // 对齐遵循主题（规范 1.6：严禁 start/end，统一转为 left/right）
+  let pAlign = (themeElements?.p?.textAlign as string) || 'justify';
+  if (pAlign === 'start') pAlign = 'left';
+  if (pAlign === 'end') pAlign = 'right';
+
   // (2) 处理 H2 二级分节标题（微信文章灵魂：胶囊彩条/双横线/立体徽章）
   // 书卷系主题（正文首行缩进）的标题同步缩进：h2 自身定义优先，回退正文字缩进
   const h2Indent = (themeElements?.h2?.textIndent as string) || (themeElements?.p?.textIndent as string) || '';
@@ -530,7 +542,7 @@ export function serializeToWeChatRichText(
       const italicFont = theme?.quoteStyle === 'pull-quote' ? 'font-style: italic;' : '';
       p.setAttribute(
         'style',
-        `margin: 0 0 ${isLast ? '0' : '10px'} 0; padding: 0; font-size: ${quoteFontSize}; line-height: 1.85; color: inherit; letter-spacing: 0.034em; box-sizing: border-box; ${monoFont} ${italicFont}`
+        `margin: 0 0 ${isLast ? '0' : '10px'} 0; padding: 0; font-size: ${quoteFontSize}; line-height: 1.85; color: inherit; letter-spacing: ${pLetterSpacing}; box-sizing: border-box; ${monoFont} ${italicFont}`
       );
     });
 
@@ -763,13 +775,8 @@ export function serializeToWeChatRichText(
   // (8) 处理正文段落 p（行高/段距/对齐/字间距/首行缩进全部遵循主题 elements.p 定义——
   // 各主题在预设里已做了差异化的书写质感设计，序列化必须忠实还原，不得压平成全局常量；
   // 图片包装与题注紧凑对齐、双分割线夹持文本绝对垂直居中仍特殊保证）
-  const pColor = (themeElements?.p?.color as string) || '#374151';
-  const pFontSize = (themeElements?.p?.fontSize as string) || baseFontSize;
-  const pLineHeight = (themeElements?.p?.lineHeight as string) || '1.85';
-  const pGap = (themeElements?.p?.marginBottom as string) || '18px';
-  const pLetterSpacing = (themeElements?.p?.letterSpacing as string) || '0.034em';
-  // 主题默认首行缩进（经典学术/文艺清新/新中式等书卷系为 2em）；用户手敲的 em 空格缩进优先
-  const themeTextIndent = (themeElements?.p?.textIndent as string) || '';
+  // 正文排版常量（pColor/pFontSize/pLineHeight/pGap/pLetterSpacing/pAlign/themeTextIndent）
+  // 已前置到 (2) 之前声明——引用块/备注等更早的分支也要用
 
   clone.querySelectorAll('p').forEach((p) => {
     // 若在 blockquote 内部已处理过，跳过
@@ -853,7 +860,7 @@ export function serializeToWeChatRichText(
       const noteFs = Math.max(11, parseFloat(baseFontSize) - 3);
       p.setAttribute(
         'style',
-        `margin-top: 0; margin-bottom: 18px; font-size: ${noteFs}px; line-height: 1.85; color: #999999; font-weight: 400; font-style: normal; letter-spacing: 0.034em; text-align: justify; word-break: break-word; box-sizing: border-box; max-width: 100%;`
+        `margin-top: 0; margin-bottom: ${pGap}; font-size: ${noteFs}px; line-height: ${pLineHeight}; color: #999999; font-weight: 400; font-style: normal; letter-spacing: ${pLetterSpacing}; text-align: ${pAlign}; word-break: break-word; box-sizing: border-box; max-width: 100%;`
       );
       return;
     }
@@ -863,7 +870,7 @@ export function serializeToWeChatRichText(
     if (pRole === 'center') {
       p.setAttribute(
         'style',
-        `margin-top: 0; margin-bottom: 18px; font-size: ${pFontSize}; line-height: ${pLineHeight}; letter-spacing: 0.034em; color: ${pColor}; text-align: center; word-break: break-word; box-sizing: border-box; max-width: 100%;`
+        `margin-top: 0; margin-bottom: ${pGap}; font-size: ${pFontSize}; line-height: ${pLineHeight}; letter-spacing: ${pLetterSpacing}; color: ${pColor}; text-align: center; word-break: break-word; box-sizing: border-box; max-width: 100%;`
       );
       return;
     }
@@ -956,11 +963,6 @@ export function serializeToWeChatRichText(
       }
     }
 
-    // 对齐遵循主题（规范 1.6：严禁 start/end，统一转为 left/right）
-    let pAlign = (themeElements?.p?.textAlign as string) || 'justify';
-    if (pAlign === 'start') pAlign = 'left';
-    if (pAlign === 'end') pAlign = 'right';
-
     p.setAttribute(
       'style',
       `margin-top: ${pMarginTop}; margin-bottom: ${pMarginBottom}; font-size: ${pFontSize}; line-height: ${pLineHeight}; letter-spacing: ${pLetterSpacing}; color: ${pColor}; text-align: ${pAlign};${indentEm > 0 ? ` text-indent: ${indentEm}em;` : themeTextIndent ? ` text-indent: ${themeTextIndent};` : ''} word-break: break-word; box-sizing: border-box; max-width: 100%;`
@@ -984,10 +986,14 @@ export function serializeToWeChatRichText(
   // 微信编辑器粘贴 ul/ol/li 时，ProseMirror 会把 li 内的行内内容拆分为独立段落
   // （复选框/徽章与文本换行分离），因此导出时将列表整体转写为 section 结构——
   // 与正文其余部分的 section/p 同构，微信粘贴高度稳定
+  // 列表项排版跟随主题 li 定义（行高/段距/字号），回退正文与现值
+  const liLineHeight = (themeElements?.li?.lineHeight as string) || '1.75';
+  const liFontSize = (themeElements?.li?.fontSize as string) || pFontSize;
+  const liGap = (themeElements?.li?.marginBottom as string) || '10px';
   const itemBaseStyle = (depth: number) =>
     depth === 1
-      ? `margin: 0 0 10px; font-size: ${pFontSize}; line-height: 1.75; color: ${strongColor}; font-weight: 500; word-break: break-word; box-sizing: border-box;`
-      : `margin: 0 0 6px; padding-left: ${20 * (depth - 1)}px; font-size: ${pFontSize}; line-height: 1.75; color: ${pColor}; font-weight: 400; word-break: break-word; box-sizing: border-box;`;
+      ? `margin: 0 0 ${liGap}; font-size: ${liFontSize}; line-height: ${liLineHeight}; color: ${strongColor}; font-weight: 500; word-break: break-word; box-sizing: border-box;`
+      : `margin: 0 0 6px; padding-left: ${20 * (depth - 1)}px; font-size: ${liFontSize}; line-height: ${liLineHeight}; color: ${pColor}; font-weight: 400; word-break: break-word; box-sizing: border-box;`;
   const listAccent = (themeElements?.a?.color as string) || (themeElements?.h2?.color as string) || '#2563eb';
 
   const convertListToSections = (listEl: HTMLElement, depth: number, sink: HTMLElement[]) => {
