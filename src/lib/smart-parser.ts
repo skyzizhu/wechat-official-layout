@@ -45,6 +45,24 @@ export interface HeadingMatchResult {
 }
 
 /**
+ * 口语化小节标题识别：「第一个坎：」「第二个尴尬：」「困境一：」「案例三：」等
+ * 自媒体叙事文的常见小节标题形态。约束：
+ * - 必须带冒号（无冒号的裸短行歧义太大，不识别）
+ * - 行内不能以句号/感叹收尾（那是句子不是标题）
+ * - 整行 ≤55 字；冒号后须有内容
+ * 名词白名单覆盖：个/步/轮/回/合/关/场/幕/段/张/招/式/封/信/页/话 +
+ * 困境/陷阱/坑/关卡/方案/案例/问题/疑问/考验/挑战/阶段/篇章/规则/玩法/真相/误区/启示/彩蛋/干货/重点/看点/要点/爆点/雷区/视角/模式
+ * 有意排除「图/表」（那是题注领域）。
+ */
+export function matchColloquialHeading(trimmed: string): boolean {
+  if (!trimmed || trimmed.length > 55 || /[。！]$/.test(trimmed)) return false;
+  return (
+    /^第[一二三四五六七八九十百千0-9]+[个步轮回合关场幕段张招式封封信页话][^：:]{0,10}[：:].{1,45}$/.test(trimmed) ||
+    /^(?:困境|陷阱|大坑|坑|关卡|方案|案例|问题|疑问|考验|挑战|阶段|篇章|规则|玩法|真相|误区|启示|彩蛋|干货|重点|看点|要点|爆点|雷区|视角|模式)[一二三四五六七八九十百千0-9]+\s*[：:].{1,45}$/.test(trimmed)
+  );
+}
+
+/**
  * 匹配中文序号章节标题（如 "一、"、"一，"、"一,"、"一."、"一 "、"第一章"、"首先，"、"（一）" 等）
  */
 export function matchChineseHeading(trimmed: string): HeadingMatchResult | null {
@@ -1342,7 +1360,8 @@ export function convertPlainTextToMarkdown(
       /^第[一二三四五六七八九十0-9]+[章节篇部卷集讲堂课回期分]+[\s：:].*$/.test(trimmed) ||
       /^(?:Chapter|Section|Part)\s+[0-9IVXLCDM]+[\s：:].*$/i.test(trimmed) ||
       /^(?:前言|背景|背景介绍|概述|核心观点|业务架构|技术实现|结语|总结|写在最后|写在前面|结语与展望)$/.test(trimmed) ||
-      /^(?:阶段|Phase|Step)\s*[一二三四五六七八九十0-9]+[：:、.\s]+.+$/i.test(trimmed);
+      /^(?:阶段|Phase|Step)\s*[一二三四五六七八九十0-9]+[：:、.\s]+.+$/i.test(trimmed) ||
+      matchColloquialHeading(trimmed);
 
     if (isH2Pattern) {
       processedLines.push('');
@@ -1561,7 +1580,8 @@ export function convertPlainTextToMarkdown(
       /^[A-Za-z][.、．]\s*\S/.test(trimmed) ||
       /^[（(][一二三四五六七八九十百千万]+[）)]/.test(trimmed) ||
       /^[一二三四五六七八九十百千万]+[、.．]/.test(trimmed) ||
-      /^#{1,6}\s/.test(trimmed);
+      /^#{1,6}\s/.test(trimmed) ||
+      matchColloquialHeading(trimmed);
     // 可见文本（剥行内标签）：题注判定用——行首/行尾锚点若测原始行，
     // 会被高亮 span 等标签致盲（▲ 藏在 <span> 后、句号藏在 </span> 后）
     const visibleText = trimmed.replace(/<[^>]*>/g, '').trim();
