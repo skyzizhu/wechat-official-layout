@@ -302,15 +302,50 @@ export function serializeToWeChatRichText(
       const textSpan = spans.length >= 2 ? spans[1] : spans.length === 1 ? spans[0] : null;
       const textHtml = textSpan ? textSpan.innerHTML : h2.innerHTML;
 
-      // 竖线徽标：不用独立元素承载——微信编辑器会把 display:inline-block 的
-      // section 归一化为块级，长标题换行时色条会被拆到独立一行。
-      // 改为文字 span 自身的 border-left（与预览端同构）：边框属于块本身，
-      // 结构上不可能与文字分离；单行标题呈短竖条，多行标题通栏而下。
-      // 主题若在 elements.h2 配置了 borderLeft 则优先沿用（模板设计保真）
-      const h2BorderLeft = (themeElements?.h2?.borderLeft as string) || `4.5px solid ${accentColor}`;
-      section.innerHTML = `
-        <span style="display: inline-block; vertical-align: middle; font-size: ${h2FontSize}; font-weight: 700; color: ${h2Color}; line-height: 1.75; letter-spacing: 0.5px; border-left: ${h2BorderLeft}; border-radius: 2px; padding-left: 9px; max-width: 100%; word-break: break-word; box-sizing: border-box;">${textHtml}</span>
-      `.trim();
+      // 每款装饰独立的 H2 形态（与预览端 MarkdownRenderer 同构）：
+      // 严禁用 display:inline-block 的 section 承载装饰——微信会归一化为块级拆行。
+      // 预览端同款 tint 辅助
+      const hexToRgba = (hex: string, alpha: number): string => {
+        let h = (hex || '').replace('#', '');
+        if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+        const n = parseInt(h, 16);
+        if (Number.isNaN(n)) return hex;
+        return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+      };
+      const baseTitle = `display: inline-block; vertical-align: middle; font-size: ${h2FontSize}; font-weight: 700; line-height: 1.75; letter-spacing: 0.5px; max-width: 100%; word-break: break-word; box-sizing: border-box;`;
+      let inner = '';
+      switch (h2Decoration) {
+        case 'terminal-prompt':
+          inner = `<span style="${baseTitle} font-family: 'Consolas', Monaco, Menlo, monospace; color: ${h2Color};"><span style="color: ${accentColor}; margin-right: 6px;">&gt;_</span>${textHtml}</span>`;
+          break;
+        case 'seal-tag':
+          inner = `<span style="${baseTitle} background-color: ${accentColor}; color: #ffffff; padding: 4px 12px; border-radius: 4px;">${textHtml}</span>`;
+          break;
+        case 'swiss-block':
+          inner = `<span style="${baseTitle} background-color: #18181b; color: #ffffff; padding: 4px 12px;">${textHtml}</span>`;
+          break;
+        case 'academic-bracket':
+          inner = `<span style="${baseTitle} color: ${h2Color}; letter-spacing: 1px;"><span style="color: ${accentColor};">【</span>${textHtml}<span style="color: ${accentColor};">】</span></span>`;
+          break;
+        case 'journal-sticker':
+          inner = `<span style="${baseTitle} color: ${h2Color}; background-color: ${hexToRgba(accentColor, 0.14)}; border: 1px dashed ${accentColor}; border-radius: 8px; padding: 4px 12px;">${textHtml}</span>`;
+          break;
+        case 'latte-badge':
+          inner = `<span style="${baseTitle} color: ${h2Color}; background-color: ${hexToRgba(accentColor, 0.16)}; border-radius: 999px; padding: 4px 14px;">${textHtml}</span>`;
+          break;
+        case 'morandi-soft':
+          inner = `<span style="${baseTitle} color: ${h2Color}; background-color: ${hexToRgba(accentColor, 0.1)}; border-radius: 12px; padding: 4px 16px;">${textHtml}</span>`;
+          break;
+        case 'cyber-glow':
+          inner = `<span style="${baseTitle} color: ${h2Color}; border: 1px solid ${accentColor}; background-color: ${hexToRgba(accentColor, 0.06)}; border-radius: 6px; padding: 4px 12px;">${textHtml}</span>`;
+          break;
+        default: {
+          // wechat-badge / report-pill / mint-capsule：经典竖线徽章（border 承载，永不拆行）
+          const h2BorderLeft = (themeElements?.h2?.borderLeft as string) || `4.5px solid ${accentColor}`;
+          inner = `<span style="${baseTitle} color: ${h2Color}; border-left: ${h2BorderLeft}; border-radius: 2px; padding-left: 9px;">${textHtml}</span>`;
+        }
+      }
+      section.innerHTML = inner;
     }
     // Case D: 复古报纸或其他常规样式
     else {

@@ -185,16 +185,16 @@ export function ExportToolbar({
               onClick={() => onToggleFirstLineAsTitle(!firstLineAsTitle)}
               className={`flex items-center gap-1 px-2 h-7 rounded-md text-xs font-medium border transition-all cursor-pointer shadow-2xs flex-shrink-0 ${
                 firstLineAsTitle
-                  ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
                   : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
               }`}
               title="开启后首句作为文章 H1 大标题；关闭后首句作为正文首个段落"
             >
-              <Heading1 className="w-3.5 h-3.5 text-amber-600" />
+              <Heading1 className="w-3.5 h-3.5 text-indigo-600" />
               <span className="hidden sm:inline">首句标题</span>
               <span
                 className={`text-[10px] px-1 py-0.2 rounded font-bold ${
-                  firstLineAsTitle ? 'bg-amber-600 text-white' : 'bg-gray-200 text-gray-600'
+                  firstLineAsTitle ? 'bg-indigo-600 text-white' : 'bg-gray-200 text-gray-600'
                 }`}
               >
                 {firstLineAsTitle ? '开' : '关'}

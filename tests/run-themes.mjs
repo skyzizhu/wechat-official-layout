@@ -113,10 +113,29 @@ for (const theme of allThemes) {
     // 分族结构断言
     const family = familyOf(theme);
     if (family === 'capsule') {
-      const m = html.match(/<span[^>]*border-left[^>]*>([^<]*)/);
-      if (!m) problems.push('胶囊族：H2 竖线未以文字 span 的 border-left 输出');
-      else if (!m[1].includes('标题文字')) problems.push('胶囊族：标题文字与竖线不在同一 span');
-      if (/width:\s*4\.5px[^>]*background-color/.test(html)) problems.push('胶囊族：仍存在独立色条元素');
+      const d = theme.h2Decoration;
+      if (d === 'wechat-badge' || d === 'report-pill' || d === 'mint-capsule') {
+        // 经典竖线徽章族：border-left 承载、文字同 span、无独立色条
+        const m = html.match(/<span[^>]*border-left[^>]*>([^<]*)/);
+        if (!m) problems.push('竖线徽章：H2 竖线未以文字 span 的 border-left 输出');
+        else if (!m[1].includes('标题文字')) problems.push('竖线徽章：标题文字与竖线不在同一 span');
+        if (/width:\s*4\.5px[^>]*background-color/.test(html)) problems.push('竖线徽章：仍存在独立色条元素');
+      } else if (d === 'seal-tag') {
+        const m = html.match(/<span[^>]*background-color:\s*[^;]+[^>]*>([^<]*)/);
+        if (!m || !/color:\s*#ffffff/.test(m[0])) problems.push('印章题签：未输出反白印章块');
+      } else if (d === 'terminal-prompt') {
+        if (!html.includes('&gt;_')) problems.push('终端提示符：缺少 >_ 前缀');
+      } else if (d === 'swiss-block') {
+        if (!/#18181b/.test(html)) problems.push('瑞士色块：黑色块丢失');
+      } else if (d === 'academic-bracket') {
+        if (!html.includes('【') || !html.includes('】')) problems.push('学术括号：【】丢失');
+      } else if (d === 'journal-sticker') {
+        if (!/border:\s*1px\s*dashed/.test(html)) problems.push('手帐贴纸：虚线描边丢失');
+      } else if (d === 'cyber-glow') {
+        if (!/border:\s*1px\s*solid/.test(html)) problems.push('科技边框：描边卡片丢失');
+      } else if (d === 'latte-badge' || d === 'morandi-soft') {
+        if (!/border-radius:\s*(999px|12px)/.test(html)) problems.push('柔和底色族：底色胶囊丢失');
+      }
     } else if (family === 'centered') {
       const lineSpans = (html.match(/width:\s*36px/g) || []).length;
       if (lineSpans < 2) problems.push(`居中族：左右细线缺失（找到 ${lineSpans} 条）`);

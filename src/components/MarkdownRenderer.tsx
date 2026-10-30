@@ -140,6 +140,18 @@ function imageUrlTransform(url: string): string {
   return defaultUrlTransform(url);
 }
 
+/** hex 颜色转 rgba（主题强调色生成淡色底），支持 #rgb 与 #rrggbb */
+function hexToRgba(hex: string, alpha: number): string {
+  let h = (hex || '').replace('#', '');
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  const n = parseInt(h, 16);
+  if (Number.isNaN(n)) return hex;
+  const r = (n >> 16) & 255;
+  const g = (n >> 8) & 255;
+  const b = n & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 /**
  * Rehype 插件：识别分割线间距、图片段落、图片题注及多图并排画廊表格
  * 解决分割线垂直居中留白，并确保微信合规多形态图片排版与题注紧凑对齐
@@ -364,10 +376,8 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
         );
       }
 
-      // 经典微胶囊小彩条（微信、新中式、商务、暗色极客等）
-      // 与微信序列化产物同构：竖线 = 文字容器自身的 border-left——
-      // 独立色条元素在公众号编辑器会被归一化为块级，长标题折行时分离成独立一行；
-      // border 属于块本身，单行标题呈短竖条，多行标题通栏而下，预览与微信端形态一致
+      // 经典胶囊/印章/终端/贴纸族（11 款）：每款独立的 H2 形态——
+      // 与微信序列化器 Case C 同构；此前 11 款渲染完全相同，差异只是名字
       if (
         h2Decoration === 'wechat-badge' ||
         h2Decoration === 'report-pill' ||
@@ -382,25 +392,75 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
         h2Decoration === 'terminal-prompt'
       ) {
         const accent = (elements.h2.color as string) || (elements.h1.color as string) || '#2563eb';
+        const base: CSSProperties = {
+          fontWeight: 700,
+          color: accent,
+          lineHeight: 1.75,
+          letterSpacing: '0.5px',
+        };
+        let titleStyle: CSSProperties = { ...base };
+        let prefix: React.ReactNode = null;
+        let suffix: React.ReactNode = null;
+        switch (h2Decoration) {
+          case 'terminal-prompt':
+            prefix = (
+              <span style={{ fontFamily: "'Consolas', Monaco, Menlo, monospace", color: accent, marginRight: 6 }}>&gt;_</span>
+            );
+            titleStyle = { ...base, fontFamily: "'Consolas', Monaco, Menlo, monospace" };
+            break;
+          case 'seal-tag':
+            titleStyle = { ...base, backgroundColor: accent, color: '#ffffff', padding: '4px 12px', borderRadius: 4 };
+            break;
+          case 'swiss-block':
+            titleStyle = { ...base, backgroundColor: '#18181b', color: '#ffffff', padding: '4px 12px', borderRadius: 0 };
+            break;
+          case 'academic-bracket':
+            prefix = <span style={{ color: accent, fontWeight: 700 }}>【</span>;
+            suffix = <span style={{ color: accent, fontWeight: 700 }}>】</span>;
+            titleStyle = { ...base, letterSpacing: '1px' };
+            break;
+          case 'journal-sticker':
+            titleStyle = {
+              ...base,
+              backgroundColor: hexToRgba(accent, 0.14),
+              border: `1px dashed ${accent}`,
+              borderRadius: 8,
+              padding: '4px 12px',
+            };
+            break;
+          case 'latte-badge':
+            titleStyle = { ...base, backgroundColor: hexToRgba(accent, 0.16), borderRadius: 999, padding: '4px 14px' };
+            break;
+          case 'morandi-soft':
+            titleStyle = { ...base, backgroundColor: hexToRgba(accent, 0.1), borderRadius: 12, padding: '4px 16px' };
+            break;
+          case 'cyber-glow':
+            titleStyle = {
+              ...base,
+              border: `1px solid ${accent}`,
+              backgroundColor: hexToRgba(accent, 0.06),
+              borderRadius: 6,
+              padding: '4px 12px',
+            };
+            break;
+          default: // wechat-badge / report-pill / mint-capsule：经典竖线徽章
+            titleStyle = { ...base, borderLeft: `4.5px solid ${accent}`, borderRadius: 2, paddingLeft: 9 };
+        }
         return (
           <h2 style={{ ...elements.h2, textAlign: 'left', lineHeight: 1.75, borderLeft: 'none' }}>
             <span
               style={{
                 display: 'inline-block',
                 verticalAlign: 'middle',
-                fontWeight: 700,
-                color: accent,
-                lineHeight: 1.75,
-                letterSpacing: '0.5px',
-                borderLeft: `4.5px solid ${accent}`,
-                borderRadius: '2px',
-                paddingLeft: '9px',
                 maxWidth: '100%',
                 wordBreak: 'break-word',
                 boxSizing: 'border-box',
+                ...titleStyle,
               }}
             >
+              {prefix}
               {children}
+              {suffix}
             </span>
           </h2>
         );

@@ -24,6 +24,15 @@ export const Preview = React.memo(function Preview({ content, theme, previewRef 
       >
         <MarkdownRenderer content={content} theme={theme} />
       </div>
+      {/* 文末收束标记：置于导出容器（previewRef）之外——不进入一键复制/长图，仅给短文预览一个「到底了」的视觉收束 */}
+      {content.trim() && (
+        <div
+          className="select-none"
+          style={{ textAlign: 'center', paddingTop: 22, paddingBottom: 4, color: 'rgba(148,163,184,0.75)', fontSize: 12, letterSpacing: '0.4em' }}
+        >
+          · 完 ·
+        </div>
+      )}
     </div>
   );
 });

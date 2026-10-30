@@ -71,41 +71,86 @@ export function ThemeCard({ theme, isSelected, onClick }: ThemeCardProps) {
             {theme.name}
           </div>
 
-          {/* H2 与正文视觉微预览 */}
+          {/* H2 与正文视觉微预览（正文带主题真实的字间距/缩进/对齐质感） */}
           <div
             style={{
               color: isDark ? '#94a3b8' : (theme.elements.p.color as string) || '#4b5563',
               fontSize: '10px',
+              letterSpacing: (theme.elements.p.letterSpacing as string) || 'normal',
             }}
             className="flex items-center gap-1.5 truncate opacity-90"
           >
             {theme.h2Decoration === 'seal-tag' && (
-              <span style={{ color: accentColor }}>「 标题 」</span>
+              <span
+                style={{ backgroundColor: accentColor }}
+                className="text-white px-1 py-0.5 rounded-xs font-bold text-[8.5px]"
+              >
+                章节
+              </span>
             )}
             {(theme.h2Decoration === 'magazine-centered' || theme.h2Decoration === 'gallery-line') && (
               <span>── ✦ ──</span>
             )}
-            {theme.h2Decoration === 'literary-dash' && (
-              <span>— 随笔 —</span>
-            )}
+            {theme.h2Decoration === 'literary-dash' && <span>— 随笔 —</span>}
             {theme.h2Decoration === 'pop-box' && (
               <span className="bg-yellow-300 text-black px-1 font-bold border border-black text-[8.5px]">潮流</span>
             )}
             {theme.h2Decoration === 'terminal-prompt' && (
-              <span style={{ color: accentColor }}>❯ prompt</span>
+              <span style={{ color: accentColor, fontFamily: "'Consolas', Monaco, monospace" }}>&gt;_ 章节</span>
+            )}
+            {theme.h2Decoration === 'swiss-block' && (
+              <span style={{ backgroundColor: '#18181b' }} className="text-white px-1 py-0.5 font-bold text-[8.5px]">
+                章节
+              </span>
+            )}
+            {theme.h2Decoration === 'academic-bracket' && (
+              <span style={{ color: accentColor }}>【 章节 】</span>
+            )}
+            {theme.h2Decoration === 'journal-sticker' && (
+              <span
+                style={{ border: `1px dashed ${accentColor}`, backgroundColor: `${accentColor}24` }}
+                className="px-1 py-0.5 rounded text-[8.5px]"
+              >
+                章节
+              </span>
+            )}
+            {(theme.h2Decoration === 'latte-badge' || theme.h2Decoration === 'morandi-soft') && (
+              <span
+                style={{ backgroundColor: `${accentColor}2e` }}
+                className="px-1.5 py-0.5 rounded-full text-[8.5px]"
+              >
+                章节
+              </span>
+            )}
+            {theme.h2Decoration === 'cyber-glow' && (
+              <span
+                style={{ border: `1px solid ${accentColor}`, backgroundColor: `${accentColor}1a` }}
+                className="px-1 py-0.5 rounded text-[8.5px]"
+              >
+                章节
+              </span>
             )}
             {theme.h2Decoration !== 'seal-tag' &&
               theme.h2Decoration !== 'magazine-centered' &&
               theme.h2Decoration !== 'gallery-line' &&
               theme.h2Decoration !== 'literary-dash' &&
               theme.h2Decoration !== 'pop-box' &&
-              theme.h2Decoration !== 'terminal-prompt' && (
+              theme.h2Decoration !== 'terminal-prompt' &&
+              theme.h2Decoration !== 'swiss-block' &&
+              theme.h2Decoration !== 'academic-bracket' &&
+              theme.h2Decoration !== 'journal-sticker' &&
+              theme.h2Decoration !== 'latte-badge' &&
+              theme.h2Decoration !== 'morandi-soft' &&
+              theme.h2Decoration !== 'cyber-glow' && (
                 <span className="flex items-center gap-1">
                   <span style={{ backgroundColor: accentColor }} className="w-1 h-2.5 rounded-xs inline-block" />
                   <span>章节排版</span>
                 </span>
               )}
-            <span className="text-[9px] opacity-60">· 阅览正文</span>
+            <span className="text-[9px] opacity-60">
+              {(theme.elements.p.textIndent as string) ? '　　' : ''}
+              正文… · 阅览
+            </span>
           </div>
         </div>
       </div>
