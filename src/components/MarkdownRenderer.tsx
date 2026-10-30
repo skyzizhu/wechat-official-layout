@@ -339,8 +339,9 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
 
       // 波普立体硬阴影徽章（纯 CSS 边框与阴影包裹标题文字，零附加字符）
       if (h2Decoration === 'pop-box') {
+        const popIndent = (elements.h2.textIndent as string) || (elements.p.textIndent as string) || undefined;
         return (
-          <h2 style={{ ...elements.h2, textAlign: 'left', lineHeight: 1.75 }}>
+          <h2 style={{ ...elements.h2, textAlign: 'left', lineHeight: 1.75, textIndent: popIndent }}>
             <span
               style={{
                 display: 'inline-block',
@@ -362,13 +363,16 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
 
       // 复古报纸横幅栏（上下横栏实线包裹，古典铅印大标题风格）
       if (h2Decoration === 'newspaper-banner') {
+        const bannerAlign = ((elements.h2.textAlign as string) || 'center') as 'left' | 'center' | 'right';
+        const bannerIndent = bannerAlign === 'left' ? ((elements.h2.textIndent as string) || (elements.p.textIndent as string) || undefined) : undefined;
         return (
           <h2
             style={{
               ...elements.h2,
-              textAlign: (elements.h2.textAlign as any) || 'center',
+              textAlign: bannerAlign,
               lineHeight: 1.75,
               boxSizing: 'border-box',
+              textIndent: bannerIndent,
             }}
           >
             {children}
@@ -446,8 +450,9 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
           default: // wechat-badge / report-pill / mint-capsule：经典竖线徽章
             titleStyle = { ...base, borderLeft: `4.5px solid ${accent}`, borderRadius: 2, paddingLeft: 9 };
         }
+        const headingIndent = (elements.h2.textIndent as string) || (elements.p.textIndent as string) || undefined;
         return (
-          <h2 style={{ ...elements.h2, textAlign: 'left', lineHeight: 1.75, borderLeft: 'none' }}>
+          <h2 style={{ ...elements.h2, textAlign: 'left', lineHeight: 1.75, borderLeft: 'none', textIndent: headingIndent }}>
             <span
               style={{
                 display: 'inline-block',
@@ -469,7 +474,17 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
       return <h2 style={elements.h2}>{children}</h2>;
     },
 
-    h3: ({ children }) => <h3 style={{ ...elements.h3, lineHeight: 1.75 }}>{children}</h3>,
+    h3: ({ children }) => (
+      <h3
+        style={{
+          ...elements.h3,
+          lineHeight: 1.75,
+          textIndent: (elements.h3.textIndent as string) || (elements.p.textIndent as string) || undefined,
+        }}
+      >
+        {children}
+      </h3>
+    ),
     h4: ({ children }) => <h4 style={{ ...elements.h4, lineHeight: 1.75 }}>{children}</h4>,
     h5: ({ children }) => <h5 style={{ ...elements.h5, lineHeight: 1.75 }}>{children}</h5>,
     h6: ({ children }) => <h6 style={{ ...elements.h6, lineHeight: 1.75 }}>{children}</h6>,

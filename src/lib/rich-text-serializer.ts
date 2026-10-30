@@ -220,6 +220,11 @@ export function serializeToWeChatRichText(
   });
 
   // (2) 处理 H2 二级分节标题（微信文章灵魂：胶囊彩条/双横线/立体徽章）
+  // 书卷系主题（正文首行缩进）的标题同步缩进：h2 自身定义优先，回退正文字缩进
+  const h2Indent = (themeElements?.h2?.textIndent as string) || (themeElements?.p?.textIndent as string) || '';
+  const h2IndentStyle = h2Indent ? ` text-indent: ${h2Indent};` : '';
+  const h3Indent = (themeElements?.h3?.textIndent as string) || (themeElements?.p?.textIndent as string) || '';
+  const h3IndentStyle = h3Indent ? ` text-indent: ${h3Indent};` : '';
   const h2Elements = Array.from(clone.querySelectorAll('h2'));
   h2Elements.forEach((h2) => {
     const parent = h2.parentElement;
@@ -257,7 +262,7 @@ export function serializeToWeChatRichText(
     else if (h2Decoration === 'pop-box') {
       section.setAttribute(
         'style',
-        'margin-top: 38px; margin-bottom: 20px; text-align: left; line-height: 1.75; max-width: 100%; box-sizing: border-box;'
+        `margin-top: 38px; margin-bottom: 20px; text-align: left; line-height: 1.75; max-width: 100%; box-sizing: border-box;${h2IndentStyle}`
       );
       const innerSpan = h2.querySelector('span');
       const textHtml = innerSpan ? innerSpan.innerHTML : h2.innerHTML;
@@ -273,7 +278,7 @@ export function serializeToWeChatRichText(
       const textAlign = (h2Style.textAlign as string) || 'center';
       section.setAttribute(
         'style',
-        `margin-top: 44px; margin-bottom: 20px; text-align: ${textAlign}; line-height: 1.75; padding: 6px 14px; border-top: ${borderTop}; border-bottom: ${borderBottom}; background-color: ${bg}; max-width: 100%; box-sizing: border-box;`
+        `margin-top: 44px; margin-bottom: 20px; text-align: ${textAlign}; line-height: 1.75; padding: 6px 14px; border-top: ${borderTop}; border-bottom: ${borderBottom}; background-color: ${bg}; max-width: 100%; box-sizing: border-box;${textAlign === 'left' ? h2IndentStyle : ''}`
       );
       section.innerHTML = `<span style="font-size: ${h2FontSize}; font-weight: 800; color: ${h2Color}; letter-spacing: ${letterSpacing}; line-height: 1.75; box-sizing: border-box;">${h2.innerHTML}</span>`;
     }
@@ -293,7 +298,7 @@ export function serializeToWeChatRichText(
     ) {
       section.setAttribute(
         'style',
-        'margin-top: 38px; margin-bottom: 20px; text-align: left; line-height: 1.75; max-width: 100%; box-sizing: border-box;'
+        `margin-top: 38px; margin-bottom: 20px; text-align: left; line-height: 1.75; max-width: 100%; box-sizing: border-box;${h2IndentStyle}`
       );
 
       // 提取标题文字：新预览 DOM 为单 span（竖线已收编为文字容器的 border-left），
@@ -399,7 +404,7 @@ export function serializeToWeChatRichText(
     const section = document.createElement('section');
     section.setAttribute(
       'style',
-      'margin-top: 26px; margin-bottom: 14px; text-align: left; line-height: 1.75; max-width: 100%; box-sizing: border-box;'
+      `margin-top: 26px; margin-bottom: 14px; text-align: left; line-height: 1.75; max-width: 100%; box-sizing: border-box;${h3IndentStyle}`
     );
 
     const innerH3 = document.createElement('h3');

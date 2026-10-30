@@ -171,6 +171,21 @@ for (const theme of allThemes) {
         problems.push(`引用形态 ${theme.quoteStyle}：签名样式缺失`);
       }
     }
+
+    // 书卷系主题（正文首行缩进）的标题同步缩进
+    const indentThemes = { 'neo-chinese': 'text-indent: 2em', 'classic-academic': 'text-indent: 2em', 'retro-newspaper': 'text-indent: 2em' };
+    if (indentThemes[theme.id]) {
+      if (theme.h2Decoration !== 'newspaper-banner') {
+        const h2sec = html.match(/<section[^>]*style="([^"]*margin-top: 38px[^"]*)"/);
+        if (!h2sec) problems.push('书卷系：H2 section 未找到');
+        else if (!/text-indent/.test(h2sec[1])) {
+          problems.push('书卷系：H2 未跟随正文首行缩进');
+        }
+      }
+      if (!/text-indent:\s*2em/.test(html)) {
+        problems.push('书卷系：正文缺少 text-indent: 2em');
+      }
+    }
   }
 
   if (problems.length) {
