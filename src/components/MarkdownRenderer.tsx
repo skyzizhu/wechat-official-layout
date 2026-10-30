@@ -342,20 +342,22 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
         const popIndent = (elements.h2.textIndent as string) || (elements.p.textIndent as string) || undefined;
         return (
           <h2 style={{ ...elements.h2, textAlign: 'left', lineHeight: 1.75, textIndent: popIndent }}>
-            <span
-              style={{
-                display: 'inline-block',
-                backgroundColor: '#fde047',
-                color: '#000000',
-                border: '2px solid #000000',
-                padding: '4px 12px',
-                boxShadow: '2.5px 2.5px 0px #000000',
-                fontWeight: 800,
-                fontSize: '17.5px',
-                lineHeight: 1.75,
-              }}
-            >
-              {children}
+            <span style={{ textIndent: 0 }}>
+              <span
+                style={{
+                  display: 'inline-block',
+                  backgroundColor: '#fde047',
+                  color: '#000000',
+                  border: '2px solid #000000',
+                  padding: '4px 12px',
+                  boxShadow: '2.5px 2.5px 0px #000000',
+                  fontWeight: 800,
+                  fontSize: '17.5px',
+                  lineHeight: 1.75,
+                }}
+              >
+                {children}
+              </span>
             </span>
           </h2>
         );
@@ -401,6 +403,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
           color: accent,
           lineHeight: 1.75,
           letterSpacing: '0.5px',
+          textIndent: 0, // 归零继承缩进：块内文字与底色左右间距保持对称
         };
         let titleStyle: CSSProperties = { ...base };
         let prefix: React.ReactNode = null;
@@ -479,7 +482,7 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
         style={{
           ...elements.h3,
           lineHeight: 1.75,
-          textIndent: (elements.h3.textIndent as string) || (elements.p.textIndent as string) || undefined,
+          marginLeft: (elements.h3.textIndent as string) || (elements.p.textIndent as string) || undefined,
         }}
       >
         {children}

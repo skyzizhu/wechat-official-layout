@@ -236,7 +236,7 @@ export function serializeToWeChatRichText(
   const h2Indent = (themeElements?.h2?.textIndent as string) || (themeElements?.p?.textIndent as string) || '';
   const h2IndentStyle = h2Indent ? ` text-indent: ${h2Indent};` : '';
   const h3Indent = (themeElements?.h3?.textIndent as string) || (themeElements?.p?.textIndent as string) || '';
-  const h3IndentStyle = h3Indent ? ` text-indent: ${h3Indent};` : '';
+  const h3IndentStyle = h3Indent ? ` margin-left: ${h3Indent};` : '';
   const h2Elements = Array.from(clone.querySelectorAll('h2'));
   h2Elements.forEach((h2) => {
     const parent = h2.parentElement;
@@ -329,7 +329,7 @@ export function serializeToWeChatRichText(
         if (Number.isNaN(n)) return hex;
         return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
       };
-      const baseTitle = `display: inline-block; vertical-align: middle; font-size: ${h2FontSize}; font-weight: 700; line-height: 1.75; letter-spacing: 0.5px; max-width: 100%; word-break: break-word; box-sizing: border-box;`;
+      const baseTitle = `display: inline-block; vertical-align: middle; font-size: ${h2FontSize}; font-weight: 700; line-height: 1.75; letter-spacing: 0.5px; text-indent: 0; max-width: 100%; word-break: break-word; box-sizing: border-box;`;
       let inner = '';
       switch (h2Decoration) {
         case 'terminal-prompt':
