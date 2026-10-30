@@ -826,9 +826,25 @@ export function serializeToWeChatRichText(
       pMarginTop = '0';
     }
 
+    // 段首缩进转换：用户敲的全角/em 空格缩进以字面字符进入微信后，
+    // 会被公众号粘贴管线按「行首空白」裁掉——改为 text-indent 内联样式承载
+    // （微信保留该属性，与预览的两个全角空格视觉等宽），并从文本中剥掉缩进字符
+    let indentEm = 0;
+    const firstTextNode = (() => {
+      const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+      return walker.nextNode();
+    })();
+    if (firstTextNode) {
+      const m = (firstTextNode.textContent || '').match(/^([\u2003\u3000]+)/);
+      if (m) {
+        indentEm = m[1].length;
+        firstTextNode.textContent = (firstTextNode.textContent || '').slice(m[1].length);
+      }
+    }
+
     p.setAttribute(
       'style',
-      `margin-top: ${pMarginTop}; margin-bottom: ${pMarginBottom}; font-size: ${pFontSize}; line-height: ${pLineHeight}; letter-spacing: 0.034em; color: ${pColor}; text-align: justify; word-break: break-word; box-sizing: border-box; max-width: 100%;`
+      `margin-top: ${pMarginTop}; margin-bottom: ${pMarginBottom}; font-size: ${pFontSize}; line-height: ${pLineHeight}; letter-spacing: 0.034em; color: ${pColor}; text-align: justify;${indentEm > 0 ? ` text-indent: ${indentEm}em;` : ''} word-break: break-word; box-sizing: border-box; max-width: 100%;`
     );
   });
 

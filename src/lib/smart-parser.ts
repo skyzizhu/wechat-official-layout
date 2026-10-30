@@ -1566,12 +1566,15 @@ export function convertPlainTextToMarkdown(
       /^\*?(?:▲\s*|\[)?(?:图|表|Figure|阶段)\s*[\dA-Za-z\-]+/i.test(trimmed) ||
       /^\*?▲\s*.+$/i.test(trimmed) ||
       /^\*?注[：:]/.test(trimmed);
+    // 邻接题注的守卫必须基于「可见文本」：行内标签（如高亮 span）会让原始行
+    // 以 </span> 收尾，句号藏在标签内，直接测行尾会漏掉句末标点致误判为题注
+    const visibleText = trimmed.replace(/<[^>]*>/g, '').trim();
     const adjacencyCaption =
       lastNonEmptyWasImage &&
-      trimmed.length > 0 &&
-      trimmed.length < 120 &&
+      visibleText.length > 0 &&
+      visibleText.length < 120 &&
       !structuralLine &&
-      !/[。！？]$/.test(trimmed);
+      !/[。！？]$/.test(visibleText);
     const isCaptionPattern = explicitCaption || adjacencyCaption;
 
     if (isCaptionPattern) {

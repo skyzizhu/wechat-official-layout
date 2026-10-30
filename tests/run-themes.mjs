@@ -41,6 +41,7 @@ global.DOMParser = dom.window.DOMParser;
 global.Node = dom.window.Node;
 global.Element = dom.window.Element;
 global.HTMLElement = dom.window.HTMLElement;
+global.NodeFilter = dom.window.NodeFilter;
 global.getComputedStyle = dom.window.getComputedStyle;
 
 const TITLE = '二、枷锁一：搜索思维——它始终把 AI 当让搜索更好的工具，这一行足够长，在公众号编辑器里必然折行到第二行';

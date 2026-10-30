@@ -44,6 +44,7 @@ global.window = dom.window;
 global.Node = dom.window.Node;
 global.Element = dom.window.Element;
 global.HTMLElement = dom.window.HTMLElement;
+global.NodeFilter = dom.window.NodeFilter;
 global.getComputedStyle = dom.window.getComputedStyle;
 
 let passCount = 0;
@@ -363,6 +364,25 @@ run(
     return p;
   },
   { h2Decoration: 'wechat-badge', elements: { h2: { color: '#10b981', fontSize: '18px' } } }
+);
+
+run(
+  '段首缩进：em 空格转 text-indent（微信粘贴管线会裁行首空白）',
+  `<p>\u2003\u2003这一段有首行缩进，两个全角空格宽，粘贴到公众号后必须保持缩进效果。</p>
+   <p>这一段没有缩进，不应有任何缩进样式。</p>`,
+  (html) => {
+    const p = [];
+    const indented = html.match(/<p[^>]*style="([^"]*text-indent[^"]*)"[^>]*>([\s\S]*?)<\/p>/);
+    if (!indented) p.push('缩进段落未输出 text-indent');
+    else {
+      if (!/text-indent:\s*2em/.test(indented[1])) p.push('text-indent 不是 2em');
+      if (/[\u2003\u3000]/.test(indented[2])) p.push('行首 em 空格未从文本中剥离（双重缩进风险）');
+      if (!indented[2].includes('这一段有首行缩进')) p.push('缩进段落文本丢失');
+    }
+    const tail = html.split('这一段没有缩进')[1] || '';
+    if (/text-indent/.test(tail)) p.push('无缩进段落被误加 text-indent');
+    return p;
+  }
 );
 
 console.log('\n===== 微信合规校验: ' + passCount + ' 通过 / ' + failCount + ' 失败 / ' + infoCount + ' 信息 =====');
