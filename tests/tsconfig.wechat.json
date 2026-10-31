@@ -9,5 +9,5 @@
     "paths": { "@/*": ["src/*"] },
     "jsx": "react-jsx"
   },
-  "include": ["../src/lib/rich-text-serializer.ts", "../src/themes/index.ts"]
+  "include": ["../src/lib/rich-text-serializer.ts", "../src/themes/index.ts", "../src/lib/smart-parser.ts"]
 }

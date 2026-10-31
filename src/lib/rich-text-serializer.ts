@@ -230,6 +230,27 @@ export function serializeToWeChatRichText(
   let pAlign = (themeElements?.p?.textAlign as string) || 'justify';
   if (pAlign === 'start') pAlign = 'left';
   if (pAlign === 'end') pAlign = 'right';
+  // 深色背景判定（用于备注灰等自适应颜色）：解析容器底色计算相对亮度
+  const rawBgColorForLum = (() => {
+    const cs = containerStyle || {};
+    const bg = (cs.backgroundColor as string) || (cs.background as string) || '';
+    const m = typeof bg === 'string' ? bg.match(/rgba?\(([^)]+)\)/) : null;
+    if (m) {
+      const parts = m[1].split(',').map((x) => parseFloat(x));
+      return [parts[0], parts[1], parts[2]];
+    }
+    const hex = typeof bg === 'string' ? bg.match(/^#([0-9a-f]{6})$/i) : null;
+    if (hex) return [parseInt(hex[1].slice(0, 2), 16), parseInt(hex[1].slice(2, 4), 16), parseInt(hex[1].slice(4, 6), 16)];
+    return null;
+  })();
+  const isDarkBg = (() => {
+    if (!rawBgColorForLum) return false;
+    const f = (v: number) => {
+      v /= 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * f(rawBgColorForLum[0]) + 0.7152 * f(rawBgColorForLum[1]) + 0.0722 * f(rawBgColorForLum[2]) < 0.35;
+  })();
 
   // (2) 处理 H2 二级分节标题（微信文章灵魂：胶囊彩条/双横线/立体徽章）
   // 书卷系主题（正文首行缩进）的标题同步缩进：h2 自身定义优先，回退正文字缩进
@@ -858,9 +879,17 @@ export function serializeToWeChatRichText(
     // 1.4 备注段落：字号比用户所选字号小 4px、灰色、不加粗不斜体，与预览一致
     if (pRole === 'note') {
       const noteFs = Math.max(11, parseFloat(baseFontSize) - 3);
+      // 备注灰随背景自适应：浅底中灰（4.8:1），深底浅灰（保持降调感的同时看清）
+      // 三档自适应：深底浅灰 / 暖调浅底用暖灰（复古报纸等暖底）/ 中性浅底中灰
+      const isWarmBg = (() => {
+        if (!rawBgColorForLum) return false;
+        const [r, g, b] = rawBgColorForLum;
+        return r > 240 && b < g && r - b > 6;
+      })();
+      const noteColor = isDarkBg ? '#a8b3bf' : isWarmBg ? '#57534e' : '#6b7280';
       p.setAttribute(
         'style',
-        `margin-top: 0; margin-bottom: ${pGap}; font-size: ${noteFs}px; line-height: ${pLineHeight}; color: #999999; font-weight: 400; font-style: normal; letter-spacing: ${pLetterSpacing}; text-align: ${pAlign}; word-break: break-word; box-sizing: border-box; max-width: 100%;`
+        `margin-top: 0; margin-bottom: ${pGap}; font-size: ${noteFs}px; line-height: ${pLineHeight}; color: ${noteColor}; font-weight: 400; font-style: normal; letter-spacing: ${pLetterSpacing}; text-align: ${pAlign}; word-break: break-word; box-sizing: border-box; max-width: 100%;`
       );
       return;
     }
@@ -1094,6 +1123,7 @@ export function serializeToWeChatRichText(
 
   const markStyleParts: string[] = [];
   if (markHighlight) {
+    if (markHighlight.color) markStyleParts.push(`color: ${markHighlight.color}`);
     if (markHighlight.background) markStyleParts.push(`background: ${markHighlight.background}`);
     if (markHighlight.borderBottom) markStyleParts.push(`border-bottom: ${markHighlight.borderBottom}`);
     if (markHighlight.border) markStyleParts.push(`border: ${markHighlight.border}`);
@@ -1121,7 +1151,7 @@ export function serializeToWeChatRichText(
     const whiteSpaceStyle = isAtomicGroup ? 'white-space: nowrap;' : 'word-break: break-word;';
     const strongStyle = inNestedList
       ? `font-weight: 600; color: ${strongColor}; display: inline; ${whiteSpaceStyle}`
-      : `font-weight: 700; color: ${strongColor}; ${markStyle} display: inline; ${whiteSpaceStyle}`;
+      : `font-weight: 700; ${markStyle || `color: ${strongColor};`} display: inline; ${whiteSpaceStyle}`;
     strong.setAttribute('style', strongStyle);
   });
 

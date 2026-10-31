@@ -39,7 +39,7 @@ export const freshMint: ThemePreset = {
       fontWeight: 600,
       textAlign: "center",
       marginBottom: "30px",
-      color: "#0d9488",
+      color: "#0f766e",
       letterSpacing: "0.5px",
       lineHeight: "1.75",
       paddingBottom: "14px",
@@ -57,7 +57,7 @@ export const freshMint: ThemePreset = {
       fontWeight: 600,
       marginTop: "26px",
       marginBottom: "12px",
-      color: "#0d9488",
+      color: "#0f766e",
       paddingLeft: "10px",
       borderLeft: "3.5px solid #14b8a6",
     },
@@ -93,7 +93,7 @@ export const freshMint: ThemePreset = {
     },
     blockquote: {
       backgroundColor: "rgba(13, 148, 136, 0.06)",
-      borderLeft: "3.5px solid #0d9488",
+      borderLeft: "3.5px solid #0f766e",
       padding: "18px 22px",
       margin: "24px 0",
       borderRadius: "0 8px 8px 0",
@@ -117,7 +117,7 @@ export const freshMint: ThemePreset = {
       color: "#374151",
     },
     a: {
-      color: "#0d9488",
+      color: "#0f766e",
       textDecoration: "underline",
       textUnderlineOffset: "3px",
       fontWeight: 600,
@@ -128,7 +128,7 @@ export const freshMint: ThemePreset = {
     },
     em: {
       fontStyle: "italic",
-      color: "#0d9488",
+      color: "#0f766e",
     },
     code: {
       backgroundColor: "#ccfbf1",
@@ -172,7 +172,7 @@ export const freshMint: ThemePreset = {
       color: "#0f766e",
       fontWeight: 700,
       textAlign: "left",
-      borderBottom: "2px solid #0d9488",
+      borderBottom: "2px solid #0f766e",
     },
     td: {
       padding: "11px 16px",

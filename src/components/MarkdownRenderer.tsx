@@ -505,21 +505,32 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
       const isBeforeHr = Boolean(node?.properties?.dataBeforeHr);
       const isAfterHr = Boolean(node?.properties?.dataAfterHr);
 
-      // (-1) 备注段落：字号比用户所选字号小 4px、灰色、不加粗不斜体
+      // (-1) 备注段落：字号比用户所选字号小 3px、灰色（随背景自适应：浅底中灰 4.8:1、深底浅灰）、不加粗不斜体
       if (node?.properties?.dataRole === 'note') {
         const noteFontSize = `${Math.max(
           11,
           parseFloat(String((theme.container?.fontSize as string) || '15.5')) - 3
         )}px`;
+        const bgRaw = String((theme.container as CSSProperties).backgroundColor || (theme.container as CSSProperties).background || '');
+        const hexM = bgRaw.match(/^#([0-9a-fA-F]{6})$/);
+        let bgLum = 1;
+        if (hexM) {
+          const rr = parseInt(hexM[1].slice(0, 2), 16) / 255;
+          const gg = parseInt(hexM[1].slice(2, 4), 16) / 255;
+          const bb = parseInt(hexM[1].slice(4, 6), 16) / 255;
+          const f = (v: number) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+          bgLum = 0.2126 * f(rr) + 0.7152 * f(gg) + 0.0722 * f(bb);
+        }
+        const noteColor = bgLum < 0.35 ? '#a8b3bf' : '#6b7280';
         return (
           <p
             data-role="note"
             style={{
               marginTop: 0,
-              marginBottom: '18px',
+              marginBottom: elements.p.marginBottom ?? '18px',
               fontSize: noteFontSize,
-              lineHeight: 1.85,
-              color: '#999999',
+              lineHeight: elements.p.lineHeight ?? 1.85,
+              color: noteColor,
               fontWeight: 400,
               fontStyle: 'normal',
               letterSpacing: '0.034em',
