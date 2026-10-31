@@ -94,7 +94,11 @@ try {
     $db['pass'],
     array(PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION)
   );
-} catch (PDOException $ex) { echo '<h3>数据库连接失败</h3>'; exit; }
+} catch (PDOException $ex) {
+  echo '<h3>数据库连接失败：' . htmlspecialchars($ex->getMessage(), ENT_QUOTES, 'UTF-8') . '</h3>';
+  echo '<p class=muted>常见原因：config.php 缺 port 字段（新代码必填）；host 应为 127.0.0.1 而非 localhost（非默认端口下 localhost 走 socket 会忽略端口）；账号密码或库名不符。</p>';
+  exit;
+}
 
 // ---------- 公共助手 ----------
 $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); };
