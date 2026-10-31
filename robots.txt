@@ -1,5 +1,7 @@
 User-Agent: *
 Allow: /
+Disallow: /analytics/
+Disallow: /admin/
 
 User-Agent: Googlebot
 User-Agent: bingbot
@@ -8,5 +10,7 @@ User-Agent: Sogou web spider
 User-Agent: 360Spider
 User-Agent: YisouSpider
 Allow: /
+Disallow: /analytics/
+Disallow: /admin/
 
 Sitemap: https://wol.yourtools.xyz/sitemap.xml

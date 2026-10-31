@@ -1,0 +1,22 @@
+# 文排统计后端 · 部署在 Apache + PHP（同域路径方案）
+# 放置位置：站点根目录下的 analytics/ 子目录
+#   wol.yourtools.xyz/analytics/track.php  → 统计接口
+#   wol.yourtools.xyz/admin/              → 后台（建议改名为不可猜的路径，见 README）
+
+# 搜索引擎：本目录（含接口与后台）一律不索引、不追踪
+<IfModule mod_headers.c>
+  Header set X-Robots-Tag "noindex, nofollow, noarchive"
+</IfModule>
+
+# 禁止 Web 访问配置与安装文件（含数据库密码）
+<FilesMatch "^(config\.php|config\.example\.php|install\.sql|\.htaccess)$">
+  Require all denied
+</FilesMatch>
+
+# Apache 2.2 兼容写法（2.4 会自动忽略 Module 不存在时的报错，二选一保留）
+<IfModule !mod_authz_core.c>
+  <FilesMatch "^(config\.php|config\.example\.php|install\.sql|\.htaccess)$">
+    Order allow,deny
+    Deny from all
+  </FilesMatch>
+</IfModule>
