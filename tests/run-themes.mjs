@@ -160,7 +160,8 @@ for (const theme of allThemes) {
       'chinese-scroll': /border-top:\s*2px solid/,
       'wechat-bubble': /border-radius:\s*12px/,
       'report-takeaway': /border-left:\s*4px solid #1e3a8a/,
-      'gallery-clean': /border:\s*1px solid #e7e5e4/,
+      // gallery-clean：浅底白卡 / 深底半透明浅卡（艺术策展为深底，走自适应分支）
+      'gallery-clean': /border:\s*1px solid (?:#e7e5e4|rgba\(231, 229, 228, 0\.18\))/,
       'mint-bubble': /border-radius:\s*16px/,
       'literary-minimal': /background-color:\s*transparent/,
       'morandi-card': /border-radius:\s*12px/,

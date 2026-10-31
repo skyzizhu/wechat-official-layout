@@ -751,15 +751,37 @@ export const MarkdownRenderer = React.memo(function MarkdownRenderer({
             fontWeight: 500,
           };
           break;
-        case 'gallery-clean':
-          bqStyle = {
-            ...bqBase,
-            background: '#ffffff',
-            border: '1px solid #e7e5e4',
-            borderLeft: 'none',
-            borderRadius: 8,
-          };
+        case 'gallery-clean': {
+          // 干净画廊卡：深底主题转半透明浅卡（与微信序列化器同构），硬编码白卡会让浅色文字不可读
+          const galleryBgRaw = String(
+            (theme.container as CSSProperties).backgroundColor || (theme.container as CSSProperties).background || ''
+          );
+          const galleryHex = galleryBgRaw.match(/^#([0-9a-fA-F]{6})$/);
+          let galleryLum = 1;
+          if (galleryHex) {
+            const gr = parseInt(galleryHex[1].slice(0, 2), 16) / 255;
+            const gg = parseInt(galleryHex[1].slice(2, 4), 16) / 255;
+            const gb = parseInt(galleryHex[1].slice(4, 6), 16) / 255;
+            const gf = (v: number) => (v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+            galleryLum = 0.2126 * gf(gr) + 0.7152 * gf(gg) + 0.0722 * gf(gb);
+          }
+          bqStyle = galleryLum < 0.35
+            ? {
+                ...bqBase,
+                background: 'rgba(231, 229, 228, 0.06)',
+                border: '1px solid rgba(231, 229, 228, 0.18)',
+                borderLeft: 'none',
+                borderRadius: 8,
+              }
+            : {
+                ...bqBase,
+                background: '#ffffff',
+                border: '1px solid #e7e5e4',
+                borderLeft: 'none',
+                borderRadius: 8,
+              };
           break;
+        }
         case 'mint-bubble':
           bqStyle = {
             ...bqBase,

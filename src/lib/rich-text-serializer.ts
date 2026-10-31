@@ -152,6 +152,32 @@ function cssPropertiesToInlineStyle(style: Record<string, unknown> | undefined):
 }
 
 /**
+ * 内联样式合并：override 同名属性覆盖 base，属性位置保持首次出现顺序。
+ * 严禁「基础样式 + 形态覆盖」朴素字符串拼接——会产生同属性重复声明且值冲突
+ * （微信编辑器粘贴时 sanitizer 可能保留首个声明，导致 quoteStyle 等形态悄悄失效）。
+ */
+function mergeStyles(base: string, override: string): string {
+  if (!override || !override.trim()) return base;
+  const order: string[] = [];
+  const map = new Map<string, string>();
+  const collect = (style: string) => {
+    style.split(';').forEach((decl) => {
+      const t = decl.trim();
+      const i = t.indexOf(':');
+      if (!t || i <= 0) return;
+      const prop = t.slice(0, i).trim().toLowerCase();
+      const val = t.slice(i + 1).trim();
+      if (!val) return;
+      if (!map.has(prop)) order.push(prop);
+      map.set(prop, val);
+    });
+  };
+  collect(base);
+  collect(override);
+  return order.map((p) => `${p}: ${map.get(p)}`).join('; ') + ';';
+}
+
+/**
  * 将整篇排版 DOM 节点序列化为 100% 严格符合微信公众号官方规范的富文本 HTML
  */
 export function serializeToWeChatRichText(
@@ -363,7 +389,7 @@ export function serializeToWeChatRichText(
           inner = `<span style="${baseTitle} background-color: #18181b; color: #ffffff; padding: 4px 12px;">${textHtml}</span>`;
           break;
         case 'academic-bracket':
-          inner = `<span style="${baseTitle} color: ${h2Color}; letter-spacing: 1px;"><span style="color: ${accentColor};">【</span>${textHtml}<span style="color: ${accentColor};">】</span></span>`;
+          inner = `<span style="${mergeStyles(baseTitle, `color: ${h2Color}; letter-spacing: 1px;`)}"><span style="color: ${accentColor};">【</span>${textHtml}<span style="color: ${accentColor};">】</span></span>`;
           break;
         case 'journal-sticker':
           inner = `<span style="${baseTitle} color: ${h2Color}; background-color: ${hexToRgba(accentColor, 0.14)}; border: 1px dashed ${accentColor}; border-radius: 8px; padding: 4px 12px;">${textHtml}</span>`;
@@ -532,7 +558,11 @@ export function serializeToWeChatRichText(
         styleOverride = 'border: none; background-color: #eff6ff; border-left: 4px solid #1e3a8a; border-radius: 0 8px 8px 0;';
         break;
       case 'gallery-clean':
-        styleOverride = 'background-color: #ffffff; border: 1px solid #e7e5e4; border-left: none; border-radius: 8px;';
+        // 干净画廊卡：浅底主题白卡；深底主题（艺术策展等）转半透明浅卡，
+        // 硬编码白卡会让主题的浅色引用文字压白底不可读
+        styleOverride = isDarkBg
+          ? 'background-color: rgba(231, 229, 228, 0.06); border: 1px solid rgba(231, 229, 228, 0.18); border-left: none; border-radius: 8px;'
+          : 'background-color: #ffffff; border: 1px solid #e7e5e4; border-left: none; border-radius: 8px;';
         break;
       case 'mint-bubble':
         styleOverride = 'background-color: rgba(20, 184, 166, 0.08); border-left: none; border-radius: 16px;';
@@ -553,7 +583,10 @@ export function serializeToWeChatRichText(
 
     section.setAttribute(
       'style',
-      `margin: 0 0 20px; padding: ${quotePadding}; background-color: ${quoteBg}; ${fullBorder} ${borderLeftStyle} border-radius: ${quoteRadius}; ${quoteBoxShadow} color: ${quoteColor}; font-size: ${quoteFontSize}; line-height: 1.85; max-width: 100%; box-sizing: border-box; word-break: break-word;${styleOverride ? ' ' + styleOverride : ''}`
+      mergeStyles(
+        `margin: 0 0 20px; padding: ${quotePadding}; background-color: ${quoteBg}; ${fullBorder} ${borderLeftStyle} border-radius: ${quoteRadius}; ${quoteBoxShadow} color: ${quoteColor}; font-size: ${quoteFontSize}; line-height: 1.85; max-width: 100%; box-sizing: border-box; word-break: break-word;`,
+        styleOverride
+      )
     );
 
     // 格式化引用块内部的所有子段落，移除多余外边距
@@ -1129,7 +1162,6 @@ export function serializeToWeChatRichText(
     if (markHighlight.border) markStyleParts.push(`border: ${markHighlight.border}`);
     if (markHighlight.padding) markStyleParts.push(`padding: ${markHighlight.padding}`);
     if (markHighlight.borderRadius) markStyleParts.push(`border-radius: ${markHighlight.borderRadius}`);
-    if (markHighlight.color) markStyleParts.push(`color: ${markHighlight.color}`);
   }
   const markStyle = markStyleParts.length > 0 ? `${markStyleParts.join('; ')};` : '';
 
