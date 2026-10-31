@@ -24,7 +24,7 @@ analytics/
    （`wol.yourtools.xyz/analytics/`）
 
 2. **建库**（二选一）：
-   - phpMyAdmin：先创建/选择数据库 → 导入 `install.sql`
+   - phpMyAdmin：先创建/选择数据库 → 导入 `install.sql`（用 root/管理员账号导入——专用运行时账号无建表权限，属预期安全设计）
    - 或浏览器访问 `https://wol.yourtools.xyz/analytics/install.php?token=安装令牌`
 
 3. **配置**：在服务器上 `cp config.example.php config.php`，填写：
