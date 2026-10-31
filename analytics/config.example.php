@@ -15,6 +15,7 @@ return array(
     'user'    => 'root',
     'pass'    => '',
     'charset' => 'utf8mb4',
+    'port'    => '3306',
   ),
 
   // IP 加盐哈希的盐（随机长字符串，换盐会破坏 UV 去重连续性，设好后不要改）

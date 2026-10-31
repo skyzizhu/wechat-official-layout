@@ -19,7 +19,7 @@ if (!$token || !hash_equals((string)$config['install_token'], $token)) { echo "ä
 $db = $config['db'];
 try {
   $pdo = new PDO(
-    "mysql:host={$db['host']};dbname={$db['dbname']};charset={$db['charset']}",
+    "mysql:host={$db['host']};port={$db['port']};dbname={$db['dbname']};charset={$db['charset']}",
     $db['user'],
     $db['pass'],
     array(PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION)

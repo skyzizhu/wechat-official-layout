@@ -89,7 +89,7 @@ if (isset($_GET['logout'])) { session_destroy(); header('Location: ./'); exit; }
 try {
   $db = $config['db'];
   $pdo = new PDO(
-    "mysql:host={$db['host']};dbname={$db['dbname']};charset={$db['charset']}",
+    "mysql:host={$db['host']};port={$db['port']};dbname={$db['dbname']};charset={$db['charset']}",
     $db['user'],
     $db['pass'],
     array(PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION)
