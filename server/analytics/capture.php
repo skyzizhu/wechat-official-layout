@@ -74,6 +74,13 @@ try {
     exit;
   }
 
+  // 单 uid 每日内容上限（防脚本灌水撑库）
+  $st3 = $pdo->prepare('SELECT COUNT(*) FROM wp_contents WHERE uid = ? AND day = ?');
+  $st3->execute(array($uid, date('Y-m-d')));
+  if ((int)$st3->fetchColumn() >= 10) {
+    exit;
+  }
+
   $ins = $pdo->prepare('INSERT INTO wp_contents (uid, fp, sid, event, title, char_len, content, day) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
   $ins->execute(array($uid, $fp, $sid, $event, $title, mb_strlen($content), $content, date('Y-m-d')));
 } catch (PDOException $ex) {

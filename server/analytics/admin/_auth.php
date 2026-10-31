@@ -5,6 +5,16 @@
  */
 
 date_default_timezone_set('Asia/Shanghai');
+// 会话 Cookie 加固：HttpOnly 防 XSS 读取、SameSite=Strict 防 CSRF、HTTPS 下加 Secure
+$isHttps = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+  || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
+session_set_cookie_params(array(
+  'lifetime' => 0,
+  'path' => '/',
+  'secure' => $isHttps,
+  'httponly' => true,
+  'samesite' => 'Strict',
+));
 session_name('wpstat'); // 必须在 session_start 之前
 session_start();
 header('X-Frame-Options: DENY');
@@ -95,6 +105,7 @@ function render_header($title, $active) {
   $CSRF = $GLOBALS['CSRF'];
   $nav = array(
     'index' => array('index.php', '概览'),
+    'growth' => array('growth.php', '增长/留存'),
     'users' => array('users.php', '用户'),
     'contents' => array('contents.php', '内容库'),
     'log' => array('log.php', '事件日志'),

@@ -44,11 +44,25 @@ analytics/
 
 ## 安全清单
 
+- [ ] **线上数据库用专用账号（不要 root）**，最小权限：
+      ```sql
+      CREATE USER 'wenpai_stat'@'localhost' IDENTIFIED BY '强密码';
+      GRANT SELECT, INSERT, DELETE ON wenpai_stats.* TO 'wenpai_stat'@'localhost';
+      FLUSH PRIVILEGES;
+      ```
+      （接口只需 SELECT+INSERT；后台删除内容需要 DELETE；拆双账号更稳）
 - [ ] config.php 已被 .htaccess 拦截（浏览器访问 config.php 应 403）
 - [ ] install.php / hashgen.php 已删除
 - [ ] admin/ 已改名为不可猜路径
-- [ ] 后台密码 ≥ 8 位；session 登录自带 5 次失败锁 15 分钟
+- [ ] 后台密码 ≥ 8 位；session 登录自带 5 次失败锁 15 分钟、Cookie HttpOnly+SameSite
 - [ ] robots.txt 可加一行 `Disallow: /analytics/`（可选）
+
+## 数据维护
+
+- 事件表清理（防无限增长）：定时任务执行
+  `curl "https://你的域名/analytics/prune.php?token=安装令牌&days=180"`
+  （删除早于 180 天的事件；内容表不受影响）
+- 后台登录 Cookie 已加固：HttpOnly + SameSite=Strict + HTTPS 下自动 Secure
 
 ## 数据说明
 
