@@ -85,12 +85,11 @@ export function getListLevelStyles(theme?: ThemePreset): ListLevelStyleSet {
     badge: {
       // 微信合规：无固定宽高/CSS 大 padding（微信粘贴会剥掉行内 padding 导致瘪条），
       // 宽度由文本中的 &nbsp; 承载（渲染层输出 \u00A0 + 序号 + \u00A0）。
-      // 显式 lineHeight:1 + 对称小内边距：胶囊高度固定紧凑、序号在任意主题
-      // （含衬线字体与 2.x 大行高主题）下都垂直居中，不再随主题行高膨胀偏移。
-      // textIndent:0 必须显式声明——首行缩进主题（如复古报纸 2em）会继承进
-      // inline-block，在胶囊内部把序号推到右侧并撑宽徽章
+      // 显式 lineHeight:1 + 对称小内边距：序号在任意主题下垂直居中不偏移。
+      // 竖向 2px / 横向 8px：微信端 line-height 被规范化剥离后继承正文 1.75（约 21px 行盒），
+      // 横向加宽保证「宽略大于高、序号水平居中」的胶囊观感（预览端 lineHeight:1 更紧凑，比例一致）
       display: 'inline-block',
-      padding: '3px 4px',
+      padding: '2px 8px',
       lineHeight: 1,
       textIndent: 0,
       borderRadius: '6px',
