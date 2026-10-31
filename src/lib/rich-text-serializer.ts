@@ -1064,8 +1064,14 @@ export function serializeToWeChatRichText(
     Array.from(listEl.children)
       .filter((c): c is HTMLElement => c.tagName === 'LI')
       .forEach((li) => {
+        // 首行缩进主题（东方雅致/经典学术/复古报纸等）：预览中松散列表的 li 内容
+        // 包在内层 <p> 里（带 elements.p 的 text-indent），序列化拍平后缩进丢失。
+        // 仅当 li 内确有 <p>（松散列表，与预览条件一致）时在项 section 上补齐——
+        // text-indent 内联样式微信粘贴管线会保留（与正文段落缩进同机制）
+        const liIndentStyle =
+          themeTextIndent && li.querySelector('p') ? ` text-indent: ${themeTextIndent};` : '';
         const itemSec = document.createElement('section');
-        itemSec.setAttribute('style', itemBaseStyle(depth));
+        itemSec.setAttribute('style', itemBaseStyle(depth) + liIndentStyle);
 
         // 深层标记（预览中深层标记由 CSS ::marker 呈现，DOM 中不存在，导出需补文字标记）
         if (depth >= 2) {
