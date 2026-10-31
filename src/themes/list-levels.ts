@@ -86,10 +86,10 @@ export function getListLevelStyles(theme?: ThemePreset): ListLevelStyleSet {
       // 微信合规：无固定宽高/CSS 大 padding（微信粘贴会剥掉行内 padding 导致瘪条），
       // 宽度由文本中的 &nbsp; 承载（渲染层输出 \u00A0 + 序号 + \u00A0）。
       // 显式 lineHeight:1 + 对称小内边距：序号在任意主题下垂直居中不偏移。
-      // 竖向 2px / 横向 8px：微信端 line-height 被规范化剥离后继承正文 1.75（约 21px 行盒），
-      // 横向加宽保证「宽略大于高、序号水平居中」的胶囊观感（预览端 lineHeight:1 更紧凑，比例一致）
+      // 竖向 3px / 横向 8px：微信端 line-height 被规范化剥离后继承正文 1.75（约 21px 行盒），
+      // 加横向内边距保证「宽略大于高、序号水平居中」的胶囊观感（预览端 lineHeight:1 更紧凑，比例一致）
       display: 'inline-block',
-      padding: '2px 8px',
+      padding: '3px 8px',
       lineHeight: 1,
       textIndent: 0,
       borderRadius: '6px',
