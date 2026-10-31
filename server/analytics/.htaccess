@@ -3,6 +3,11 @@
 #   wol.yourtools.xyz/analytics/track.php  → 统计接口
 #   wol.yourtools.xyz/admin/              → 后台（建议改名为不可猜的路径，见 README）
 
+# 搜索引擎：本目录（含接口与后台）一律不索引、不追踪
+<IfModule mod_headers.c>
+  Header set X-Robots-Tag "noindex, nofollow, noarchive"
+</IfModule>
+
 # 禁止 Web 访问配置与安装文件（含数据库密码）
 <FilesMatch "^(config\.php|config\.example\.php|install\.sql|\.htaccess)$">
   Require all denied

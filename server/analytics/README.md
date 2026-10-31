@@ -55,7 +55,7 @@ analytics/
 - [ ] install.php / hashgen.php 已删除
 - [ ] admin/ 已改名为不可猜路径
 - [ ] 后台密码 ≥ 8 位；session 登录自带 5 次失败锁 15 分钟、Cookie HttpOnly+SameSite
-- [ ] robots.txt 可加一行 `Disallow: /analytics/`（可选）
+- [x] robots.txt 已内置 `Disallow: /analytics/`（站点构建自带）；后台若改名，把新路径加进 `src/app/robots.ts` 的 disallow 并重新构建
 
 ## 数据维护
 
