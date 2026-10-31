@@ -17,6 +17,7 @@ import {
 import { SAMPLE_PLAIN_TEXT } from '@/lib/sample-markdown';
 import { collapseCodeFenceArtifacts, detectContentFormat, processContentByMode } from '@/lib/smart-parser';
 import { stripMarkdownToPlainText } from '@/lib/markdown-plain';
+import { trackPageView, trackEvent } from '@/lib/analytics';
 import { AppPromoBadge } from '@/components/AppPromoBadge';
 import { SiteFooter } from '@/components/SiteFooter';
 import { convertLinksToFootnotes } from '@/lib/link-footnotes';
@@ -136,6 +137,8 @@ function MainLayout() {
 
   // 1. 初始化：迁移旧版单草稿 → 多草稿库，恢复激活草稿与用户偏好
   useEffect(() => {
+    // 访问统计（仅生产域名发送，本地开发静默）
+    trackPageView();
     try {
       draftStore.migrateLegacy();
       let list = draftStore.listDrafts();
@@ -540,6 +543,7 @@ function MainLayout() {
         selectedThemeId={themeId}
         onSelect={(newId) => {
           setThemeId(newId);
+          trackEvent('theme', newId);
         }}
       />
 

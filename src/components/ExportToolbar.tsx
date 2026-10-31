@@ -3,6 +3,7 @@
 import { Palette, ChevronDown, Copy, ImageDown, FileDown, Pipette, Link2, Heading1, Loader2 } from 'lucide-react';
 import type { ThemePreset, FontSizeOption } from '@/themes';
 import { copyRichText, exportAsImage } from '@/lib/export';
+import { trackEvent, lengthBucket } from '@/lib/analytics';
 import { useToast } from './Toast';
 import { ColorPickerModal } from './ColorPickerModal';
 import React, { useEffect, useRef, useState } from 'react';
@@ -66,6 +67,7 @@ export function ExportToolbar({
     if (!previewRef.current) return;
     try {
       await copyRichText(previewRef.current, theme, currentColor);
+      trackEvent('copy', lengthBucket(markdown.length));
       showToast('✅ 微信公众号富文本已复制！格式与样式严格适配，可直接粘贴发布');
     } catch {
       showToast('❌ 复制失败，请重试');
