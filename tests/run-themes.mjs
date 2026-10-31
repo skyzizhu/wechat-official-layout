@@ -197,14 +197,16 @@ for (const theme of allThemes) {
       }
     }
 
-    // 书卷系主题（正文首行缩进）的标题同步缩进
+    // 书卷系主题（正文首行缩进）的标题同步缩进——缩进由行首 inline-block
+    // 全角空格占位 span 承载（section 的 text-indent 微信粘贴不可靠，禁止使用）
     const indentThemes = { 'neo-chinese': 'text-indent: 2em', 'classic-academic': 'text-indent: 2em', 'retro-newspaper': 'text-indent: 2em' };
     if (indentThemes[theme.id]) {
       if (theme.h2Decoration !== 'newspaper-banner') {
-        const h2sec = html.match(/<section[^>]*style="([^"]*margin-top: 38px[^"]*)"/);
-        if (!h2sec) problems.push('书卷系：H2 section 未找到');
-        else if (!/text-indent/.test(h2sec[1])) {
-          problems.push('书卷系：H2 未跟随正文首行缩进');
+        // banner 横幅默认居中（居中形态按设计不缩进），其余左对齐形态须有行首缩进占位
+        const h2sec = html.match(/<section[^>]*style="([^"]*margin-top: 38px[^"]*)"(>[^<]*<span[^>]*>\u2003\u2003)/);
+        if (!h2sec) problems.push('书卷系：H2 缩进占位 span 未找到（行首 \\u2003\\u2003）');
+        if (!/>\u2003\u2003</.test(html) && !/>[\u2003]{2}/.test(html)) {
+          problems.push('书卷系：缩进占位 span 丢失');
         }
       }
       if (!/text-indent:\s*2em/.test(html)) {

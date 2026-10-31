@@ -59,6 +59,7 @@ const doc = `<div id="a">
 </div>`;
 
 let totalProblems = 0;
+const allWarns = [];
 const casesList = [];
 for (const t of allThemes) {
   casesList.push([`${t.name}/原生`, t]);
@@ -72,6 +73,7 @@ for (const [label, theme] of casesList) {
   const html = serializeToWeChatRichText(document.getElementById('a'), theme, undefined);
   const doc2 = new JSDOM(html).window.document;
   const problems = [];
+  const warns = [];
 
   // 1. 标签配平
   const openSec = (html.match(/<section\b/g) || []).length;
@@ -114,11 +116,38 @@ for (const [label, theme] of casesList) {
   // 8. 表格单元格保留
   if (!doc2.querySelector('th') || !doc2.querySelector('td')) problems.push('表格单元格丢失');
 
+  // 9. 微信机制审计：section 不携带 text-indent——微信粘贴对块级 section 的
+  //    text-indent 不可靠、且会剥掉子元素的零值继承防护（text-indent: 0），
+  //    缩进必须由块级 p（正文已验证）或行首 inline-block 占位 span（徽章同款）承载
+  doc2.querySelectorAll('section').forEach((el) => {
+    if (/text-indent/.test(el.getAttribute('style') || '')) {
+      problems.push(`section 携带 text-indent（微信粘贴不可靠）「${(el.textContent || '').trim().slice(0, 8)}」`);
+    }
+  });
+
+  // 警示级（不计入失败）：微信会剥行内元素 padding、inline-block 固定宽高——
+  // 存量输出中允许存在，但新增依赖前需确认劣化表现可接受
+  doc2.querySelectorAll('[style]').forEach((el) => {
+    const st = el.getAttribute('style') || '';
+    if (/display:\s*inline;/.test(st) && /padding:\s*(?!0px? 0px?)[^;]+/.test(st)) {
+      warns.push(`${el.tagName} 行内元素带 padding（微信会剥）「${(el.textContent || '').trim().slice(0, 8)}」`);
+    }
+    if (/display:\s*inline-block;/.test(st) && /(width|height):\s*\d/.test(st)) {
+      warns.push(`${el.tagName} inline-block 固定宽高（微信会剥）「${(el.textContent || '').trim().slice(0, 8)}」`);
+    }
+  });
+
   if (problems.length) {
     totalProblems += problems.length;
     console.log(`❌ ${label}`);
     problems.forEach((p) => console.log(`   · ${p}`));
   }
+  warns.forEach((w) => allWarns.push(`${label}: ${w}`));
+}
+if (allWarns.length) {
+  console.log(`\n⚠️ 警示（微信剥除类样式，存量可接受，新增依赖前需确认）：`);
+  [...new Set(allWarns)].slice(0, 10).forEach((w) => console.log(`   · ${w}`));
+  if (allWarns.length > 10) console.log(`   · …共 ${allWarns.length} 条`);
 }
 console.log(`\n===== 结构扫描：${allThemes.length} 主题 × ${casesList.length / allThemes.length} 组配色，${totalProblems} 处异常 =====`);
 process.exit(totalProblems ? 1 : 0);

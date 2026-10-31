@@ -178,6 +178,18 @@ function mergeStyles(base: string, override: string): string {
 }
 
 /**
+ * 首行缩进的微信安全承载：返回 N 个全角空格字符（供 inline-block 占位 span 使用）。
+ * 微信粘贴管线会裁段落级行首空白文本、剥零值 text-indent（继承防护失效）、
+ * 且 text-indent 在 section 上不可靠——而「inline-block + 空格内容」是数字徽章
+ * 同款、已验证存活的机制：占位宽度由 em 空格字符天然承载，不依赖任何 CSS。
+ */
+function emIndentSpaces(indent?: string | null): string {
+  const m = (indent || '').trim().match(/^([\d.]+)em$/);
+  const count = m ? Math.max(1, Math.min(8, Math.round(parseFloat(m[1])))) : 2;
+  return '\u2003'.repeat(count);
+}
+
+/**
  * 将整篇排版 DOM 节点序列化为 100% 严格符合微信公众号官方规范的富文本 HTML
  */
 export function serializeToWeChatRichText(
@@ -279,9 +291,10 @@ export function serializeToWeChatRichText(
   })();
 
   // (2) 处理 H2 二级分节标题（微信文章灵魂：胶囊彩条/双横线/立体徽章）
-  // 书卷系主题（正文首行缩进）的标题同步缩进：h2 自身定义优先，回退正文字缩进
+  // 书卷系主题（正文首行缩进）的标题同步缩进：h2 自身定义优先，回退正文字缩进。
+  // 缩进不用 section 的 text-indent 承载（微信粘贴不可靠，且零值继承防护会被剥），
+  // 统一改为行首 inline-block 全角空格占位 span（数字徽章同款、已验证存活机制）
   const h2Indent = (themeElements?.h2?.textIndent as string) || (themeElements?.p?.textIndent as string) || '';
-  const h2IndentStyle = h2Indent ? ` text-indent: ${h2Indent};` : '';
   const h3Indent = (themeElements?.h3?.textIndent as string) || (themeElements?.p?.textIndent as string) || '';
   const h3IndentStyle = h3Indent ? ` margin-left: ${h3Indent};` : '';
   const h2Elements = Array.from(clone.querySelectorAll('h2'));
@@ -321,11 +334,11 @@ export function serializeToWeChatRichText(
     else if (h2Decoration === 'pop-box') {
       section.setAttribute(
         'style',
-        `margin-top: 38px; margin-bottom: 20px; text-align: left; line-height: 1.75; max-width: 100%; box-sizing: border-box;${h2IndentStyle}`
+        'margin-top: 38px; margin-bottom: 20px; text-align: left; line-height: 1.75; max-width: 100%; box-sizing: border-box;'
       );
       const innerSpan = h2.querySelector('span');
       const textHtml = innerSpan ? innerSpan.innerHTML : h2.innerHTML;
-      section.innerHTML = `<span style="display: inline-block; background-color: #fde047; color: #000000; border: 2px solid #000000; padding: 4px 12px; box-shadow: 2.5px 2.5px 0px #000000; font-weight: 800; font-size: 17.5px; line-height: 1.75; max-width: 100%; word-break: break-word; box-sizing: border-box;">${textHtml}</span>`;
+      section.innerHTML = `${h2Indent ? `<span style="display: inline-block;">${emIndentSpaces(h2Indent)}</span>` : ''}<span style="display: inline-block; background-color: #fde047; color: #000000; border: 2px solid #000000; padding: 4px 12px; box-shadow: 2.5px 2.5px 0px #000000; font-weight: 800; font-size: 17.5px; line-height: 1.75; max-width: 100%; word-break: break-word; box-sizing: border-box;">${textHtml}</span>`;
     }
     // Case B2: 复古报纸横幅风格 (上下横栏实线，古典铅印大标题风格)
     else if (h2Decoration === 'newspaper-banner') {
@@ -337,9 +350,9 @@ export function serializeToWeChatRichText(
       const textAlign = (h2Style.textAlign as string) || 'center';
       section.setAttribute(
         'style',
-        `margin-top: 44px; margin-bottom: 20px; text-align: ${textAlign}; line-height: 1.75; padding: 6px 14px; border-top: ${borderTop}; border-bottom: ${borderBottom}; background-color: ${bg}; max-width: 100%; box-sizing: border-box;${textAlign === 'left' ? h2IndentStyle : ''}`
+        `margin-top: 44px; margin-bottom: 20px; text-align: ${textAlign}; line-height: 1.75; padding: 6px 14px; border-top: ${borderTop}; border-bottom: ${borderBottom}; background-color: ${bg}; max-width: 100%; box-sizing: border-box;`
       );
-      section.innerHTML = `<span style="font-size: ${h2FontSize}; font-weight: 800; color: ${h2Color}; letter-spacing: ${letterSpacing}; line-height: 1.75; box-sizing: border-box;">${h2.innerHTML}</span>`;
+      section.innerHTML = `${textAlign === 'left' && h2Indent ? `<span style="display: inline-block;">${emIndentSpaces(h2Indent)}</span>` : ''}<span style="font-size: ${h2FontSize}; font-weight: 800; color: ${h2Color}; letter-spacing: ${letterSpacing}; line-height: 1.75; box-sizing: border-box;">${h2.innerHTML}</span>`;
     }
     // Case C: 经典微胶囊小彩条（微信风、商务、新中式、极客、薄荷、莫兰迪等）
     else if (
@@ -357,7 +370,7 @@ export function serializeToWeChatRichText(
     ) {
       section.setAttribute(
         'style',
-        `margin-top: 38px; margin-bottom: 20px; text-align: left; line-height: 1.75; max-width: 100%; box-sizing: border-box;${h2IndentStyle}`
+        'margin-top: 38px; margin-bottom: 20px; text-align: left; line-height: 1.75; max-width: 100%; box-sizing: border-box;'
       );
 
       // 提取标题文字：新预览 DOM 为单 span（竖线已收编为文字容器的 border-left），
@@ -365,6 +378,11 @@ export function serializeToWeChatRichText(
       const spans = Array.from(h2.querySelectorAll('span'));
       const textSpan = spans.length >= 2 ? spans[1] : spans.length === 1 ? spans[0] : null;
       const textHtml = textSpan ? textSpan.innerHTML : h2.innerHTML;
+
+      // 行首缩进占位（与胶囊同为 inline-block，vertical-align 对齐胶囊中线）
+      const h2IndentSpacer = h2Indent
+        ? `<span style="display: inline-block; vertical-align: middle;">${emIndentSpaces(h2Indent)}</span>`
+        : '';
 
       // 每款装饰独立的 H2 形态（与预览端 MarkdownRenderer 同构）：
       // 严禁用 display:inline-block 的 section 承载装饰——微信会归一化为块级拆行。
@@ -409,7 +427,7 @@ export function serializeToWeChatRichText(
           inner = `<span style="${baseTitle} color: ${h2Color}; border-left: ${h2BorderLeft}; border-radius: 2px; padding-left: 9px;">${textHtml}</span>`;
         }
       }
-      section.innerHTML = inner;
+      section.innerHTML = h2IndentSpacer + inner;
     }
     // Case D: 复古报纸或其他常规样式
     else {
@@ -1066,10 +1084,9 @@ export function serializeToWeChatRichText(
       .forEach((li) => {
         // 首行缩进主题（东方雅致/经典学术/复古报纸等）：预览中松散列表的 li 内容
         // 包在内层 <p> 里（带 elements.p 的 text-indent），序列化拍平后缩进丢失。
-        // 仅当 li 内确有 <p>（松散列表，与预览条件一致）时，把项内容包进一层带
-        // text-indent 的内层 <p>——微信对块级 p 的 text-indent 是保留的（正文段落
-        // 同机制已验证）；直接写在 section 上会被微信剥离零值继承防护（text-indent:
-        // 0），数字徽章继承 2em 后被内部撑宽
+        // 仅当 li 内确有 <p>（松散列表，与预览条件一致）时，行首插入 inline-block
+        // 全角空格占位 span（数字徽章同款、已验证存活机制）——不用 section 的
+        // text-indent（微信不可靠，且会剥掉徽章的零值继承防护把徽章撑宽）
         const wantsIndent = Boolean(themeTextIndent) && Boolean(li.querySelector('p'));
         const itemSec = document.createElement('section');
         itemSec.setAttribute('style', itemBaseStyle(depth));
@@ -1136,12 +1153,12 @@ export function serializeToWeChatRichText(
               .replace(/vertical-align:\s*[^;]+;?/g, '')
           );
         }
-        // 缩进内层 <p>：包住全部行内内容（项 section 内永无嵌套块，无 p 嵌套合法性问题）
+        // 缩进占位：插在标记 span 之前（占位 span 自身成为首元素，不影响标记规范化）
         if (wantsIndent) {
-          const innerP = document.createElement('p');
-          innerP.setAttribute('style', `margin: 0; text-indent: ${themeTextIndent};`);
-          while (itemSec.firstChild) innerP.appendChild(itemSec.firstChild);
-          itemSec.appendChild(innerP);
+          const spacer = document.createElement('span');
+          spacer.setAttribute('style', 'display: inline-block;');
+          spacer.textContent = emIndentSpaces(themeTextIndent);
+          itemSec.insertBefore(spacer, itemSec.firstChild);
         }
         sink.push(itemSec);
 
