@@ -1066,12 +1066,13 @@ export function serializeToWeChatRichText(
       .forEach((li) => {
         // 首行缩进主题（东方雅致/经典学术/复古报纸等）：预览中松散列表的 li 内容
         // 包在内层 <p> 里（带 elements.p 的 text-indent），序列化拍平后缩进丢失。
-        // 仅当 li 内确有 <p>（松散列表，与预览条件一致）时在项 section 上补齐——
-        // text-indent 内联样式微信粘贴管线会保留（与正文段落缩进同机制）
-        const liIndentStyle =
-          themeTextIndent && li.querySelector('p') ? ` text-indent: ${themeTextIndent};` : '';
+        // 仅当 li 内确有 <p>（松散列表，与预览条件一致）时，把项内容包进一层带
+        // text-indent 的内层 <p>——微信对块级 p 的 text-indent 是保留的（正文段落
+        // 同机制已验证）；直接写在 section 上会被微信剥离零值继承防护（text-indent:
+        // 0），数字徽章继承 2em 后被内部撑宽
+        const wantsIndent = Boolean(themeTextIndent) && Boolean(li.querySelector('p'));
         const itemSec = document.createElement('section');
-        itemSec.setAttribute('style', itemBaseStyle(depth) + liIndentStyle);
+        itemSec.setAttribute('style', itemBaseStyle(depth));
 
         // 深层标记（预览中深层标记由 CSS ::marker 呈现，DOM 中不存在，导出需补文字标记）
         if (depth >= 2) {
@@ -1134,6 +1135,13 @@ export function serializeToWeChatRichText(
               .replace(/line-height:\s*[^;]+;?/g, '')
               .replace(/vertical-align:\s*[^;]+;?/g, '')
           );
+        }
+        // 缩进内层 <p>：包住全部行内内容（项 section 内永无嵌套块，无 p 嵌套合法性问题）
+        if (wantsIndent) {
+          const innerP = document.createElement('p');
+          innerP.setAttribute('style', `margin: 0; text-indent: ${themeTextIndent};`);
+          while (itemSec.firstChild) innerP.appendChild(itemSec.firstChild);
+          itemSec.appendChild(innerP);
         }
         sink.push(itemSec);
 
