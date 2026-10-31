@@ -1,10 +1,10 @@
 <?php
 /**
- * 文排访问统计 · 上报接口（同域部署：wol.yourtools.xyz/api/track.php）
+ * 文排访问统计 · 上报接口（同域部署：wol.yourtools.xyz/analytics/track.php）
  *
  * 前端用法（图片信标，无 CORS/预检问题，微信 WebView 兼容）：
- *   new Image().src = '/api/track.php?e=pv&uid=匿名id&p=%2F'
- *   new Image().src = '/api/track.php?e=copy&uid=...&p=...&x=字数档位'
+ *   new Image().src = '/analytics/track.php?e=pv&uid=..&fp=..&sid=..&p=%2F'
+ *   new Image().src = '/analytics/track.php?e=copy&uid=..&x=字数档位'
  *
  * 设计要点：
  *   - 只追加：接口只 INSERT，不读不回显任何数据
@@ -27,8 +27,12 @@ $EVENTS = array('pv', 'copy', 'theme', 'export_md');
 $e = isset($_GET['e']) ? strtolower(trim($_GET['e'])) : '';
 if (!in_array($e, $EVENTS, true)) { header('Content-Type: image/gif'); echo $GIF; exit; }
 
-$uid = isset($_GET['uid']) ? preg_replace('/[^a-f0-9]/', '', strtolower(substr((string)$_GET['uid'], 0, 32))) : '';
+$hex = function ($v, $max) { return substr(preg_replace('/[^a-f0-9]/', '', strtolower((string)$v)), 0, $max); };
+$uid = $hex(isset($_GET['uid']) ? $_GET['uid'] : '', 32);
 if (strlen($uid) < 8) { header('Content-Type: image/gif'); echo $GIF; exit; }
+
+$fp  = $hex(isset($_GET['fp']) ? $_GET['fp'] : '', 16);
+$sid = $hex(isset($_GET['sid']) ? $_GET['sid'] : '', 16);
 
 $p = isset($_GET['p']) ? mb_substr(trim((string)$_GET['p']), 0, 190) : '/';
 if ($p === '') $p = '/';
@@ -56,8 +60,8 @@ try {
   $st = $pdo->prepare('SELECT COUNT(*) FROM wp_visits WHERE ip_hash = ? AND created_at > NOW() - INTERVAL 60 SECOND');
   $st->execute(array($ip_hash));
   if ((int)$st->fetchColumn() <= 20) {
-    $ins = $pdo->prepare('INSERT INTO wp_visits (event, uid, path, extra, ip_hash, ua, referer, day) VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE())');
-    $ins->execute(array($e, $uid, $p, $x, $ip_hash, $ua, $ref));
+    $ins = $pdo->prepare('INSERT INTO wp_visits (event, uid, fp, sid, path, extra, ip_hash, ua, referer, day) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $ins->execute(array($e, $uid, $fp, $sid, $p, $x, $ip_hash, $ua, $ref, date('Y-m-d')));
   }
 } catch (PDOException $ex) {
   // 统计失败不影响主站：静默

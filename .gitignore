@@ -45,3 +45,4 @@ tests/.parser-build/
 tests/.editor-build/
 tests/.wechat-build/
 tests/.dual-build/
+server/analytics/config.php

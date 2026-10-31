@@ -10,10 +10,10 @@
 return array(
   // 数据库连接（MySQL / MariaDB）
   'db' => array(
-    'host'    => 'localhost',
-    'dbname'  => '你的数据库名',
-    'user'    => '数据库用户名',
-    'pass'    => '数据库密码',
+    'host'    => '127.0.0.1',
+    'dbname'  => 'wenpai_stats',
+    'user'    => 'root',
+    'pass'    => '',
     'charset' => 'utf8mb4',
   ),
 
@@ -28,4 +28,12 @@ return array(
   // 把输出粘贴到这里，然后立刻删除 hashgen.php
   'admin_user' => 'admin',
   'admin_hash' => '', // password_hash() 生成的 bcrypt 串
+
+  // 是否把用户复制/导出的作品内容存入数据库（wp_contents 表）
+  // ⚠️ 注意：站点宣传语是「文章隐私零上传」，开启前请确认接受数据留存，
+  //    并建议在页面隐私说明中注明「复制动作的内容会匿名留存用于产品分析」
+  'capture_content' => true,
+
+  // 单条内容体积上限（字节），超出截断
+  'max_content_bytes' => 131072, // 128KB
 );

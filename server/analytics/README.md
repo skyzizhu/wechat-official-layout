@@ -5,9 +5,10 @@
 ```
 analytics/
 ├── track.php            统计接口（1px gif 信标，只写不读）
-├── admin/index.php      后台管理（登录 + 报表）
+├── capture.php          内容入库接口（复制/导出时匿名留存作品全文，POST JSON）
+├── admin/               后台管理（概览 / 用户 / 内容库 / 事件日志）
 ├── install.php          一次性安装器（建表；装完删除）
-├── install.sql          建表 SQL（也可用 phpMyAdmin 直接导入）
+├── install.sql          建表 SQL（wp_visits 事件表 + wp_contents 内容表）
 ├── hashgen.php          后台密码哈希生成（用完删除）
 ├── config.example.php   配置模板（复制为 config.php 填写）
 ├── config.php           真实配置（自己创建，被 .htaccess 禁止访问，不进 git）
@@ -51,7 +52,14 @@ analytics/
 
 ## 数据说明
 
-- 一张表 `wp_visits` 只追加；IP 只存加盐哈希前 16 位，不存原文（合规）
-- 事件：`pv`（页面浏览）/ `copy`（一键复制，extra=字数档位）/ `theme`（主题切换，
-  extra=主题 id）/ `export_md`（导出 MD）
-- 后台报表按天聚合，7/30/90/365 天切换；单表 + 4 个索引，日流量十万级以内无压力
+- `wp_visits` 事件表只追加：IP 只存加盐哈希前 16 位，不存原文（合规）
+- 身份识别三件套（全部匿名）：`uid`（localStorage 随机 id，回访稳定）、
+  `fp`（浏览器指纹：UA/语言/时区/屏幕/canvas 绘制的 SHA-256 前 16 位，
+  辅助识别清了缓存的同一浏览器）、`sid`（会话 id，标签页关闭即新会话）
+- `wp_contents` 内容表：用户显式触发「复制 / 导出 MD」时匿名留存作品全文
+  （`capture_content` 总开关可关；单篇上限 128KB 服务端截断；后台可查看/删除）
+- ⚠️ 隐私提示：内容留存改变了「文章隐私零上传」的默认承诺——上线前请
+  在站点隐私说明中注明「复制/导出动作的内容会匿名留存用于产品分析」，
+  或将 `capture_content` 设为 false
+- 事件：`pv` / `copy`（extra=字数档位）/ `theme`（extra=主题 id）/ `export_md`
+- 后台报表按天聚合；单表 + 索引，日流量十万级以内无压力
