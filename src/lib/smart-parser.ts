@@ -805,7 +805,9 @@ export function convertPlainTextToMarkdown(
         if (!nextTrimmed) {
           consecutiveEmpty++;
           if (consecutiveEmpty > 1) break; // 连续两个空行视为代码块结束
-          codeLines.push(nextLine);
+          // 单个空行不进围栏：网页/公众号富文本转纯文本时会在每个可视行之间插入
+          // 换行伪影（视觉无空行、纯文本却有空行），保留会让预览/微信产物行行之间多出空行。
+          // 有意的代码空行走 ``` 围栏（2.0 原样放行）或代码模式回车，不经过此路径
           j++;
           continue;
         }
@@ -1923,6 +1925,30 @@ export function adjustFirstLineTitle(markdown: string, treatAsTitle: boolean): s
     }
   }
   return lines.join('\n');
+}
+
+/**
+ * 收紧代码围栏里的「富文本换行伪影」空行：每个相邻非空行之间恰好一个空行、
+ * 且全围栏不存在连续多个空行（真实代码的空行是偶发的，不会每行之间都有）。
+ * 仅对这种形态整体去空行——旧版本草稿的快照 md 已固化为围栏带空行，
+ * 刷新恢复时经此归一化，无需重新编辑即可消除多余空行。
+ */
+export function collapseCodeFenceArtifacts(md: string): string {
+  if (!md.includes('```')) return md;
+  const segments = md.split(/(```[\s\S]*?```)/g);
+  return segments
+    .map((segment, i) => {
+      if (i % 2 === 0) return segment;
+      const lines = segment.split('\n');
+      const content = lines.slice(1, -1);
+      const nonBlank = content.filter((l) => l.trim());
+      if (nonBlank.length < 2) return segment;
+      const blanks = content.length - nonBlank.length;
+      if (blanks !== nonBlank.length - 1) return segment;
+      if (/(?:^|\n)[ \t]*\n[ \t]*\n/.test(segment)) return segment;
+      return [lines[0], ...nonBlank, lines[lines.length - 1]].join('\n');
+    })
+    .join('');
 }
 
 /**

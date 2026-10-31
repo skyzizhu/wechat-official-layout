@@ -23,7 +23,8 @@ global.DOMParser = dom.window.DOMParser; global.Node = dom.window.Node;
 global.Element = dom.window.Element; global.HTMLElement = dom.window.HTMLElement;
 global.NodeFilter = dom.window.NodeFilter; global.getComputedStyle = dom.window.getComputedStyle;
 const { serializeToWeChatRichText } = require(path.join(process.cwd(), 'tests/.wechat-build/lib/rich-text-serializer.js'));
-const { allThemes } = require(path.join(process.cwd(), 'tests/.wechat-build/themes/index.js'));
+const { allThemes, applyColorToTheme } = require(path.join(process.cwd(), 'tests/.wechat-build/themes/index.js'));
+const { PRESET_THEME_COLORS } = require(path.join(process.cwd(), 'tests/.wechat-build/lib/color-harmonics.js'));
 
 function parseColor(str) {
   if (!str) return null;
@@ -89,7 +90,21 @@ const doc = `<div id="a">
 </div>`;
 
 let totalProblems = 0;
+// 自定义主色矩阵：全部预置色（除「默认原色」）+ 两个高亮度压力色，
+// 专门覆盖「用户选色后主题被 applyColorToTheme 改写」的路径（暗底主题曾因此深底深字不可读）
+const customColors = [
+  ...PRESET_THEME_COLORS.filter((c) => c.hex),
+  { name: '亮琥珀', hex: '#f59e0b' },
+  { name: '亮天蓝', hex: '#38bdf8' },
+];
+const cases = [];
 for (const theme of allThemes) {
+  cases.push({ label: `原生`, theme });
+  for (const c of customColors) {
+    cases.push({ label: c.name, theme: applyColorToTheme(theme, c.hex) });
+  }
+}
+for (const { label, theme } of cases) {
   document.body.innerHTML = doc;
   const article = document.getElementById('a');
   const html = serializeToWeChatRichText(article, theme, undefined);
@@ -130,11 +145,9 @@ for (const theme of allThemes) {
 
   if (problems.length) {
     totalProblems += problems.length;
-    console.log(`❌ ${theme.name} (${theme.id})`);
+    console.log(`❌ ${theme.name} × ${label} (${theme.id})`);
     problems.forEach((p) => console.log(`   · ${p}`));
-  } else {
-    console.log(`✅ ${theme.name}`);
   }
 }
-console.log(`\n===== 可读性审计：${totalProblems} 处对比度不足 =====`);
+console.log(`\n===== 可读性审计：${allThemes.length} 主题 × ${cases.length / allThemes.length} 组配色，${totalProblems} 处对比度不足 =====`);
 process.exit(totalProblems ? 1 : 0);

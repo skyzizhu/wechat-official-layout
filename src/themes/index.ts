@@ -17,7 +17,7 @@ import { popBrutalism } from './presets/pop-brutalism';
 import { warmLatte } from './presets/warm-latte';
 import { curatorGallery } from './presets/curator-gallery';
 import { freshMint } from './presets/fresh-mint';
-import { generateHarmonicPalette } from '@/lib/color-harmonics';
+import { generateHarmonicPalette, hexToRgb, getLuminance, wcagContrast } from '@/lib/color-harmonics';
 
 export const allThemes: ThemePreset[] = [
   wechat,          // 公众号风
@@ -45,16 +45,35 @@ export function getThemeById(id: string): ThemePreset {
 }
 
 /**
+ * 暗底主题检测：容器底色亮度低于阈值即视为深色排版（暗色极客 / 科技未来 / 艺术策展）。
+ * 自选主色必须对暗底走「提亮调和」分支，否则正文会被浅色系的深墨色覆盖成深底深字（~1.1:1 不可读）。
+ */
+function isDarkContainerTheme(theme: ThemePreset): boolean {
+  const bg = theme.container.backgroundColor;
+  const m = typeof bg === 'string' ? bg.match(/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})/) : null;
+  if (!m) return false;
+  const [r, g, b] = hexToRgb(m[0]);
+  return getLuminance(r, g, b) < 0.45;
+}
+
+/**
  * 智能色彩搭配引擎应用器：
  * 当用户指定一个主色时，自动保持该模板的版心与骨架，
  * 智能重排标题、线框、徽章、引用块背景、高亮马克笔等为全新搭配色系！
+ * 暗底主题自动切换为「暗底调和」：文字类色阶提亮、面板类色阶压暗，任何主色都保证可读。
  */
 export function applyColorToTheme(baseTheme: ThemePreset, customColor?: string): ThemePreset {
   if (!customColor || !customColor.trim()) {
     return baseTheme;
   }
 
-  const palette = generateHarmonicPalette(customColor);
+  const onDark = isDarkContainerTheme(baseTheme);
+  const palette = generateHarmonicPalette(customColor, { dark: onDark });
+  // 主色直接作正文级文字（H1/H3/链接）时，与容器底对比不足 4.5:1 则退到加深/提亮后的强调色
+  const containerBg =
+    typeof baseTheme.container.backgroundColor === 'string' ? baseTheme.container.backgroundColor : '#ffffff';
+  const accentText =
+    onDark || wcagContrast(customColor, containerBg) < 4.5 ? palette.primaryDark : customColor;
 
   return {
     ...baseTheme,
@@ -76,7 +95,7 @@ export function applyColorToTheme(baseTheme: ThemePreset, customColor?: string):
       ...baseTheme.elements,
       h1: {
         ...baseTheme.elements.h1,
-        color: palette.primary,
+        color: accentText,
         borderBottomColor: palette.primaryBorder,
       },
       h2: {
@@ -85,7 +104,7 @@ export function applyColorToTheme(baseTheme: ThemePreset, customColor?: string):
       },
       h3: {
         ...baseTheme.elements.h3,
-        color: palette.primary,
+        color: accentText,
         borderLeftColor: palette.primary,
       },
       p: {
@@ -101,7 +120,7 @@ export function applyColorToTheme(baseTheme: ThemePreset, customColor?: string):
       },
       a: {
         ...baseTheme.elements.a,
-        color: palette.primary,
+        color: accentText,
       },
       strong: {
         ...baseTheme.elements.strong,

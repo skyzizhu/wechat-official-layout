@@ -353,6 +353,17 @@ for (const file of cases) {
       expect(has('- **1.1、**') || has('- **1.1**'), '压测嵌套列表丢失');
       expect(hasNot('### 3.7') && hasNot('1. 7分'), '压测小数被误判');
       break;
+    case 'case62':
+      expect(has('```'), '代码围栏未生成');
+      expect(has('const wordsPerMinute = 300;'), '代码内容丢失');
+      expect(has('return Math.ceil(wordCount / wordsPerMinute);'), '代码内容丢失');
+      {
+        // 富文本伪影：源里每两行代码之间夹一个空行，围栏内必须收紧为紧凑代码
+        const fence = md.match(/```[^\n]*\n([\s\S]*?)\n```/);
+        expect(!!fence, '未找到代码围栏');
+        if (fence) expect(!/\n[ \t]*\n/.test(fence[1]), '围栏内残留伪影空行');
+      }
+      break;
   }
 
   if (fails.length === 0) passCount++;

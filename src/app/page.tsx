@@ -15,7 +15,7 @@ import {
   FontSizeOption,
 } from '@/themes';
 import { SAMPLE_PLAIN_TEXT } from '@/lib/sample-markdown';
-import { detectContentFormat, processContentByMode } from '@/lib/smart-parser';
+import { collapseCodeFenceArtifacts, detectContentFormat, processContentByMode } from '@/lib/smart-parser';
 import { stripMarkdownToPlainText } from '@/lib/markdown-plain';
 import { AppPromoBadge } from '@/components/AppPromoBadge';
 import { SiteFooter } from '@/components/SiteFooter';
@@ -156,7 +156,7 @@ function MainLayout() {
         // 双副本恢复：优先用持久化的「排版用 markdown」副本重建快照（编辑器仍展示纯文本）；
         // 旧版本草稿若是 Markdown 源码，现场降级为纯文本展示并登记排版副本
         if (entry?.md && stripMarkdownToPlainText(entry.md) === loaded) {
-          importedRef.current = { plain: loaded, md: entry.md };
+          importedRef.current = { plain: loaded, md: collapseCodeFenceArtifacts(entry.md) };
         } else {
           loaded = importContent(loaded);
         }
@@ -236,7 +236,7 @@ function MainLayout() {
     if (rawPlain.trim() !== '') {
       let loaded = normalizeLoadedDraft(rawPlain);
       if (entry?.md && stripMarkdownToPlainText(entry.md) === loaded) {
-        importedRef.current = { plain: loaded, md: entry.md };
+        importedRef.current = { plain: loaded, md: collapseCodeFenceArtifacts(entry.md) };
       } else {
         loaded = importContent(loaded);
       }

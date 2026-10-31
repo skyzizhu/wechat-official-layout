@@ -1,0 +1,13 @@
+下面的工具函数用于计算文章的阅读时长。
+
+function calculateReadingTime(text) {
+
+  const wordsPerMinute = 300;
+
+  const wordCount = text.trim().length;
+
+  return Math.ceil(wordCount / wordsPerMinute);
+
+}
+
+配置完成后，构建时会自动在文章头部输出统计信息。

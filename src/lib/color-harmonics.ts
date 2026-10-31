@@ -108,17 +108,66 @@ export function getLuminance(r: number, g: number, b: number): number {
 }
 
 /**
- * 根据用户输入的单一颜色，全自动生成整套和谐排版配色方案
+ * WCAG 相对亮度（sRGB 线性化），用于对比度计算
  */
-export function generateHarmonicPalette(baseHex: string): ColorPalette {
+export function wcagLuminance(hex: string): number {
+  const [r, g, b] = hexToRgb(hex).map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/**
+ * WCAG 对比度（1 ~ 21），正文可读门槛 4.5:1
+ */
+export function wcagContrast(a: string, b: string): number {
+  const l1 = wcagLuminance(a);
+  const l2 = wcagLuminance(b);
+  const [hi, lo] = l1 > l2 ? [l1, l2] : [l2, l1];
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/**
+ * 根据用户输入的单一颜色，全自动生成整套和谐排版配色方案。
+ * @param opts.dark 暗底主题（暗色极客/科技未来/艺术策展等）：
+ *   文字类色阶整体提亮、底色类色阶压暗——同一套接口在深底上依然保证 4.5:1 以上可读。
+ */
+export function generateHarmonicPalette(baseHex: string, opts?: { dark?: boolean }): ColorPalette {
   const [r, g, b] = hexToRgb(baseHex);
   const [h, s, l] = rgbToHsl(r, g, b);
   const lum = getLuminance(r, g, b);
 
-  // 1. 深色强调（用于副标题、加深描边）
-  const darkL = Math.max(15, l - 22);
-  const [dr, dg, db] = hslToRgb(h, Math.min(100, s + 10), darkL);
-  const primaryDark = rgbToHex(dr, dg, db);
+  // 暗底调和分支：深底上「加深」没有意义，强调色改为提亮（HSL 亮度钳制在 66~86 区间），
+  // 引用/表头/代码底色改为暗色调和面板，正文墨色改为带主色微调的浅灰
+  if (opts?.dark) {
+    const accentS = Math.min(95, s + 10);
+    const accentL = l < 60 ? Math.min(84, Math.max(66, l + 40)) : Math.min(86, l + 6);
+    const [ar, ag, ab] = hslToRgb(h, accentS, accentL);
+    const [nr, ng, nb] = hslToRgb(h, 10, 88);
+    const [sr, sg, sb] = hslToRgb(h, 8, 68);
+    const [lr, lg, lb] = hslToRgb(h, Math.min(40, Math.round(s * 0.5)), 16);
+    const [br, bg2, bb] = hslToRgb(h, Math.min(55, Math.round(s * 0.7)), 32);
+    return {
+      primary: baseHex,
+      primaryDark: rgbToHex(ar, ag, ab),
+      primaryLight: rgbToHex(lr, lg, lb),
+      primaryBorder: rgbToHex(br, bg2, bb),
+      primaryBadgeText: '#ffffff',
+      highlightBg: `rgba(${r}, ${g}, ${b}, 0.32)`,
+      neutralText: rgbToHex(nr, ng, nb),
+      subtleText: rgbToHex(sr, sg, sb),
+    };
+  }
+
+  // 1. 深色强调（用于副标题、加深描边、H1/H3/链接兜底文字色）。
+  // 高亮度主色（亮天蓝等浅色系）按 l-22 一次加深后可能仍不足 4.5:1，逐级加深至白底 4.6:1 达标
+  const accentS = Math.min(100, s + 10);
+  const darkStart = Math.max(15, l - 22);
+  let primaryDark = rgbToHex(...hslToRgb(h, accentS, darkStart));
+  for (let dl = darkStart - 3; dl >= 6 && wcagContrast(primaryDark, '#ffffff') < 4.6; dl -= 3) {
+    primaryDark = rgbToHex(...hslToRgb(h, accentS, dl));
+  }
 
   // 2. 极浅底色（用于引用框淡底、表格表头、卡片底）
   const lightL = 96;
