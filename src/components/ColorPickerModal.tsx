@@ -85,17 +85,23 @@ export function ColorPickerModal({
                   }`}
                 >
                   <div
-                    style={{
-                      backgroundColor: item.hex || '#9ca3af',
-                    }}
+                    style={
+                      item.hex
+                        ? { backgroundColor: item.hex }
+                        : // 默认原色：柔和多彩锥形渐变，表达「还原主题自带配色」
+                          {
+                            background:
+                              'conic-gradient(from 210deg, #fca5a5, #fcd34d, #6ee7b7, #93c5fd, #d8b4fe, #fca5a5)',
+                          }
+                    }
                     className="w-7 h-7 rounded-full shadow-xs flex items-center justify-center relative border border-black/10"
                   >
-                    {!item.hex && (
-                      <span className="text-[10px] text-white font-bold">原</span>
-                    )}
-                    {isSelected && (
-                      <Check className="w-3.5 h-3.5 text-white drop-shadow-md stroke-[3]" />
-                    )}
+                    {isSelected &&
+                      (item.hex ? (
+                        <Check className="w-3.5 h-3.5 text-white drop-shadow-md stroke-[3]" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5 text-gray-800 drop-shadow-sm stroke-[3]" />
+                      ))}
                   </div>
                   <span className="text-[11px] text-gray-700 font-medium truncate w-full text-center">
                     {item.name}
