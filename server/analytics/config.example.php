@@ -24,7 +24,7 @@ return array(
   // 安装令牌：访问 install.php?token=xxx 时校验；安装完成后删除 install.php
   'install_token' => '请替换为随机字符串',
 
-  // 后台管理登录（admin/index.php）
+  // 后台管理登录（stat-admin/index.php）
   // admin_hash 用 hashgen.php 生成：访问 /analytics/hashgen.php?pass=你的密码，
   // 把输出粘贴到这里，然后立刻删除 hashgen.php
   'admin_user' => 'admin',
