@@ -36,10 +36,12 @@ echo '<div class="box"><h2>原始事件（共 ' . $total . ' 条）</h2><div sty
 echo '<table><tr><th>时间</th><th>事件</th><th>用户</th><th>指纹</th><th>会话</th><th>路径/附属</th><th>UA/来源</th></tr>';
 foreach ($rows as $r) {
   $uaShort = preg_match('/Mobile|Android|iPhone|iPad/', $r['ua']) ? '📱' : '🖥';
+  // copy 事件的字数档位码翻译为可读标签（≤500字 等）
+  $extraHtml = $r['extra'] !== '' ? ' <span class="muted">' . $h($r['event'] === 'copy' ? length_label($r['extra']) : $r['extra']) . '</span>' : '';
   echo '<tr><td>' . $h($r['created_at']) . '</td><td>' . $h($r['event']) . '</td>'
     . '<td><a href="users.php?uid=' . $h($r['uid']) . '"><code>' . $h(substr($r['uid'], 0, 10)) . '…</code></a></td>'
     . '<td><code>' . $h($r['fp']) . '</code></td><td><code>' . $h($r['sid']) . '</code></td>'
-    . '<td>' . $h($r['path']) . ($r['extra'] !== '' ? ' <span class="muted">' . $h($r['extra']) . '</span>' : '') . '</td>'
+    . '<td>' . $h($r['path']) . $extraHtml . '</td>'
     . '<td>' . $uaShort . ((int)$r['has_ref'] === 1 ? ' <span class="muted">有来源</span>' : '') . '</td></tr>';
 }
 if (!count($rows)) echo '<tr><td colspan="7" class="muted">暂无数据</td></tr>';
