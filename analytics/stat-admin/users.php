@@ -52,7 +52,8 @@ if ($uidFilter !== '') {
 
   echo '<div class="box"><h2>最近事件（30 条）</h2><table><tr><th>时间</th><th>事件</th><th>附属</th><th>来源</th></tr>';
   foreach ($events as $ev) {
-    echo '<tr><td>' . $h($ev['created_at']) . '</td><td>' . $h($ev['event']) . '</td><td>' . $h($ev['extra']) . '</td><td>' . ((int)$ev['has_ref'] === 1 ? '有' : '—') . '</td></tr>';
+    $extraTxt = $ev['event'] === 'copy' ? length_label($ev['extra']) : $ev['extra'];
+    echo '<tr><td>' . $h($ev['created_at']) . '</td><td>' . $h($ev['event']) . '</td><td>' . $h($extraTxt) . '</td><td>' . ((int)$ev['has_ref'] === 1 ? '有' : '—') . '</td></tr>';
   }
   echo '</table></div>';
 

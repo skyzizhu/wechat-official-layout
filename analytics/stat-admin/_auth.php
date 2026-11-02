@@ -103,6 +103,24 @@ try {
 // ---------- 公共助手 ----------
 $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); };
 
+// 主题 id → 中文名（与站点 16 款主题一致；未知 id 原样显示）
+$THEME_NAMES = array(
+  'wechat' => '公众号风', 'neo-chinese' => '东方雅致', 'morandi-soft' => '莫兰迪柔调',
+  'pop-brutalism' => '潮流波普', 'warm-latte' => '暖阳拿铁', 'fresh-mint' => '薄荷青柠',
+  'modern-minimal' => '现代简约', 'magazine' => '杂志风', 'business-report' => '商务报告',
+  'curator-gallery' => '艺术策展', 'literary-fresh' => '文艺清新', 'classic-academic' => '经典学术',
+  'retro-newspaper' => '复古报纸', 'warm-journal' => '温暖手帐', 'dark-geek' => '暗色极客',
+  'tech-future' => '科技未来',
+);
+function theme_name($id) {
+  return isset($GLOBALS['THEME_NAMES'][$id]) ? $GLOBALS['THEME_NAMES'][$id] : (string)$id;
+}
+/** 复制事件的字数档位码 → 可读标签（未知值原样返回） */
+function length_label($code) {
+  static $map = array('le500' => '≤500字', 'le2000' => '501~2000字', 'le5000' => '2001~5000字', 'gt5000' => '5000字以上');
+  return isset($map[$code]) ? $map[$code] : (string)$code;
+}
+
 /** 页面骨架头部（$active: index/users/contents/log） */
 function render_header($title, $active) {
   $h = $GLOBALS['h'];
@@ -145,6 +163,19 @@ th{color:#6b7280;font-weight:500}.num-td{text-align:right;font-variant-numeric:t
 @media(max-width:640px){.two{grid-template-columns:1fr}}
 .bar{height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden;margin-top:4px}
 .bar i{display:block;height:100%;background:#2563eb}
+.today-strip{background:linear-gradient(90deg,#eef2ff,#f0fdf4);border:1px solid #e0e7ff;border-radius:10px;padding:10px 16px;margin-bottom:16px;font-size:13px;color:#374151;display:flex;gap:20px;flex-wrap:wrap;align-items:center}
+.today-strip b{font-size:16px;color:#111827}
+.today-strip .t{font-weight:600;color:#4338ca}
+.chart{display:flex;align-items:flex-end;gap:2px;height:130px;margin-bottom:6px;overflow-x:auto}
+.chart .col{flex:1 0 auto;min-width:6px;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%}
+.chart .bars{display:flex;align-items:flex-end;gap:1px;height:100%}
+.chart .b{width:5px;max-width:12px;border-radius:2px 2px 0 0}
+.chart .b.pv{background:#2563eb}
+.chart .b.uv{background:#93c5fd}
+.chart .b.cp{background:#10b981}
+.chart .d{font-size:9px;color:#9ca3af;white-space:nowrap;margin-top:2px}
+.legend{font-size:12px;color:#6b7280;display:flex;gap:14px;margin-bottom:6px}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:middle}
 .muted{color:#9ca3af}.btn-del{background:#c0392b;color:#fff;border:0;border-radius:6px;padding:5px 12px;font-size:13px;cursor:pointer}
 pre.content{white-space:pre-wrap;word-break:break-word;background:#fafafa;border:1px solid #eef0f2;border-radius:8px;padding:14px;font-size:13px;max-height:60vh;overflow:auto}
 .pager{margin-top:12px;font-size:13px}.pager a{margin-right:10px}
