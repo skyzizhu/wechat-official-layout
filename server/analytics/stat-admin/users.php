@@ -50,7 +50,7 @@ if ($uidFilter !== '') {
   if (!count($contents)) echo '<tr><td colspan="5" class="muted">无内容</td></tr>';
   echo '</table></div>';
 
-  echo '<div class="box"><h2>最近事件（30 条）</h2><table><tr><th>时间</th><th>事件</th><th>附属</th><th>来源</th></tr>';
+  echo '<div class="box"><h2>最近事件（30 条）　<a href="log.php?uid=' . $h($uidFilter) . '" style="font-size:12px;font-weight:400">在事件日志中查看全部 →</a></h2><table><tr><th>时间</th><th>事件</th><th>附属</th><th>来源</th></tr>';
   foreach ($events as $ev) {
     $extraTxt = $ev['event'] === 'copy' ? length_label($ev['extra']) : $ev['extra'];
     echo '<tr><td>' . $h($ev['created_at']) . '</td><td>' . $h($ev['event']) . '</td><td>' . $h($extraTxt) . '</td><td>' . ((int)$ev['has_ref'] === 1 ? '有' : '—') . '</td></tr>';
