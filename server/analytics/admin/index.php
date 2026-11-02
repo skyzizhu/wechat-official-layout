@@ -3,8 +3,9 @@
 require __DIR__ . '/_auth.php';
 
 $range = isset($_GET['range']) ? (string)$_GET['range'] : '30';
-if (!preg_match('/^(7|30|90|365)$/', $range)) $range = '30';
-$from = date('Y-m-d', strtotime("-{$range} days"));
+if (!preg_match('/^(today|7|30|90|365)$/', $range)) $range = '30';
+// today = 仅当天；其余为「近 N 天」滚动窗口
+$from = $range === 'today' ? date('Y-m-d') : date('Y-m-d', strtotime("-{$range} days"));
 $to = date('Y-m-d');
 
 // 汇总卡片
@@ -57,6 +58,7 @@ $card = function ($label, $value, $sub = '') {
   return "<div class=\"card\"><div class=\"num\">{$value}</div><div class=\"label\">{$label}</div>{$s}</div>";
 };
 
+$onToday = $h($range === 'today' ? 'on' : '');
 $on7 = $h($range === '7' ? 'on' : '');
 $on30 = $h($range === '30' ? 'on' : '');
 $on90 = $h($range === '90' ? 'on' : '');
@@ -65,6 +67,7 @@ $on365 = $h($range === '365' ? 'on' : '');
 render_header('概览', 'index');
 
 echo '<div class="ranges" style="margin-bottom:16px"><span class="muted" style="font-size:13px">范围：</span>'
+  . '<a class="' . $onToday . '" href="?range=today">今日</a>'
   . '<a class="' . $on7 . '" href="?range=7">7 天</a><a class="' . $on30 . '" href="?range=30">30 天</a>'
   . '<a class="' . $on90 . '" href="?range=90">90 天</a><a class="' . $on365 . '" href="?range=365">一年</a></div>';
 
